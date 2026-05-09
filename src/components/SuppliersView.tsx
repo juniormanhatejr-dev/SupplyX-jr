@@ -1,0 +1,311 @@
+import { motion, AnimatePresence } from 'motion/react';
+import { Handshake, Search, Star, MapPin, ExternalLink, MoreVertical, ArrowLeft, Phone, Mail, Globe, ShieldCheck, Clock, Award, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+
+interface Supplier {
+  id: string;
+  uid: string;
+  name: string;
+  sector: string;
+  address: string;
+  phone: string;
+  email: string;
+  bio?: string;
+  rating?: number;
+  city?: string;
+  photoURL?: string;
+}
+
+interface SuppliersViewProps {
+  isDarkMode: boolean;
+  language: 'PT' | 'EN';
+  onViewProfile?: (uid: string) => void;
+}
+
+export default function SuppliersView({ isDarkMode, language, onViewProfile }: SuppliersViewProps) {
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        setLoading(true);
+        const q = query(collection(db, 'users'), where('type', '==', 'supplier'));
+        const snapshot = await getDocs(q);
+        const fetched = snapshot.docs.map(doc => ({
+          id: doc.id,
+          uid: doc.id,
+          ...doc.data()
+        })) as Supplier[];
+        setSuppliers(fetched);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.LIST, 'users');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSuppliers();
+  }, []);
+
+  const filteredSuppliers = suppliers.filter(s => 
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.sector?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.city?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const t = {
+    PT: {
+      strategicPartners: 'Parceiros Estratégicos',
+      searchSuppliers: 'Pesquisar fornecedores...',
+      fullProfile: 'Perfil Completo',
+      loyal: 'Fidelizado',
+      location: 'Localização',
+      backToList: 'Voltar para lista',
+      fallbackBio: `Atuando no setor de ${selectedSupplier?.sector} com excelência e compromisso. Especialistas em soluções para construção civil em Moçambique.`,
+      certifications: 'Certificações',
+      certificationsDesc: 'ISO 9001, ISO 14001 e selo de sustentabilidade ODS.',
+      leadTime: 'Prazo Médio',
+      leadTimeDesc: '3-5 dias úteis para entrega na região metropolitana.',
+      creditScore: 'Score de Crédito',
+      creditScoreDesc: 'AAA+ - Excelente histórico de pagamentos e solidez.',
+      noSuppliers: 'Nenhum fornecedor encontrado.'
+    },
+    EN: {
+      strategicPartners: 'Strategic Partners',
+      searchSuppliers: 'Search suppliers...',
+      fullProfile: 'Full Profile',
+      loyal: 'Loyal',
+      location: 'Location',
+      backToList: 'Back to list',
+      fallbackBio: `Operating in the ${selectedSupplier?.sector} sector with excellence and commitment. Specialists in construction solutions in Mozambique.`,
+      certifications: 'Certifications',
+      certificationsDesc: 'ISO 9001, ISO 14001 and ODS sustainability seal.',
+      leadTime: 'Average Lead Time',
+      leadTimeDesc: '3-5 business days for metro region delivery.',
+      creditScore: 'Credit Score',
+      creditScoreDesc: 'AAA+ - Excellent payment history and solidity.',
+      noSuppliers: 'No suppliers found.'
+    }
+  }[language];
+
+  if (selectedSupplier) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -20 }}
+        className="space-y-8"
+      >
+        <button 
+          onClick={() => setSelectedSupplier(null)}
+          className={`px-5 py-2.5 rounded-2xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all italic border shadow-xl shadow-black/5 ${
+            isDarkMode ? 'bg-zinc-800 border-zinc-700 text-brand hover:brightness-110' : 'bg-white border-zinc-100 text-brand hover:bg-brand/5'
+          }`}
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {t.backToList}
+        </button>
+
+        <div className={`p-8 rounded-3xl border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
+          <div className="flex flex-col md:flex-row gap-8 items-start">
+            <div className={`w-24 h-24 shrink-0 rounded-3xl flex items-center justify-center overflow-hidden ${isDarkMode ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+              {selectedSupplier.photoURL ? (
+                <img src={selectedSupplier.photoURL} alt={selectedSupplier.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <Handshake className="w-12 h-12 text-brand" />
+              )}
+            </div>
+            
+            <div className="flex-1">
+              <div className="flex flex-wrap items-center gap-4 mb-4">
+                <h2 className={`text-3xl font-black italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{selectedSupplier.name}</h2>
+                <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'bg-brand/10 text-brand' : 'bg-brand/5 text-brand'}`}>
+                  {selectedSupplier.sector}
+                </div>
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 text-amber-500 rounded-full text-[10px] font-black">
+                  <Star className="w-3 h-3 fill-amber-500" />
+                  {selectedSupplier.rating || 4.5}
+                </div>
+              </div>
+
+              <p className={`text-sm leading-relaxed max-w-2xl mb-8 ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                {selectedSupplier.bio || t.fallbackBio}
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest flex items-center gap-2">
+                    <MapPin className="w-3 h-3" /> {t.location}
+                  </p>
+                  <p className={`text-sm font-bold ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{selectedSupplier.city || 'Maputo'}, {selectedSupplier.address || (language === 'PT' ? 'Moçambique' : 'Mozambique')}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest flex items-center gap-2">
+                    <Mail className="w-3 h-3" /> {language === 'PT' ? 'E-mail:' : 'Email:'}
+                  </p>
+                  <p className={`text-sm font-bold ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{selectedSupplier.email}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest flex items-center gap-2">
+                    <Phone className="w-3 h-3" /> {language === 'PT' ? 'Telefone:' : 'Phone:'}
+                  </p>
+                  <p className={`text-sm font-bold ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{selectedSupplier.phone}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest flex items-center gap-2">
+                    <Globe className="w-3 h-3" /> Website
+                  </p>
+                  <p className={`text-sm font-bold ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>www.{selectedSupplier.name.toLowerCase().replace(/\s/g, '')}.co.mz</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className={`p-6 rounded-3xl border ${isDarkMode ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100'}`}>
+            <ShieldCheck className="w-8 h-8 text-emerald-500 mb-4" />
+            <h4 className={`font-black uppercase italic tracking-tighter mb-2 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+              {t.certifications}
+            </h4>
+            <p className="text-xs text-zinc-500 font-bold leading-relaxed">
+              {t.certificationsDesc}
+            </p>
+          </div>
+          <div className={`p-6 rounded-3xl border ${isDarkMode ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100'}`}>
+            <Clock className="w-8 h-8 text-brand mb-4" />
+            <h4 className={`font-black uppercase italic tracking-tighter mb-2 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+              {t.leadTime}
+            </h4>
+            <p className="text-xs text-zinc-500 font-bold leading-relaxed">
+              {t.leadTimeDesc}
+            </p>
+          </div>
+          <div className={`p-6 rounded-3xl border ${isDarkMode ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100'}`}>
+            <Award className="w-8 h-8 text-amber-500 mb-4" />
+            <h4 className={`font-black uppercase italic tracking-tighter mb-2 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+              {t.creditScore}
+            </h4>
+            <p className="text-xs text-zinc-500 font-bold leading-relaxed">
+              {t.creditScoreDesc}
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="space-y-6"
+    >
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h2 className={`text-xl font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+          {t.strategicPartners}
+        </h2>
+        <div className="relative w-full sm:w-80">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <input 
+            type="text" 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={t.searchSuppliers}
+            className={`w-full pl-10 pr-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand/20 transition-all ${
+              isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500' : 'bg-white border-zinc-200 text-zinc-900 placeholder-zinc-400'
+            }`}
+          />
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-10 h-10 text-brand animate-spin" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredSuppliers.map((s, i) => (
+            <motion.div
+              key={s.id}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: i * 0.1 }}
+              className={`p-6 rounded-3xl border transition-all group relative overflow-hidden ${
+                isDarkMode ? 'bg-zinc-950 border-zinc-800 hover:border-brand/30' : 'bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
+              }`}
+            >
+              <div className="flex justify-between items-start mb-6">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all group-hover:scale-110 overflow-hidden ${
+                  isDarkMode ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-100'
+                }`}>
+                  {s.photoURL ? (
+                    <img src={s.photoURL} alt={s.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <Handshake className="w-7 h-7 text-brand" />
+                  )}
+                </div>
+                <button className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'text-zinc-500 hover:text-white' : 'text-zinc-300 hover:text-zinc-600'}`}>
+                  <MoreVertical className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <h3 className={`text-lg font-black uppercase italic tracking-tighter mb-1 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{s.name}</h3>
+              <p className="text-[10px] font-black text-brand uppercase tracking-widest mb-4 leading-none">{s.sector}</p>
+              
+              <div className="space-y-3 mb-8">
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-lg text-[10px] font-black">
+                    <Star className="w-3 h-3 fill-amber-500" />
+                    {s.rating || 4.5}
+                  </div>
+                  <span className={`text-[11px] font-bold ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    {t.loyal}
+                  </span>
+                </div>
+                <div className={`flex items-center gap-2 text-[11px] font-bold ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                  <MapPin className="w-4 h-4 text-brand/60" />
+                  {s.city || 'Maputo'}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-4 border-t border-zinc-500/10 mb-[-4px] mx-[-4px]">
+                <button 
+                  onClick={() => {
+                    if (onViewProfile) {
+                      onViewProfile(s.uid);
+                    } else {
+                      setSelectedSupplier(s);
+                    }
+                  }}
+                  className={`flex-1 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                    isDarkMode ? 'bg-zinc-900 text-zinc-300 hover:bg-brand hover:text-white' : 'bg-zinc-50 text-zinc-600 hover:bg-brand hover:text-white shadow-sm'
+                  }`}
+                >
+                  {t.fullProfile}
+                </button>
+                <button className={`p-3 rounded-2xl transition-all border ${
+                  isDarkMode ? 'border-zinc-800 bg-brand/5 text-brand hover:bg-brand hover:text-white' : 'border-zinc-100 bg-brand/5 text-brand hover:bg-brand hover:text-white'
+                }`}>
+                  <ExternalLink className="w-4 h-4" />
+                </button>
+              </div>
+            </motion.div>
+          ))}
+          {filteredSuppliers.length === 0 && (
+            <div className="col-span-full py-20 text-center">
+              <p className="text-zinc-500 font-bold italic">{t.noSuppliers}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+

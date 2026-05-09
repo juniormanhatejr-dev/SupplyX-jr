@@ -1,0 +1,114 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores profile information for buyers and suppliers.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "userName": { "type": "string" },
+        "nuit": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "type": { "type": "string", "enum": ["buyer", "supplier"] },
+        "sector": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "bio": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "coverURL": { "type": "string" },
+        "city": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "nuit", "email", "type"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Construction material order records.",
+      "type": "object",
+      "properties": {
+        "buyerId": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "items": { 
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "material": { "type": "string" },
+              "quantity": { "type": "string" },
+              "unit": { "type": "string" },
+              "price": { "type": "number" }
+            }
+          }
+        },
+        "total": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "processing", "shipped", "delivered", "canceled"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Stock items and materials listed by suppliers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "onSale": { "type": "boolean" },
+        "salePrice": { "type": "number" },
+        "stock": { "type": "number" },
+        "image": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "supplierId", "name", "category", "price"]
+    },
+    "ChatRoom": {
+      "title": "Chat Room",
+      "description": "B2B conversation between buyer and supplier.",
+      "type": "object",
+      "properties": {
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "lastMessage": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "participantNames": { "type": "object" }
+      }
+    },
+    "ChatMessage": {
+      "title": "Chat Message",
+      "description": "Individual message in a chat room.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile collection indexed by Firebase Auth UID."
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Global orders collection."
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Material and product inventory."
+    },
+    "/chats/{chatId}": {
+      "schema": "ChatRoom",
+      "description": "B2B Conversations."
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Conversation messages."
+    }
+  }
+}

@@ -535,7 +535,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     ];
     worksheet['!cols'] = wscols;
 
-    XLSX.writeFile(workbook, `comparativo_cotacao_supplyx_${new Date().getTime()}.xlsx`);
+    XLSX.writeFile(workbook, `comparativo_cotação_supplyx_${new Date().getTime()}.xlsx`);
   };
 
   const exportOrdersToExcel = () => {
@@ -637,7 +637,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
-      pdf.save(`Cotacao_${response.name.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
+      pdf.save(`Cotação_${response.name.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
     } catch (error) {
       console.error("PDF generator error:", error);
     }
@@ -720,7 +720,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       supplier: 'Fornecedor',
       status: {
         delivered: 'Entregue',
-        transit: 'Em Transito',
+        transit: 'Em Trânsito',
         waiting: 'Aguardando',
         quote: 'Cotação'
       },

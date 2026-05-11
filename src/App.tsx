@@ -12,6 +12,7 @@ import NotificationsView from './components/NotificationsView';
 import ReportsView from './components/ReportsView';
 import SettingsView from './components/SettingsView';
 import RegistrationView from './components/Auth/RegistrationView';
+import LandingPageView from './components/LandingPageView';
 import ChatView from './components/ChatView';
 import CartModal from './components/CartModal';
 import ProfileModal from './components/ProfileModal';
@@ -26,7 +27,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [showQuoteFormDirectly, setShowQuoteFormDirectly] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true); // Default to Dark Mode for premium feel
   const [language, setLanguage] = useState<'PT' | 'EN'>('PT');
   const [selectedCategory, setSelectedCategory] = useState('Tudo');
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -34,6 +35,7 @@ export default function App() {
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [selectedSupplierForCatalog, setSelectedSupplierForCatalog] = useState<string | null>(null);
   const [shouldEditProfile, setShouldEditProfile] = useState(false);
+  const [view, setView] = useState<'landing' | 'auth'>('landing');
   const { items } = useCart();
 
   // If supplier, default to Seller Central
@@ -61,12 +63,13 @@ export default function App() {
 
   const handleLogout = () => {
     auth.signOut();
+    setView('landing');
   };
 
   const translations = {
     PT: {
       newOrder: 'Novo Pedido',
-      search: 'Buscar materials...',
+      search: 'Buscar materiais...',
       supplier: 'Fornecedor',
       buyer: 'Comprador',
       tabs: {
@@ -113,11 +116,22 @@ export default function App() {
   }
 
   if (!user) {
+    if (view === 'landing') {
+      return (
+        <LandingPageView 
+          isDarkMode={isDarkMode} 
+          language={language}
+          onGetStarted={() => setView('auth')}
+          onLogin={() => setView('auth')}
+        />
+      );
+    }
     return (
       <RegistrationView 
         isDarkMode={isDarkMode} 
         language={language} 
         onSuccess={refreshProfile}
+        onBack={() => setView('landing')}
       />
     );
   }
@@ -194,12 +208,11 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 relative overflow-hidden ${isDarkMode ? 'dark bg-zinc-950' : 'bg-zinc-50'}`}>
-      {/* App Watermark */}
-      <div className="fixed inset-0 pointer-events-none flex items-center justify-center opacity-[0.03] dark:opacity-[0.01] select-none z-0">
-        <div className="relative rotate-[-15deg]">
-           <SupplyXLogo size="xl" showText={true} className="scale-[4] md:scale-[8]" isDark={isDarkMode} />
-        </div>
+    <div className={`min-h-screen transition-colors duration-500 relative overflow-hidden ${isDarkMode ? 'dark bg-supplyx-deep' : 'bg-zinc-50'}`}>
+      {/* Background Ambience */}
+      <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-supplyx-blue/5 blur-[120px] rounded-full animate-pulse-slow" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-supplyx-blue/5 blur-[120px] rounded-full animate-pulse-slow transition-opacity" />
       </div>
 
       <Sidebar 
@@ -227,121 +240,103 @@ export default function App() {
         onLogout={handleLogout}
       />
       
-      <main className="lg:ml-64 transition-all pb-12 pt-20">
-        <header className={`fixed top-0 left-0 right-0 lg:left-64 z-40 border-b backdrop-blur-xl transition-all ${
-          isDarkMode ? 'bg-zinc-950/80 border-zinc-800 shadow-2xl shadow-black/40' : 'bg-white/80 border-zinc-100 shadow-sm shadow-zinc-200/20'
+      <main className="lg:ml-64 transition-all pb-12 pt-28 relative z-10">
+        <header className={`fixed top-4 left-4 right-4 lg:left-[calc(16rem+1rem)] lg:right-4 z-40 rounded-[32px] border transition-all duration-500 glass-dark ${
+          isDarkMode ? ' border-white/5 shadow-3xl' : 'bg-white/80 border-zinc-100 shadow-sm shadow-zinc-200/20'
         }`}>
-          <div className="w-full h-16 flex items-center justify-between px-4 sm:px-6">
-            <div className="flex items-center gap-4">
+          <div className="w-full h-20 flex items-center justify-between px-6 sm:px-10">
+            <div className="flex items-center gap-6">
               <button 
                 onClick={() => setIsSidebarOpen(true)}
-                className={`lg:hidden w-10 h-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 ${
-                  isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
+                className={`lg:hidden w-12 h-12 flex items-center justify-center rounded-2xl border transition-all active:scale-95 shadow-xl ${
+                  isDarkMode ? 'bg-supplyx-dark border-white/5 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
                 }`}
               >
                 <Menu className="w-5 h-5" />
               </button>
               
               <div className="flex items-center gap-3">
-                <SupplyXLogo size="sm" isDark={isDarkMode} />
                 <div className="hidden sm:flex items-center">
-                  <span className={`mx-2 text-zinc-300 dark:text-zinc-700 font-light`}>|</span>
-                  <p className={`text-xs font-bold leading-none uppercase tracking-widest ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                  <p className={`text-[11px] font-black italic uppercase tracking-[0.3em] ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-400'}`}>
                     {t.tabs[activeTab === 'Seller Central' && profile?.type !== 'supplier' ? 'Dashboard' : activeTab as keyof typeof t.tabs]}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-3">
-              {/* System Actions */}
-              <div className="flex items-center bg-zinc-100 dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-zinc-800">
+            <div className="flex items-center gap-3 sm:gap-6">
+              <div className="flex items-center gap-1.5 sm:gap-2 bg-white/5 p-1 rounded-[18px] border border-white/5">
                 <button 
                   onClick={() => setLanguage(language === 'PT' ? 'EN' : 'PT')}
-                  className={`flex items-center gap-1 px-2.5 h-7 rounded-lg text-[10px] font-black transition-all ${
-                    isDarkMode ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-zinc-900'
+                  className={`flex items-center gap-2 px-4 h-8 rounded-[14px] text-[10px] font-black transition-all ${
+                    isDarkMode ? 'text-zinc-400 hover:text-white hover:bg-white/5' : 'text-zinc-500 hover:text-zinc-900'
                   }`}
-                  title={language === 'PT' ? 'Mudar para Inglês' : 'Switch to Portuguese'}
                 >
-                  <Globe className="w-3 h-3 text-brand" />
-                  <span className="hidden xs:inline">{language}</span>
+                  <Globe className="w-3.5 h-3.5 text-supplyx-blue" />
+                  <span className="hidden xs:inline tracking-widest">{language}</span>
                 </button>
-
-                <div className="w-px h-3 bg-zinc-200 dark:bg-zinc-800 mx-1" />
-
                 <button 
                   onClick={() => setIsDarkMode(!isDarkMode)}
-                  className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${
-                    isDarkMode ? 'text-amber-400 hover:bg-zinc-800' : 'text-zinc-400 hover:bg-zinc-200'
+                  className={`w-8 h-8 flex items-center justify-center rounded-[14px] transition-all ${
+                    isDarkMode ? 'text-amber-400 hover:bg-white/5' : 'text-zinc-400 hover:bg-zinc-200'
                   }`}
                 >
-                  {isDarkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                  {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                 </button>
               </div>
 
-              {/* Interaction Actions */}
-              <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="flex items-center gap-2 sm:gap-4">
                 <NotificationCenter 
                   isDarkMode={isDarkMode} 
                   language={language} 
                   userType={profile?.type}
                   onViewAll={() => setActiveTab('Notificações')}
                 />
-
+                
                 {profile?.type === 'buyer' && (
                   <button 
                     onClick={() => setIsCartOpen(true)}
-                    className={`relative w-9 h-9 flex items-center justify-center rounded-xl border transition-all ${
-                      isDarkMode ? 'border-zinc-800 text-zinc-400 bg-zinc-900 hover:text-white hover:border-zinc-700' : 'border-zinc-200 text-zinc-500 bg-white hover:bg-zinc-50 hover:border-zinc-300'
+                    className={`w-12 h-12 flex items-center justify-center rounded-2xl border transition-all relative group shadow-xl ${
+                      isDarkMode ? 'bg-supplyx-dark border-white/5 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
                     }`}
                   >
-                    <ShoppingCart className="w-4 h-4 transition-transform active:scale-95" />
+                    <ShoppingCart className="w-5 h-5 group-hover:scale-110 transition-transform" />
                     {items.length > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand text-white text-[8px] font-black rounded-full flex items-center justify-center shadow-lg shadow-brand/30 border-2 border-inherit">
+                      <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-supplyx-blue text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-supplyx-deep">
                         {items.length}
                       </span>
                     )}
                   </button>
                 )}
-              </div>
 
-              <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-800 mx-1 hidden sm:block" />
-
-              {/* Profile Action */}
-              <button 
-                onClick={() => {
-                  setSelectedProfileId(auth.currentUser?.uid || null);
-                  setIsProfileModalOpen(true);
-                }}
-                className={`group flex items-center gap-2 p-1 pl-1 pr-3 rounded-xl transition-all border ${
-                  isDarkMode ? 'hover:bg-zinc-900 border-zinc-800 hover:border-zinc-700' : 'hover:bg-zinc-50 border-zinc-200 hover:border-zinc-300'
-                }`}
-              >
-                <div className={`w-8 h-8 rounded-lg overflow-hidden border shadow-sm transition-transform group-hover:scale-105 ${isDarkMode ? 'border-zinc-700 bg-zinc-800' : 'border-zinc-300 bg-white'}`}>
+                <button 
+                  onClick={() => {
+                    setSelectedProfileId(auth.currentUser?.uid || null);
+                    setIsProfileModalOpen(true);
+                  }}
+                  className={`w-12 h-12 flex items-center justify-center rounded-2xl border transition-all overflow-hidden relative group shadow-xl ${
+                    isDarkMode ? 'bg-supplyx-dark border-white/5' : 'bg-white border-zinc-200'
+                  }`}
+                >
                   {profile?.photoURL ? (
                     <OptimizedImage 
                       src={profile.photoURL} 
                       alt={profile.name} 
-                      className="w-full h-full object-cover" 
-                      referrerPolicy="no-referrer" 
-                      containerClassName="w-full h-full"
+                      className="w-full h-full object-cover transition-transform group-hover:scale-110"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-brand/10 text-brand font-black italic text-xs">
+                    <div className="w-full h-full flex items-center justify-center bg-supplyx-blue/10 text-supplyx-blue font-black italic text-xs">
                       {profile?.name?.charAt(0)}
                     </div>
                   )}
-                </div>
-                <div className="hidden md:flex flex-col items-start leading-none text-left">
-                  <span className={`text-[10px] font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{profile?.name?.split(' ')[0]}</span>
-                  <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-tighter">{profile?.type === 'supplier' ? t.supplier : t.buyer}</span>
-                </div>
-              </button>
+                  <div className="absolute inset-0 bg-supplyx-blue/0 group-hover:bg-supplyx-blue/10 transition-colors" />
+                </button>
+              </div>
             </div>
           </div>
         </header>
 
-        <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
+        <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-8">
           {renderContent()}
         </div>
 

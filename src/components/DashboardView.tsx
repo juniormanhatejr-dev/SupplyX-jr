@@ -3,7 +3,8 @@ import {
   CircleDollarSign, 
   ArrowUpRight, 
   CreditCard,
-  Calendar
+  Calendar,
+  Zap
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import StatCard from './StatCard';
@@ -112,9 +113,9 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className="space-y-8"
+      className="space-y-12"
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {activeStats.map((stat, i) => (
           <div key={`stat-${userType}-${i}`}>
             <StatCard 
@@ -130,19 +131,23 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
         ))}
       </div>
 
-      <div className="space-y-4">
-        <h3 className={`text-lg font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.categories}</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className={`text-lg font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.categories}</h3>
+          <div className="h-px bg-supplyx-blue/10 flex-1 mx-6 hidden sm:block" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
           {categoryCards.map((cat) => (
             <button 
               key={cat.name}
               onClick={() => onCategoryClick?.(cat.name)}
-              className={`p-4 sm:p-6 rounded-3xl border transition-all hover:scale-105 active:scale-95 flex flex-col items-center gap-3 group ${
-                isDarkMode ? 'bg-zinc-900 border-zinc-800 hover:border-brand shadow-2xl' : 'bg-white border-zinc-100 hover:border-brand shadow-sm'
+              className={`p-8 rounded-[40px] border transition-all hover:-translate-y-2 active:scale-95 flex flex-col items-center gap-4 group relative overflow-hidden ${
+                isDarkMode ? 'bg-supplyx-dark border-white/5 hover:border-supplyx-blue shadow-3xl' : 'bg-white border-zinc-100 hover:border-brand shadow-sm'
               }`}
             >
-              <span className="text-2xl sm:text-3xl transition-transform group-hover:scale-110">{cat.icon}</span>
-              <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-center ${isDarkMode ? 'text-zinc-400 group-hover:text-white' : 'text-zinc-500 group-hover:text-zinc-900'}`}>
+              <div className="absolute -top-12 -right-12 w-24 h-24 bg-supplyx-blue/5 rounded-full blur-2xl group-hover:bg-supplyx-blue/10 transition-colors" />
+              <span className="text-4xl transition-transform group-hover:scale-125 duration-500 relative z-10">{cat.icon}</span>
+              <span className={`text-[10px] font-black uppercase tracking-[0.2em] text-center relative z-10 ${isDarkMode ? 'text-zinc-500 group-hover:text-white' : 'text-zinc-500 group-hover:text-zinc-900'}`}>
                 {(t.catNames as any)[cat.name] || cat.name}
               </span>
             </button>
@@ -150,53 +155,56 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        <div className="lg:col-span-2 space-y-12">
           <SalesChart isDarkMode={isDarkMode} userType={userType} language={language} />
           <div className="overflow-hidden">
             <TransactionList isDarkMode={isDarkMode} userType={userType} language={language} />
           </div>
         </div>
         
-        <div className="space-y-8">
+        <div className="space-y-12">
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.5 }}
-            className="bg-zinc-900 rounded-3xl p-8 text-white relative overflow-hidden"
+            className="group glass rounded-[48px] p-10 text-white relative overflow-hidden border-white/5"
           >
             <div className="relative z-10">
-              <h3 className="text-xl font-bold mb-2">{t.aiTitle}</h3>
-              <p className="text-zinc-400 text-sm mb-6">{t.aiDesc}</p>
+              <div className="w-12 h-12 rounded-2xl bg-supplyx-blue flex items-center justify-center mb-8 shadow-xl shadow-blue-500/20">
+                <Zap className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-2xl font-black italic uppercase tracking-tight mb-4">{t.aiTitle}</h3>
+              <p className="text-zinc-400 text-sm mb-10 font-medium leading-relaxed">{t.aiDesc}</p>
               <button 
                 onClick={onActivateIA}
-                className="bg-brand hover:bg-brand-hover text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-colors"
+                className="w-full bg-supplyx-blue hover:bg-blue-600 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-blue-500/20"
               >
                 {t.aiBtn}
               </button>
             </div>
-            <div className="absolute -right-8 -bottom-8 w-48 h-48 bg-brand/20 blur-3xl rounded-full" />
+            <div className="absolute -right-16 -bottom-16 w-64 h-64 bg-supplyx-blue/10 blur-[100px] rounded-full group-hover:bg-supplyx-blue/20 transition-colors" />
           </motion.div>
 
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.6 }}
-            className={`${isDarkMode ? 'bg-zinc-900 border-zinc-800 shadow-2xl' : 'bg-white border-zinc-200'} rounded-3xl border p-6 transition-colors shadow-sm`}
+            className={`${isDarkMode ? 'bg-supplyx-dark border-white/5 shadow-3xl' : 'bg-white border-zinc-200'} rounded-[48px] border p-8 transition-colors shadow-sm`}
           >
-            <div className="flex items-center justify-between mb-6">
-              <h4 className={`font-bold transition-colors ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.deliveries}</h4>
+            <div className="flex items-center justify-between mb-10">
+              <h4 className={`text-sm font-black uppercase tracking-[0.2em] transition-colors ${isDarkMode ? 'text-zinc-500' : 'text-zinc-900'}`}>{t.deliveries}</h4>
               <Calendar className={`w-4 h-4 ${isDarkMode ? 'text-zinc-600' : 'text-zinc-400'}`} />
             </div>
-            <div className="space-y-4">
+            <div className="space-y-2">
               {[
                 { desc: t.cementDesc, status: t.tomorrow },
                 { desc: t.rebarDesc, status: language === 'PT' ? '09 Mai' : 'May 09' },
                 { desc: t.sandDesc, status: language === 'PT' ? '12 Mai' : 'May 12' },
               ].map((item, i) => (
-                <div key={i} className={`flex justify-between items-center py-2 border-b last:border-0 ${isDarkMode ? 'border-zinc-800' : 'border-zinc-50'}`}>
-                  <span className={`text-sm font-medium truncate max-w-[150px] ${isDarkMode ? 'text-zinc-400' : 'text-zinc-600'}`}>{item.desc}</span>
-                  <span className="text-sm font-bold text-brand">{item.status}</span>
+                <div key={i} className={`flex justify-between items-center p-5 rounded-2xl transition-colors ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-zinc-50'}`}>
+                  <span className={`text-sm font-bold truncate max-w-[150px] ${isDarkMode ? 'text-zinc-200' : 'text-zinc-600'}`}>{item.desc}</span>
+                  <span className="text-xs font-black italic text-supplyx-blue px-3 py-1 bg-supplyx-blue/10 rounded-full border border-supplyx-blue/20 uppercase whitespace-nowrap">{item.status}</span>
                 </div>
               ))}
             </div>

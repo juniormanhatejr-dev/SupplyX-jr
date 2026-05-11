@@ -36,9 +36,10 @@ interface RegistrationViewProps {
   isDarkMode: boolean;
   language: 'PT' | 'EN';
   onSuccess: () => void;
+  onBack?: () => void;
 }
 
-export default function RegistrationView({ isDarkMode, language, onSuccess }: RegistrationViewProps) {
+export default function RegistrationView({ isDarkMode, language, onSuccess, onBack }: RegistrationViewProps) {
   const t = {
     PT: {
       slogan: 'Conectando Fornecedores e Compradores',
@@ -280,46 +281,55 @@ export default function RegistrationView({ isDarkMode, language, onSuccess }: Re
   };
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${isDarkMode ? 'bg-zinc-950 text-white' : 'bg-zinc-50 text-zinc-900'}`}>
+    <div className={`min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden ${isDarkMode ? 'bg-supplyx-deep text-white' : 'bg-zinc-50 text-zinc-900'}`}>
+      {/* Background Glows */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-supplyx-blue/5 blur-[120px] rounded-full -z-10" />
+      
+      {onBack && (
+        <button 
+          onClick={onBack}
+          className="absolute top-8 left-8 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors"
+        >
+          <ChevronDown className="w-4 h-4 rotate-90" />
+          Voltar
+        </button>
+      )}
+
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-lg mb-8 text-center"
+        className="w-full max-w-lg mb-12 text-center"
       >
         <div className="flex items-center justify-center gap-4 mb-4">
-          <SupplyXLogo size="lg" />
+          <SupplyXLogo size="lg" isDark={true} />
         </div>
-        <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">{t.slogan}</p>
+        <p className="text-supplyx-blue text-[10px] font-black uppercase tracking-widest leading-none bg-supplyx-blue/10 px-4 py-1.5 rounded-full inline-block border border-supplyx-blue/20">{t.slogan}</p>
       </motion.div>
 
-      <div className={`w-full max-w-md rounded-[40px] overflow-hidden border shadow-2xl relative ${isDarkMode ? 'bg-zinc-900 border-zinc-800 shadow-black' : 'bg-white border-zinc-100 shadow-zinc-200'}`}>
+      <div className={`w-full max-w-md rounded-[48px] overflow-hidden border shadow-3xl relative glass-dark ${isDarkMode ? 'border-white/5' : 'bg-white border-zinc-100 shadow-zinc-200'}`}>
         {/* Header Tab */}
-        <div className="flex">
+        <div className="flex p-2">
           <button 
             onClick={() => setType('buyer')}
-            className={`flex-1 py-6 flex flex-col items-center gap-2 transition-all relative ${type === 'buyer' ? 'bg-emerald-600' : 'bg-zinc-800'}`}
+            className={`flex-1 py-4 flex flex-col items-center gap-2 rounded-[32px] transition-all relative ${type === 'buyer' ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-white/5 opacity-40 grayscale'}`}
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${type === 'buyer' ? 'bg-white/20' : 'bg-zinc-700/50'}`}>
-              <ShoppingCart className="w-5 h-5 text-white" />
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${type === 'buyer' ? 'bg-supplyx-blue text-white' : 'bg-zinc-700/50'}`}>
+              <ShoppingCart className="w-4 h-4" />
             </div>
             <div className="text-center">
-              <p className="text-xs font-black uppercase tracking-tight text-white">{t.buyerTitle}</p>
-              <p className="text-[8px] font-bold text-white/60 uppercase">{t.buyerSub}</p>
+              <p className="text-[10px] font-black uppercase tracking-tight text-white">{t.buyerTitle}</p>
             </div>
-            {type === 'buyer' && <motion.div layoutId="tab-indicator" className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-4 bg-emerald-600 rotate-45" />}
           </button>
           <button 
             onClick={() => setType('supplier')}
-            className={`flex-1 py-6 flex flex-col items-center gap-2 transition-all relative ${type === 'supplier' ? 'bg-blue-600' : 'bg-zinc-800'}`}
+            className={`flex-1 py-4 flex flex-col items-center gap-2 rounded-[32px] transition-all relative ${type === 'supplier' ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-white/5 opacity-40 grayscale'}`}
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${type === 'supplier' ? 'bg-white/20' : 'bg-zinc-700/50'}`}>
-              <Package className="w-5 h-5 text-white" />
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${type === 'supplier' ? 'bg-supplyx-blue text-white' : 'bg-zinc-700/50'}`}>
+              <Package className="w-4 h-4" />
             </div>
             <div className="text-center">
-              <p className="text-xs font-black uppercase tracking-tight text-white">{t.supplierTitle}</p>
-              <p className="text-[8px] font-bold text-white/60 uppercase">{t.supplierSub}</p>
+              <p className="text-[10px] font-black uppercase tracking-tight text-white">{t.supplierTitle}</p>
             </div>
-            {type === 'supplier' && <motion.div layoutId="tab-indicator" className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-4 bg-blue-600 rotate-45" />}
           </button>
         </div>
 

@@ -122,13 +122,13 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
     <div className="relative">
       <button 
         onClick={toggleOpen}
-        className={`p-2.5 rounded-xl border transition-all relative ${
-          isDarkMode ? 'border-zinc-800 text-zinc-400 bg-zinc-900 group' : 'border-zinc-200 text-zinc-400 bg-white group'
+        className={`w-12 h-12 flex items-center justify-center rounded-2xl border transition-all relative group shadow-xl ${
+          isDarkMode ? 'bg-supplyx-dark border-white/5 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
         }`}
       >
-        <Bell className={`w-5 h-5 transition-colors ${unreadCount > 0 ? 'text-brand animate-pulse' : ''}`} />
+        <Bell className={`w-5 h-5 transition-colors ${unreadCount > 0 ? 'text-supplyx-blue animate-pulse-slow' : ''}`} />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-background animate-bounce">
+          <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-supplyx-blue text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-supplyx-deep">
             {unreadCount}
           </span>
         )}
@@ -142,47 +142,49 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className={`absolute -right-12 md:right-0 mt-3 w-80 md:w-96 rounded-3xl border z-40 overflow-hidden shadow-2xl origin-top-right ${
-                isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-100'
+              className={`absolute -right-24 md:right-0 mt-6 w-[320px] sm:w-[420px] rounded-[32px] border z-40 overflow-hidden shadow-3xl origin-top-right glass-dark ${
+                isDarkMode ? 'border-white/5' : 'bg-white border-zinc-100'
               }`}
             >
-              <div className={`p-5 border-b flex justify-between items-center ${isDarkMode ? 'border-zinc-800' : 'border-zinc-50'}`}>
-                <h3 className={`font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+              <div className={`p-8 border-b flex justify-between items-center ${isDarkMode ? 'border-white/5 bg-white/5' : 'border-zinc-50'}`}>
+                <h3 className={`font-black uppercase italic tracking-[0.2em] text-[11px] ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-900'}`}>
                   {t.title}
                 </h3>
                 {unreadCount > 0 && (
                   <button 
                     onClick={markAllAsRead}
-                    className="text-[10px] font-black uppercase text-brand hover:underline"
+                    className="text-[10px] font-black uppercase text-zinc-400 hover:text-white transition-colors"
                   >
                     {t.markRead}
                   </button>
                 )}
               </div>
 
-              <div className="max-h-[400px] overflow-y-auto">
+              <div className="max-h-[500px] overflow-y-auto">
                 {notifications.length === 0 ? (
-                  <div className="p-10 text-center">
-                    <CheckCircle2 className="w-10 h-10 text-zinc-200 mx-auto mb-3" />
-                    <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
+                  <div className="p-16 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-6">
+                      <CheckCircle2 className="w-8 h-8 text-zinc-600" />
+                    </div>
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
                       {t.empty}
                     </p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-zinc-800/10">
+                  <div className="divide-y divide-white/5">
                     {notifications.map((n) => (
                       <div 
                         key={n.id} 
-                        className={`p-4 flex gap-4 transition-colors relative group ${
-                          !n.isRead ? (isDarkMode ? 'bg-brand/5' : 'bg-brand/5') : ''
-                        } ${isDarkMode ? 'hover:bg-zinc-900' : 'hover:bg-zinc-50'}`}
+                        className={`p-6 flex gap-6 transition-all relative group ${
+                          !n.isRead ? (isDarkMode ? 'bg-supplyx-blue/5' : 'bg-supplyx-blue/5') : ''
+                        } ${isDarkMode ? 'hover:bg-white/[0.02]' : 'hover:bg-zinc-50'}`}
                       >
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${
                           n.type === 'promotion' ? 'bg-amber-500/10 text-amber-500' : 
                           n.type === 'supplier' ? 'bg-emerald-500/10 text-emerald-500' :
-                          n.type === 'rfq' ? 'bg-brand/10 text-brand' :
-                          n.type === 'stock' ? 'bg-red-500/10 text-red-500' :
-                          n.type === 'order' ? 'bg-purple-500/10 text-purple-500' : 'bg-blue-500/10 text-blue-500'
+                          n.type === 'rfq' ? 'bg-supplyx-blue/10 text-supplyx-blue' :
+                          n.type === 'stock' ? 'bg-rose-500/10 text-rose-500' :
+                          n.type === 'order' ? 'bg-violet-500/10 text-violet-500' : 'bg-blue-500/10 text-blue-500'
                         }`}>
                           {n.type === 'promotion' ? <Tag className="w-5 h-5" /> : 
                            n.type === 'supplier' ? <MapPin className="w-5 h-5" /> : 
@@ -191,21 +193,21 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                            n.type === 'order' ? <Clock className="w-5 h-5" /> : <Info className="w-5 h-5" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-black uppercase leading-tight ${isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                          <p className={`text-[12px] font-black uppercase italic leading-tight mb-1 ${isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>
                             {language === 'PT' ? n.titlePT : n.titleEN}
                           </p>
-                          <p className={`text-[11px] mt-1 line-clamp-2 ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                          <p className={`text-[11px] font-medium leading-relaxed mb-3 line-clamp-2 ${isDarkMode ? 'text-zinc-500' : 'text-zinc-500'}`}>
                             {language === 'PT' ? n.descPT : n.descEN}
                           </p>
-                          <span className="text-[9px] font-bold text-zinc-500 mt-2 block uppercase tracking-widest">
-                            {n.time}
+                          <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest flex items-center gap-2">
+                             <Clock className="w-3 h-3" /> {n.time}
                           </span>
                         </div>
                         <button 
                           onClick={() => removeNotification(n.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-500 transition-all"
+                          className="opacity-0 group-hover:opacity-100 w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-rose-500 hover:bg-rose-500/10 transition-all active:scale-95"
                         >
-                          <X className="w-3 h-3" />
+                          <X className="w-4 h-4" />
                         </button>
                       </div>
                     ))}
@@ -213,13 +215,13 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                 )}
               </div>
 
-              <div className={`p-4 border-t text-center ${isDarkMode ? 'border-zinc-800 bg-zinc-950' : 'border-zinc-50 bg-zinc-50/50'}`}>
+              <div className={`p-6 border-t text-center ${isDarkMode ? 'border-white/5 bg-white/5' : 'border-zinc-50 bg-zinc-50/50'}`}>
                 <button 
                   onClick={() => {
                     setIsOpen(false);
                     onViewAll?.();
                   }}
-                  className="text-[10px] font-black uppercase tracking-widest text-brand hover:underline"
+                  className="w-full h-12 rounded-2xl flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-supplyx-blue hover:bg-supplyx-blue hover:text-white transition-all active:scale-95 border border-supplyx-blue/20"
                 >
                   {t.viewAll}
                 </button>

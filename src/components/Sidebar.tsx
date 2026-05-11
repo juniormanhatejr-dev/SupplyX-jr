@@ -100,54 +100,49 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
         onClick={onClose}
       />
 
-      <aside className={`fixed left-0 top-0 h-screen w-64 border-r flex flex-col z-[70] transition-all duration-300 transform lg:translate-x-0
+      <aside className={`fixed left-0 top-0 h-screen w-64 flex flex-col z-[70] transition-all duration-500 transform lg:translate-x-0
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        ${isDarkMode ? 'bg-zinc-950 border-zinc-800 shadow-2xl shadow-black' : 'bg-white border-zinc-200'}`}>
+        ${isDarkMode ? 'bg-supplyx-deep border-r border-white/5 shadow-3xl' : 'bg-white border-r border-zinc-200'}`}>
+        
         <div className="p-8 flex items-center justify-between">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-3">
-              <SupplyXLogo size="lg" showText={false} isDark={isDarkMode} />
-              <div className="flex flex-col">
-                <span className={`text-xl font-black tracking-tight leading-none ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-                  SUPPLY<span className="text-[#00B8D9]">X</span>
-                </span>
-                <p className="text-[7px] font-black uppercase tracking-[0.1em] text-zinc-500 mt-1 leading-none whitespace-nowrap">
-                  powered by <span className="text-[#00B8D9]">Manhate Link África</span>
-                </p>
-              </div>
-            </div>
-          </div>
-          <button onClick={onClose} className="lg:hidden p-2 text-zinc-400 hover:text-zinc-600">
+          <SupplyXLogo size="md" isDark={isDarkMode} />
+          <button onClick={onClose} className="lg:hidden p-2 text-zinc-400 hover:text-white">
             <LogOut className="w-5 h-5 rotate-180" />
           </button>
         </div>
 
-      <nav className="flex-1 px-4 space-y-1 mt-4 overflow-y-auto">
-        {filteredItems.map((item, index) => (
-          <button
-            key={index}
-            onClick={() => {
-              onNavItemClick(item.originalLabel);
-              if (window.innerWidth < 1024) onClose();
-            }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-black transition-all duration-200 group
-              ${activeItem === item.originalLabel 
-                ? 'bg-brand text-white shadow-xl shadow-brand/20' 
-                : isDarkMode ? 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-100' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}`}
-          >
-            <item.icon className={`w-5 h-5 ${activeItem === item.originalLabel ? 'text-white' : 'text-brand'}`} />
-            {item.label}
-          </button>
-        ))}
+      <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto custom-scrollbar">
+        {filteredItems.map((item, index) => {
+          const isActive = activeItem === item.originalLabel;
+          return (
+            <button
+              key={index}
+              onClick={() => {
+                onNavItemClick(item.originalLabel);
+                if (window.innerWidth < 1024) onClose();
+              }}
+              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 group relative
+                ${isActive 
+                  ? 'bg-supplyx-blue text-white shadow-2xl shadow-blue-500/20' 
+                  : isDarkMode ? 'text-zinc-500 hover:bg-white/5 hover:text-white' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}`}
+            >
+              <item.icon className={`w-5 h-5 transition-transform group-hover:scale-110 ${isActive ? 'text-white' : 'text-supplyx-blue'}`} />
+              {item.label}
+              {isActive && (
+                <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              )}
+            </button>
+          );
+        })}
       </nav>
 
-      <div className={`p-4 border-t ${isDarkMode ? 'border-zinc-800' : 'border-zinc-100'}`}>
+      <div className={`p-6 border-t ${isDarkMode ? 'border-white/5' : 'border-zinc-100'}`}>
         <button 
           onClick={onLogout}
-          className={`w-full flex items-center gap-3 px-3 py-3 text-sm font-black uppercase tracking-widest transition-all rounded-xl
-            ${isDarkMode ? 'text-zinc-500 hover:text-white hover:bg-zinc-900' : 'text-zinc-400 hover:text-zinc-900'}`}
+          className={`w-full flex items-center gap-3 px-4 py-4 text-[11px] font-black uppercase tracking-[0.2em] transition-all rounded-2xl group
+            ${isDarkMode ? 'text-zinc-500 hover:text-red-400 hover:bg-red-500/5' : 'text-zinc-400 hover:text-zinc-900'}`}
         >
-          <LogOut className="w-5 h-5" />
+          <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
           {nav.logout}
         </button>
       </div>

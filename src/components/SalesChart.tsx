@@ -45,25 +45,25 @@ export default function SalesChart({ isDarkMode, userType = 'buyer', language = 
   }[language];
 
   return (
-    <div className={`p-4 md:p-8 rounded-3xl border shadow-sm min-h-[350px] h-full transition-all flex flex-col ${
-      isDarkMode ? 'bg-zinc-900 border-zinc-800 shadow-2xl' : 'bg-white border-zinc-200 shadow-sm'
+    <div className={`p-8 md:p-12 rounded-[48px] border shadow-3xl min-h-[400px] h-full transition-all flex flex-col ${
+      isDarkMode ? 'bg-supplyx-dark border-white/5' : 'bg-white border-zinc-200 shadow-sm'
     }`} id="sales-chart-container">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 md:mb-10 shrink-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-12 shrink-0">
         <div>
-          <h3 className={`text-lg font-black italic uppercase tracking-tighter transition-colors ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+          <h3 className={`text-xl font-black italic uppercase tracking-tighter transition-colors ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
             {translations.title}
           </h3>
-          <p className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>
+          <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>
             {translations.subtitle}
           </p>
         </div>
         <select 
-          className={`bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-brand w-full sm:w-auto cursor-pointer transition-all ${
-            isDarkMode ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-zinc-50 border-zinc-200 text-zinc-600'
+          className={`bg-zinc-50 border border-zinc-200 rounded-2xl px-6 py-3 text-[10px] font-black uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-supplyx-blue w-full sm:w-auto cursor-pointer transition-all ${
+            isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-600'
           }`}
         >
-          <option value="7">{translations.last7}</option>
-          <option value="30">{translations.last30}</option>
+          <option value="7" className="bg-supplyx-deep">{translations.last7}</option>
+          <option value="30" className="bg-supplyx-deep">{translations.last30}</option>
         </select>
       </div>
 
@@ -72,42 +72,47 @@ export default function SalesChart({ isDarkMode, userType = 'buyer', language = 
           <AreaChart data={data}>
             <defs>
               <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#0052CC" stopOpacity={0.2}/>
-                <stop offset="95%" stopColor="#0052CC" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDarkMode ? '#27272a' : '#f4f4f5'} />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDarkMode ? 'rgba(255,255,255,0.05)' : '#f4f4f5'} />
             <XAxis 
               dataKey="name" 
               axisLine={false} 
               tickLine={false} 
               tick={{ fontSize: 10, fill: isDarkMode ? '#52525b' : '#9CA3AF', fontWeight: 'bold' }}
-              dy={10}
+              dy={15}
             />
             <YAxis 
               axisLine={false} 
               tickLine={false} 
               tick={{ fontSize: 10, fill: isDarkMode ? '#52525b' : '#9CA3AF', fontWeight: 'bold' }}
-              tickFormatter={(value) => `MT ${value}`}
+              tickFormatter={(value) => `MT ${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`}
+              dx={-10}
             />
             <Tooltip 
               contentStyle={{ 
-                borderRadius: '16px', 
-                border: isDarkMode ? '1px solid #27272a' : '1px solid #E5E7EB',
-                backgroundColor: isDarkMode ? '#18181b' : '#ffffff',
-                boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
-                color: isDarkMode ? '#fff' : '#000'
+                borderRadius: '24px', 
+                border: isDarkMode ? '1px solid rgba(255,255,255,0.1)' : '1px solid #E5E7EB',
+                backgroundColor: isDarkMode ? 'rgba(6, 8, 22, 0.9)' : '#ffffff',
+                backdropFilter: 'blur(10px)',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                color: isDarkMode ? '#fff' : '#000',
+                padding: '16px'
               }}
-              labelStyle={{ fontWeight: 'black', marginBottom: '4px', textTransform: 'uppercase', fontSize: '10px' }}
+              labelStyle={{ fontWeight: '900', marginBottom: '8px', textTransform: 'uppercase', fontSize: '10px', letterSpacing: '0.1em' }}
+              itemStyle={{ fontWeight: '700', fontSize: '12px' }}
               formatter={(value: any) => [`MT ${value}`, translations.value]}
             />
             <Area 
               type="monotone" 
               dataKey="value" 
-              stroke="#0052CC" 
+              stroke="#3B82F6" 
               strokeWidth={4}
               fillOpacity={1} 
               fill="url(#colorValue)" 
+              animationDuration={2000}
             />
           </AreaChart>
         </ResponsiveContainer>

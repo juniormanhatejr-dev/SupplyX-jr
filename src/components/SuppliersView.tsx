@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { Handshake, Search, Star, MapPin, ExternalLink, MoreVertical, ArrowLeft, Phone, Mail, Globe, ShieldCheck, Clock, Award, Loader2 } from 'lucide-react';
+import { OptimizedImage } from './ui/OptimizedImage';
 import { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -115,7 +116,13 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile }: S
           <div className="flex flex-col md:flex-row gap-8 items-start">
             <div className={`w-24 h-24 shrink-0 rounded-3xl flex items-center justify-center overflow-hidden ${isDarkMode ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
               {selectedSupplier.photoURL ? (
-                <img src={selectedSupplier.photoURL} alt={selectedSupplier.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                <OptimizedImage 
+                  src={selectedSupplier.photoURL} 
+                  alt={selectedSupplier.name} 
+                  className="w-full h-full object-cover" 
+                  referrerPolicy="no-referrer"
+                  containerClassName="w-full h-full"
+                />
               ) : (
                 <Handshake className="w-12 h-12 text-brand" />
               )}
@@ -246,7 +253,13 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile }: S
                   isDarkMode ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-100'
                 }`}>
                   {s.photoURL ? (
-                    <img src={s.photoURL} alt={s.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <OptimizedImage 
+                      src={s.photoURL} 
+                      alt={s.name} 
+                      className="w-full h-full object-cover" 
+                      referrerPolicy="no-referrer" 
+                      containerClassName="w-full h-full"
+                    />
                   ) : (
                     <Handshake className="w-7 h-7 text-brand" />
                   )}

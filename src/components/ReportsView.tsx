@@ -1,9 +1,11 @@
 import { motion } from 'motion/react';
 import { useRef, useState } from 'react';
-import { BarChart3, TrendingUp, Download, Calendar, Filter, Loader2 } from 'lucide-react';
+import { BarChart3, TrendingUp, Download, Calendar, Filter, Loader2, DollarSign } from 'lucide-react';
 import SalesChart from './SalesChart';
+import StatCard from './StatCard';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { sanitizeDocumentColors } from '../lib/colorSanitizer';
 
 interface ReportsViewProps {
   isDarkMode: boolean;
@@ -20,35 +22,23 @@ export default function ReportsView({ isDarkMode, language }: ReportsViewProps) 
     setIsExporting(true);
     try {
       const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
+        scale: 1.2, // Slightly lower for faster processing on complex charts
         useCORS: true,
         backgroundColor: isDarkMode ? '#09090b' : '#ffffff',
+        logging: false,
+        imageTimeout: 15000,
         onclone: (clonedDoc) => {
-          const elements = clonedDoc.getElementsByTagName('*');
-          for (let i = 0; i < elements.length; i++) {
-            const el = elements[i] as HTMLElement;
-            const style = window.getComputedStyle(el);
-            ['backgroundColor', 'color', 'borderColor'].forEach(prop => {
-              const val = style[prop as any];
-              if (val && (val.includes('oklab') || val.includes('oklch'))) {
-                if (val.includes('/ 0')) {
-                   el.style[prop as any] = 'transparent';
-                } else {
-                   el.style[prop as any] = prop === 'backgroundColor' ? (isDarkMode ? '#09090b' : 'white') : (isDarkMode ? 'white' : 'black');
-                }
-              }
-            });
-          }
+          sanitizeDocumentColors(clonedDoc, isDarkMode);
         }
       });
       
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgData = canvas.toDataURL('image/jpeg', 0.7);
+      const pdf = new jsPDF('p', 'mm', 'a4', true);
       const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
       pdf.save(`Relatorio_Performance_${new Date().getTime()}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -110,27 +100,30 @@ export default function ReportsView({ isDarkMode, language }: ReportsViewProps) 
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className={`p-6 rounded-3xl border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-emerald-500" />
-            </div>
-            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">+12.5%</span>
-          </div>
-          <p className={`text-2xl font-black italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>MT 1.2M</p>
-          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-1">{t.savings}</p>
-        </div>
-
-        <div className={`p-6 rounded-3xl border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-brand/10 rounded-2xl flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-brand" />
-            </div>
-            <span className="text-[10px] font-black text-brand uppercase tracking-widest">+5.2%</span>
-          </div>
-          <p className={`text-2xl font-black italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>MT 4.8M</p>
-          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-1">{t.volume}</p>
-        </div>
+        <StatCard 
+          label={t.savings}
+          value="MT 1.2M"
+          change="+12.5%"
+          trend="up"
+          icon={TrendingUp}
+          isDarkMode={isDarkMode}
+        />
+        <StatCard 
+          label={t.volume}
+          value="MT 4.8M"
+          change="+5.2%"
+          trend="up"
+          icon={BarChart3}
+          isDarkMode={isDarkMode}
+        />
+        <StatCard 
+          label={language === 'PT' ? 'ROI Estimado' : 'Estimated ROI'}
+          value="24.5%"
+          change="+1.8%"
+          trend="up"
+          icon={DollarSign}
+          isDarkMode={isDarkMode}
+        />
       </div>
 
       <div className={`p-8 rounded-3xl border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>

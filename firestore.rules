@@ -38,8 +38,8 @@ service cloud.firestore {
              (!('bio' in data) || (data.bio is string && data.bio.size() <= 1000)) &&
              (!('phone' in data) || (data.phone is string && data.phone.size() <= 50)) &&
              (!('address' in data) || (data.address is string && data.address.size() <= 500)) &&
-             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 2000)) &&
-             (!('coverURL' in data) || (data.coverURL is string && data.coverURL.size() <= 2000)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 3000000)) &&
+             (!('coverURL' in data) || (data.coverURL is string && data.coverURL.size() <= 3000000)) &&
              (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
              (!('nuit' in data) || (data.nuit is string && data.nuit.size() <= 50)) &&
              (!('sector' in data) || (data.sector is string && data.sector.size() <= 100)) &&
@@ -53,7 +53,7 @@ service cloud.firestore {
              data.name is string && data.name.size() <= 200 &&
              data.price is number && data.price >= 0 &&
              (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
-             (!('image' in data) || (data.image is string && data.image.size() <= 1000)) &&
+             (!('image' in data) || (data.image is string && data.image.size() <= 3000000)) &&
              (!('createdAt' in data) || (data.createdAt is timestamp)) &&
              (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }

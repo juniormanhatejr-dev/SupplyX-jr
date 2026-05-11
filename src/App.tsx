@@ -16,6 +16,7 @@ import ChatView from './components/ChatView';
 import CartModal from './components/CartModal';
 import ProfileModal from './components/ProfileModal';
 import SupplyXLogo from './components/SupplyXLogo';
+import { OptimizedImage } from './components/ui/OptimizedImage';
 import { useAuth } from './contexts/AuthContext';
 import { useCart } from './contexts/CartContext';
 import { auth } from './lib/firebase';
@@ -318,7 +319,13 @@ export default function App() {
               >
                 <div className={`w-8 h-8 rounded-lg overflow-hidden border shadow-sm transition-transform group-hover:scale-105 ${isDarkMode ? 'border-zinc-700 bg-zinc-800' : 'border-zinc-300 bg-white'}`}>
                   {profile?.photoURL ? (
-                    <img src={profile.photoURL} alt={profile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <OptimizedImage 
+                      src={profile.photoURL} 
+                      alt={profile.name} 
+                      className="w-full h-full object-cover" 
+                      referrerPolicy="no-referrer" 
+                      containerClassName="w-full h-full"
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-brand/10 text-brand font-black italic text-xs">
                       {profile?.name?.charAt(0)}

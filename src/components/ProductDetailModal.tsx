@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import ProfileModal from './ProfileModal';
+import { OptimizedImage } from './ui/OptimizedImage';
 
 interface Product {
   id: string;
@@ -121,11 +122,12 @@ export default function ProductDetailModal({ product, isOpen, onClose, onEdit, i
 
             {/* Left: Image */}
             <div className="w-full md:w-1/2 aspect-square md:aspect-auto h-auto md:h-full relative overflow-hidden">
-                <img 
+                <OptimizedImage 
                   src={product.image} 
                   alt={product.name} 
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
+                  containerClassName="w-full h-full"
                 />
                 {product.onSale && (
                   <div className="absolute top-6 left-6 bg-red-600 text-white text-xs font-black uppercase px-3 py-1.5 rounded-xl shadow-lg">

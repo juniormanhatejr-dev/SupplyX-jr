@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ChangeEvent } from 'react';
 import { 
   ChevronDown, 
   Target, 
@@ -25,10 +25,11 @@ import {
   MessageSquare,
   Brain
 } from 'lucide-react';
-import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType, uploadFile } from '../lib/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, getDoc } from 'firebase/firestore';
 import ProfileModal from './ProfileModal';
 import ProductDetailModal from './ProductDetailModal';
+import { OptimizedImage } from './ui/OptimizedImage';
 import { useCart } from '../contexts/CartContext';
 
 interface Product {
@@ -131,6 +132,7 @@ export default function ProductsView({
   const [isSuccess, setIsSuccess] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
@@ -202,6 +204,41 @@ export default function ProductsView({
     }
   };
 
+  const handleProductImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    console.log('handleProductImageUpload triggered');
+    const file = e.target.files?.[0];
+    if (!file) {
+      console.log('No file selected');
+      return;
+    }
+    console.log('File selected:', { name: file.name, size: file.size, type: file.type });
+    
+    if (!auth.currentUser) {
+      console.log('User not authenticated, cannot upload');
+      alert(language === 'PT' ? 'Você precisa estar logado para carregar imagens.' : 'You must be logged in to upload images.');
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      alert(language === 'PT' ? 'Por favor, selecione uma imagem válida.' : 'Please select a valid image.');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const path = `products/${auth.currentUser.uid}/${Date.now()}_${file.name}`;
+      console.log('Calling uploadFile with path:', path);
+      const url = await uploadFile(path, file);
+      console.log('uploadFile returned URL/Data:', url.substring(0, 50) + '...');
+      setEditingProduct(prev => ({ ...prev, image: url }));
+    } catch (err: any) {
+      console.error('Final upload error caught in component:', err);
+      alert(language === 'PT' ? `Erro: ${err.message}` : `Error: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const t = {
     PT: {
       browse: 'Explorar Catálogo',
@@ -267,7 +304,8 @@ export default function ProductsView({
         pending: 'Pendente',
         responseTime: 'Tempo de Resposta Acordado',
         transactionId: 'ID da Transação'
-      }
+      },
+      imageError: 'Erro ao carregar imagem'
     },
     EN: {
       browse: 'Browse Catalog',
@@ -326,6 +364,7 @@ export default function ProductsView({
       buyer: 'Buyer',
       supplier: 'Supplier',
       interestIn: 'Interest in product',
+      imageError: 'Error loading image',
       csv: {
         type: 'Request Type',
         dateTime: 'Date/Time',
@@ -618,11 +657,12 @@ export default function ProductsView({
               className="space-y-2 group cursor-pointer relative"
             >
               <div className={`aspect-square rounded-xl overflow-hidden ${isDarkMode ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
-                <img 
+                <OptimizedImage 
                   src={item.image} 
                   alt="" 
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                   referrerPolicy="no-referrer"
+                  containerClassName="w-full h-full"
                 />
                 {userType === 'supplier' && (
                   <div className="absolute top-2 right-2 bg-zinc-900/80 p-2 rounded-lg backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity">
@@ -715,11 +755,12 @@ export default function ProductsView({
               className="relative group cursor-pointer"
             >
               <div className={`aspect-square rounded-xl overflow-hidden ${isDarkMode ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
-                <img 
+                <OptimizedImage 
                   src={item.image} 
                   alt="" 
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                   referrerPolicy="no-referrer"
+                  containerClassName="w-full h-full"
                 />
               </div>
               <div className="absolute bottom-2 left-2 right-2">
@@ -802,23 +843,39 @@ export default function ProductsView({
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.imageUrl}</label>
-                    <input 
-                      type="text"
-                      value={editingProduct?.image || ''}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
-                      className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
-                      placeholder="https://..."
-                    />
+                    <div className="flex gap-2">
+                      <input 
+                        type="text"
+                        value={editingProduct?.image || ''}
+                        onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
+                        className={`flex-1 p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
+                        placeholder="https://..."
+                      />
+                      <label className={`shrink-0 flex items-center justify-center w-14 h-14 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:bg-brand/5 hover:border-brand/50 ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-500' : 'bg-zinc-50 border-zinc-100 text-zinc-400'}`}>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={handleProductImageUpload} 
+                        />
+                        {isUploading ? (
+                          <Loader2 className="w-5 h-5 animate-spin text-brand" />
+                        ) : (
+                          <Plus className="w-5 h-5" />
+                        )}
+                      </label>
+                    </div>
                   </div>
                 </div>
 
                 {editingProduct?.image && (
                   <div className="relative aspect-video rounded-2xl overflow-hidden border-2 border-zinc-100 dark:border-zinc-800">
-                    <img 
+                    <OptimizedImage 
                       src={editingProduct.image} 
                       alt="Preview" 
                       className="w-full h-full object-cover"
-                      onError={(e) => (e.currentTarget.src = 'https://images.unsplash.com/photo-1581094288338-2314dddb7ec3?w=600&q=80')}
+                      containerClassName="w-full h-full"
+                      fallback={<div className="flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-400 text-[8px] font-black uppercase tracking-widest">{t.imageError || 'Error'}</div>}
                     />
                     <div className="absolute top-2 left-2 px-2 py-1 bg-black/50 backdrop-blur-md rounded text-[8px] font-black text-white uppercase tracking-widest">{t.imagePreview}</div>
                   </div>

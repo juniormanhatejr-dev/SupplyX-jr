@@ -159,6 +159,19 @@ export default function RegistrationView({ isDarkMode, language, onSuccess }: Re
 
     try {
       if (mode === 'register') {
+        // Basic validation
+        if (formData.name.trim().length === 0 || formData.userName.trim().length === 0) {
+          setError(language === 'PT' ? 'Por favor, preencha todos os campos obrigatórios.' : 'Please fill in all required fields.');
+          setIsLoading(false);
+          return;
+        }
+
+        if (formData.password.length < 6) {
+          setError(language === 'PT' ? 'A senha deve ter pelo menos 6 caracteres.' : 'Password must be at least 6 characters.');
+          setIsLoading(false);
+          return;
+        }
+
         const userCredential = await createUserWithEmailAndPassword(auth, formData.email.trim(), formData.password);
         const user = userCredential.user;
 
@@ -166,27 +179,37 @@ export default function RegistrationView({ isDarkMode, language, onSuccess }: Re
 
         // Save to Firestore
         try {
-            await setDoc(doc(db, 'users', user.uid), {
-              uid: user.uid,
-              name: formData.name,
-              userName: formData.userName,
-              nuit: formData.nuit,
-              address: formData.address,
-              phone: formData.phone,
-              email: formData.email.trim(),
-              type: type,
-              sector: formData.sector,
-              city: formData.city,
-              bio: t.defaultBio(formData.sector, formData.city),
-              photoURL: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&q=80',
-              coverURL: 'https://images.unsplash.com/photo-1541746972996-4e0b0f43e02a?w=1000&q=80',
-              createdAt: serverTimestamp()
-            });
+          await createProfileDoc(user.uid, {
+            name: formData.name,
+            userName: formData.userName,
+            nuit: formData.nuit,
+            address: formData.address,
+            phone: formData.phone,
+            email: formData.email.trim(),
+            type: type,
+            sector: formData.sector,
+            city: formData.city,
+          });
         } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
+          // If Firestore fails, we still let them in but they might need to fix it later
+          // or we handle it via AuthContext or login recovery
+          console.error('Firestore creation failed during registration:', err);
         }
       } else {
-        await signInWithEmailAndPassword(auth, formData.email.trim(), formData.password);
+        const userCredential = await signInWithEmailAndPassword(auth, formData.email.trim(), formData.password);
+        const user = userCredential.user;
+
+        // Check if profile exists, if not create a minimal one (Recovery)
+        const docRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+          await createProfileDoc(user.uid, {
+            name: user.displayName || 'User',
+            userName: user.displayName || 'User',
+            email: user.email || '',
+            type: 'buyer', // Default to buyer on recovery
+          });
+        }
       }
 
       onSuccess();
@@ -198,9 +221,33 @@ export default function RegistrationView({ isDarkMode, language, onSuccess }: Re
       if (err.code === 'auth/wrong-password') message = language === 'PT' ? 'Senha incorreta.' : 'Wrong password.';
       if (err.code === 'auth/email-already-in-use') message = language === 'PT' ? 'Este e-mail já está em uso.' : 'Email already in use.';
       if (err.code === 'auth/invalid-email') message = t.invalidEmail;
+      if (err.code === 'auth/weak-password') message = language === 'PT' ? 'Senha muito fraca.' : 'Weak password.';
       setError(message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const createProfileDoc = async (uid: string, data: any) => {
+    try {
+      await setDoc(doc(db, 'users', uid), {
+        uid,
+        name: data.name || '',
+        userName: data.userName || '',
+        nuit: data.nuit || '',
+        address: data.address || '',
+        phone: data.phone || '',
+        email: data.email || '',
+        type: data.type || 'buyer',
+        sector: data.sector || t.sectors[0],
+        city: data.city || 'Maputo',
+        bio: data.bio || (data.sector ? t.defaultBio(data.sector, data.city || 'Maputo') : t.welcome),
+        photoURL: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&q=80',
+        coverURL: 'https://images.unsplash.com/photo-1541746972996-4e0b0f43e02a?w=1000&q=80',
+        createdAt: serverTimestamp()
+      }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${uid}`);
     }
   };
 
@@ -215,25 +262,12 @@ export default function RegistrationView({ isDarkMode, language, onSuccess }: Re
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
-        try {
-          await setDoc(doc(db, 'users', user.uid), {
-            uid: user.uid,
-            name: user.displayName || '',
-            nuit: '',
-            address: '',
-            phone: '',
-            email: user.email || '',
-            type: type,
-            sector: t.sectors[0],
-            city: 'Maputo',
-            bio: t.welcome,
-            photoURL: user.photoURL || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&q=80',
-            coverURL: 'https://images.unsplash.com/photo-1541746972996-4e0b0f43e02a?w=1000&q=80',
-            createdAt: serverTimestamp()
-          }, { merge: true });
-        } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
-        }
+        await createProfileDoc(user.uid, {
+          name: user.displayName || '',
+          userName: user.displayName || '',
+          email: user.email || '',
+          type: type,
+        });
       }
 
       onSuccess();
@@ -319,7 +353,12 @@ export default function RegistrationView({ isDarkMode, language, onSuccess }: Re
                     isDarkMode={isDarkMode}
                     badge={t.taxIdBadge}
                     value={formData.nuit}
-                    onChange={(v) => setFormData({...formData, nuit: v})}
+                    onChange={(v) => {
+                      const numericValue = v.replace(/[^0-9]/g, '');
+                      if (numericValue.length <= 9) {
+                        setFormData({...formData, nuit: numericValue});
+                      }
+                    }}
                   />
                   <InputField 
                     icon={MapPin} 

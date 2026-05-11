@@ -37,8 +37,8 @@ export default function StatCard({ label, value, change, trend, icon: Icon, dela
         </div>
       </div>
       <div>
-        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>{label}</p>
-        <h3 className={`text-2xl font-black italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{value}</h3>
+        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 truncate ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>{label}</p>
+        <h3 className={`text-2xl font-black italic tracking-tighter truncate ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{value}</h3>
       </div>
     </motion.div>
   );

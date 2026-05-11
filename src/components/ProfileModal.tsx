@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { OptimizedImage } from './ui/OptimizedImage';
 
 interface UserProfile {
   uid: string;
@@ -133,22 +134,24 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
             <div className="max-h-[85vh] overflow-y-auto">
               {/* Header / Cover */}
               <div className="h-44 relative shrink-0">
-                <img 
+                <OptimizedImage 
                   src={profile?.coverURL || 'https://images.unsplash.com/photo-1541746972996-4e0b0f43e02a?w=1000&q=80'} 
                   alt="Cover" 
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
+                  containerClassName="w-full h-full"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/60 to-transparent" />
                 
                 <div className="absolute -bottom-12 left-8 flex items-end gap-6">
                   <div className={`w-32 h-32 rounded-[32px] border-4 overflow-hidden shadow-2xl flex items-center justify-center ${isDarkMode ? 'bg-zinc-900 border-zinc-900' : 'bg-white border-white'}`}>
                     {profile?.photoURL ? (
-                      <img 
+                      <OptimizedImage 
                         src={profile.photoURL} 
                         alt={profile.name} 
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
+                        containerClassName="w-full h-full"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-brand/10 text-brand">

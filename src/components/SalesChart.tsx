@@ -45,10 +45,10 @@ export default function SalesChart({ isDarkMode, userType = 'buyer', language = 
   }[language];
 
   return (
-    <div className={`p-4 md:p-8 rounded-3xl border shadow-sm h-[350px] md:h-[450px] transition-all ${
+    <div className={`p-4 md:p-8 rounded-3xl border shadow-sm min-h-[350px] h-full transition-all flex flex-col ${
       isDarkMode ? 'bg-zinc-900 border-zinc-800 shadow-2xl' : 'bg-white border-zinc-200 shadow-sm'
     }`} id="sales-chart-container">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 md:mb-10 shrink-0">
         <div>
           <h3 className={`text-lg font-black italic uppercase tracking-tighter transition-colors ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
             {translations.title}
@@ -67,7 +67,7 @@ export default function SalesChart({ isDarkMode, userType = 'buyer', language = 
         </select>
       </div>
 
-      <div className="h-[250px] md:h-[300px] w-full">
+      <div className="flex-grow min-h-[250px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data}>
             <defs>

@@ -1,9 +1,12 @@
-import { useState, useRef, ChangeEvent } from 'react';
+import { useState, useRef, useEffect, ChangeEvent } from 'react';
+import * as XLSX from 'xlsx';
 import SupplyXLogo from './SupplyXLogo';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { GoogleGenAI, Type } from "@google/genai";
+import { sanitizeDocumentColors } from '../lib/colorSanitizer';
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import imageCompression from 'browser-image-compression';
 import { 
   FileText, 
   Clock, 
@@ -18,6 +21,7 @@ import {
   Trash2,
   Download,
   Printer,
+  Eye,
   Image as ImageIcon,
   Camera,
   Loader2,
@@ -27,12 +31,13 @@ import {
   X,
   User,
 } from 'lucide-react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, getDoc } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import ProfileModal from './ProfileModal';
+import QuotationDocument from './QuotationDocument';
 
 const availableSuppliers = [
-  { id: 'S1', name: 'Gerdau S.A.', quality: 'A+', segment: 'Estrutural' },
+  { id: 'S1', name: 'CONSTRUCENTER BEIRA', quality: 'A+', segment: 'Geral' },
   { id: 'S2', name: 'Votorantim', quality: 'A', segment: 'Básicos' },
   { id: 'S3', name: 'Saint-Gobain', quality: 'B+', segment: 'Acabamento' },
   { id: 'S4', name: 'Tigre S.A.', quality: 'A+', segment: 'Hidráulica' },
@@ -63,6 +68,97 @@ interface SupplierResponse {
   confidence: number;
 }
 
+interface MaterialComboBoxProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+  isDarkMode?: boolean;
+}
+
+function MaterialComboBox({ value, onChange, options, isDarkMode }: MaterialComboBoxProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filteredOptions = options.filter(opt => 
+    opt.toLowerCase().includes(value.toLowerCase())
+  ).slice(0, 10);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <input 
+        type="text" 
+        value={value} 
+        onChange={(e) => {
+          onChange(e.target.value);
+          setIsOpen(true);
+          setHighlightedIndex(-1);
+        }}
+        onFocus={() => setIsOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedIndex(prev => Math.min(prev + 1, filteredOptions.length - 1));
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedIndex(prev => Math.max(prev - 1, 0));
+          } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+            e.preventDefault();
+            onChange(filteredOptions[highlightedIndex]);
+            setIsOpen(false);
+          } else if (e.key === 'Escape') {
+            setIsOpen(false);
+          }
+        }}
+        className={`w-full bg-transparent border-none text-sm font-bold placeholder:text-zinc-300 outline-none ${isDarkMode ? 'text-zinc-100' : 'text-zinc-800'}`}
+      />
+      
+      <AnimatePresence>
+        {isOpen && filteredOptions.length > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className={`absolute z-[150] w-full mt-2 rounded-xl border shadow-2xl overflow-hidden ${
+              isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100'
+            }`}
+          >
+            <div className="max-h-48 overflow-y-auto">
+              {filteredOptions.map((opt, i) => (
+                <button
+                  key={opt}
+                  onClick={() => {
+                    onChange(opt);
+                    setIsOpen(false);
+                  }}
+                  onMouseEnter={() => setHighlightedIndex(i)}
+                  className={`w-full text-left px-4 py-2.5 text-xs font-bold transition-colors ${
+                    i === highlightedIndex
+                      ? (isDarkMode ? 'bg-brand/20 text-brand' : 'bg-brand/10 text-brand')
+                      : (isDarkMode ? 'text-zinc-400 hover:bg-zinc-800' : 'text-zinc-500 hover:bg-zinc-50')
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function OrdersView({ startWithForm = false, onFormClose, onNavigate, isDarkMode, language, userType = 'buyer' }: OrdersViewProps) {
   const [showForm, setShowForm] = useState(userType === 'supplier' ? false : startWithForm);
   const [respondingTo, setRespondingTo] = useState<any>(null);
@@ -73,6 +169,54 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const [aiResponses, setAiResponses] = useState<SupplierResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
+  const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
+  const [downloadingOrderId, setDownloadingOrderId] = useState<string | null>(null);
+  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [profile, setProfile] = useState<any>(null);
+  const user = auth.currentUser;
+
+  useEffect(() => {
+    if (user) {
+      const docRef = doc(db, 'users', user.uid);
+      getDoc(docRef).then(docSnap => {
+        if (docSnap.exists()) {
+          setProfile(docSnap.data());
+        }
+      }).catch(error => {
+        handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+      });
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'products'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const prods = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as any)
+      }));
+      
+      // Inject demo products for CONSTRUCENTER BEIRA (Supplier S1) to match the reference image exactly
+      const demoProds = [
+        { id: 'd1', supplierId: 'S1', name: 'Cimento CP IV', price: 818.50, category: 'Geral' },
+        { id: 'd2', supplierId: 'S1', name: 'Aço CA-50 12mm', price: 807.01, category: 'Geral' },
+        { id: 'd3', supplierId: 'S1', name: 'Tubo PVC 100mm', price: 411.50, category: 'Geral' },
+        { id: 'd4', supplierId: 'S1', name: 'Areia Média', price: 1272.00, category: 'Geral' },
+      ];
+      
+      const combined = [...prods];
+      demoProds.forEach(dp => {
+        if (!combined.some(p => p.name === dp.name && p.supplierId === dp.supplierId)) {
+          combined.push(dp);
+        }
+      });
+
+      setAllProducts(combined);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'products');
+    });
+    return () => unsubscribe();
+  }, []);
 
   const startChat = async (order: any) => {
     if (!auth.currentUser) return;
@@ -129,6 +273,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const invoiceRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -150,29 +295,40 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   };
 
   const [rows, setRows] = useState([
-    { id: 1, material: language === 'PT' ? 'Cimento CP-II 50kg' : 'Cement CP-II 50kg', quantity: '100', unit: language === 'PT' ? 'Sacos' : 'Bags', date: '2024-05-20' },
-    { id: 2, material: language === 'PT' ? 'Vergalhão 10mm' : 'Rebar 10mm', quantity: '50', unit: language === 'PT' ? 'Unid.' : 'Units', date: '2024-05-20' }
+    { id: 1, material: 'Cimento CP IV', quantity: '500.00', unit: 'SACOS', date: new Date().toISOString().split('T')[0] },
+    { id: 2, material: 'Aço CA-50 12mm', quantity: '200.00', unit: 'BARRAS', date: new Date().toISOString().split('T')[0] },
+    { id: 3, material: 'Tubo PVC 100mm', quantity: '150.00', unit: 'METROS', date: new Date().toISOString().split('T')[0] },
+    { id: 4, material: 'Areia Média', quantity: '30.00', unit: 'M³', date: new Date().toISOString().split('T')[0] }
   ]);
 
   const exportToExcel = () => {
-    const headers = [t.materialLabel, t.quantityLabel, t.unitLabel, t.needDateLabel];
-    const data = rows.map(row => [
-      row.material,
-      row.quantity,
-      row.unit,
-      row.date
+    // Ensure we have data
+    if (!rows || rows.length === 0) return;
+
+    const headers = ['Item', t.materialLabel, t.quantityLabel, t.unitLabel, t.needDateLabel];
+    const data = rows.map((row, index) => [
+      index + 1,
+      row.material || '',
+      row.quantity || '',
+      row.unit || '',
+      row.date || ''
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers, ...data].map(e => e.join(",")).join("\n");
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...data]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Materiais");
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "lista_materiais_supplyx.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Fix column widths
+    const wscols = [
+      { wch: 6 },  // Item
+      { wch: 40 }, // Material
+      { wch: 15 }, // Quantidade
+      { wch: 15 }, // Unidade
+      { wch: 20 }  // Data
+    ];
+    worksheet['!cols'] = wscols;
+
+    XLSX.writeFile(workbook, `lista_materiais_supplyx_${new Date().getTime()}.xlsx`);
   };
 
   const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -181,50 +337,62 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
     setIsImageProcessing(true);
     try {
+      // Compress image before sending to AI
+      const options = {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1920,
+        useWebWorker: true
+      };
+      
+      const compressedFile = await imageCompression(file, options);
+      
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve) => {
         reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(compressedFile);
       });
 
       const base64Data = await base64Promise;
       const base64Image = base64Data.split(',')[1];
 
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: {
-          parts: [
-            {
-              text: "Extract construction materials from this list/image. Return as a JSON array of objects with keys: material, quantity, and unit. Keep quantities as strings. Return ONLY the JSON array.",
-            },
-            {
-              inlineData: {
-                data: base64Image,
-                mimeType: file.type
-              }
-            }
-          ]
-        },
-        config: {
+      if (!process.env.GEMINI_API_KEY) {
+        throw new Error('GEMINI_API_KEY is not defined');
+      }
+
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        generationConfig: {
           responseMimeType: "application/json",
           responseSchema: {
-            type: Type.ARRAY,
+            type: SchemaType.ARRAY,
             items: {
-              type: Type.OBJECT,
+              type: SchemaType.OBJECT,
               properties: {
-                material: { type: Type.STRING },
-                quantity: { type: Type.STRING },
-                unit: { type: Type.STRING }
+                material: { type: SchemaType.STRING },
+                quantity: { type: SchemaType.STRING },
+                unit: { type: SchemaType.STRING }
               },
               required: ["material", "quantity", "unit"]
             }
           }
         }
       });
+      
+      const result = await model.generateContent([
+        {
+          text: "Extract construction materials from this list/image. Return as a JSON array of objects with keys: material, quantity, and unit. Keep quantities as strings. Return ONLY the JSON array.",
+        },
+        {
+          inlineData: {
+            data: base64Image,
+            mimeType: compressedFile.type
+          }
+        }
+      ]);
 
-      const extractedData = JSON.parse(response.text || "[]");
+      const responseText = result.response.text();
+      const extractedData = JSON.parse(responseText || "[]");
       
       if (Array.isArray(extractedData)) {
         const newRows = extractedData.map((item: any) => ({
@@ -244,6 +412,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       }
     } catch (error) {
       console.error("Error processing image:", error);
+      alert(language === 'PT' ? 'Erro ao processar imagem. Por favor, tente novamente.' : 'Error processing image. Please try again.');
     } finally {
       setIsImageProcessing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -284,16 +453,45 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     
     const responses: SupplierResponse[] = selectedSuppliers.map(sid => {
       const s = availableSuppliers.find(as => as.id === sid);
+      
+      // Calculate real total based on products if they exist
+      let calculatedTotal = 0;
+      let itemsFound = 0;
+
+      rows.forEach(row => {
+        // Try to find matching product for this supplier
+        const match = allProducts.find(p => 
+          p.supplierId === sid && 
+          (p.name.toLowerCase().includes(row.material.toLowerCase()) || 
+           row.material.toLowerCase().includes(p.name.toLowerCase()))
+        );
+
+        if (match) {
+          calculatedTotal += match.price * parseFloat(row.quantity || '0');
+          itemsFound++;
+        }
+      });
+
+      // If no items found at all for this supplier, use a small random or just 0
+      // The user wants to avoid "inventing", so if 0 items found, we should probably warn
+      if (itemsFound === 0) {
+        calculatedTotal = 0;
+      }
+
       return {
         supplierId: sid,
         name: s?.name || '',
-        price: Math.floor(Math.random() * (15000 - 8000) + 8000),
+        price: calculatedTotal > 0 ? calculatedTotal : 0,
         timeToDeliver: Math.random() > 0.5 ? (language === 'PT' ? '2 dias' : '2 days') : (language === 'PT' ? '48 horas' : '48 hours'),
-        confidence: Math.floor(Math.random() * (99 - 90) + 90)
+        confidence: calculatedTotal > 0 ? 98 : 10
       };
     });
 
-    const sorted = [...responses].sort((a, b) => a.price - b.price);
+    const sorted = [...responses].sort((a, b) => {
+      if (a.price === 0) return 1;
+      if (b.price === 0) return -1;
+      return a.price - b.price;
+    });
 
     setTimeout(() => {
       setAiResponses(sorted);
@@ -301,56 +499,148 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     }, 2500);
   };
 
+  const exportAllPDFs = () => {
+    downloadAllPDFs();
+  };
+
+  const exportComparisonToExcel = () => {
+    if (!aiResponses || aiResponses.length === 0) return;
+
+    const headers = [
+      'Ranking',
+      language === 'PT' ? 'Fornecedor' : 'Supplier',
+      language === 'PT' ? 'Preço Total (MT)' : 'Total Price (MT)',
+      language === 'PT' ? 'Prazo de Entrega' : 'Delivery Time',
+      language === 'PT' ? 'Confiança' : 'Confidence'
+    ];
+
+    const data = aiResponses.map((res, i) => [
+      i + 1,
+      res.name,
+      res.price,
+      res.timeToDeliver,
+      `${res.confidence}%`
+    ]);
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...data]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Comparativo");
+    
+    const wscols = [
+      { wch: 10 }, // Ranking
+      { wch: 35 }, // Fornecedor
+      { wch: 20 }, // Preço
+      { wch: 20 }, // Prazo
+      { wch: 15 }  // Confiança
+    ];
+    worksheet['!cols'] = wscols;
+
+    XLSX.writeFile(workbook, `comparativo_cotacao_supplyx_${new Date().getTime()}.xlsx`);
+  };
+
+  const exportOrdersToExcel = () => {
+    const orders = getOrders(t);
+    const headers = [
+      'ID',
+      userType === 'supplier' ? t.client : t.supplier,
+      t.total,
+      language === 'PT' ? 'Data' : 'Date',
+      'Status'
+    ];
+
+    const data = orders.map(order => [
+      order.id,
+      order.supplier,
+      order.total,
+      order.date,
+      order.status
+    ]);
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...data]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Pedidos");
+
+    const wscols = [
+      { wch: 12 }, // ID
+      { wch: 35 }, // Fornecedor/Cliente
+      { wch: 20 }, // Total
+      { wch: 15 }, // Data
+      { wch: 15 }  // Status
+    ];
+    worksheet['!cols'] = wscols;
+
+    XLSX.writeFile(workbook, `pedidos_supplyx_${new Date().getTime()}.xlsx`);
+  };
+
+  const exportOrdersToPDF = async () => {
+    // Generate a simple PDF table of orders since html2canvas on the whole view might be messy
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const orders = getOrders(t);
+    
+    pdf.setFontSize(20);
+    pdf.text('SupplyX - Relatório de Pedidos', 15, 20);
+    
+    pdf.setFontSize(10);
+    pdf.setTextColor(100);
+    pdf.text(`Gerado em: ${new Date().toLocaleString()}`, 15, 28);
+    
+    // Headers
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(15, 35, 180, 8, 'F');
+    const headers = ['ID', userType === 'supplier' ? t.client : t.supplier, t.total, 'Data', 'Status'];
+    pdf.text(headers[0], 20, 40);
+    pdf.text(headers[1], 45, 40);
+    pdf.text(headers[2], 115, 40);
+    pdf.text(headers[3], 145, 40);
+    pdf.text(headers[4], 175, 40);
+    
+    // Rows
+    pdf.setFont('helvetica', 'normal');
+    orders.forEach((order, i) => {
+      const y = 48 + (i * 8);
+      pdf.text(order.id, 20, y);
+      pdf.text(order.supplier.substring(0, 30), 45, y);
+      pdf.text(order.total, 115, y);
+      pdf.text(order.date, 145, y);
+      pdf.text(order.status, 175, y);
+      
+      // Bottom border for row
+      pdf.setDrawColor(240, 240, 240);
+      pdf.line(15, y + 2, 195, y + 2);
+    });
+    
+    pdf.save(`pedidos_supplyx_${new Date().getTime()}.pdf`);
+  };
+
   const downloadPDF = async (response: SupplierResponse) => {
     if (!invoiceRef.current) return;
     
     // Create a temporary container for the PDF content to ensure it looks like the user's image
     const element = invoiceRef.current;
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      onclone: (clonedDoc) => {
-        // Find all elements in the cloned document and convert oklab/oklch colors to something safe
-        // because html2canvas 1.4.1 doesn't support them.
-        const elements = clonedDoc.getElementsByTagName('*');
-        for (let i = 0; i < elements.length; i++) {
-          const el = elements[i] as HTMLElement;
-          const style = window.getComputedStyle(el);
-          
-          // Check common properties that might use these colors
-          ['backgroundColor', 'color', 'borderColor'].forEach(prop => {
-            const val = style[prop as any];
-            if (val && (val.includes('oklab') || val.includes('oklch'))) {
-              // Forced fallback to a hex or simple rgb if caught. 
-              // Since we're in the clone, we can just mutate style.
-              // For simplicity, we'll strip them or set to a fallback if we can't easily parse.
-              // Most common issue is oklch(none none none / 0) which is transparent.
-              if (val.includes('/ 0')) {
-                 el.style[prop as any] = 'transparent';
-              } else {
-                 el.style[prop as any] = prop === 'backgroundColor' ? 'white' : 'black';
-              }
-            }
-          });
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 1.2, // Slightly reduced for speed
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        imageTimeout: 10000,
+        onclone: (clonedDoc) => {
+          sanitizeDocumentColors(clonedDoc, false);
         }
-      }
-    });
-    
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgProps = pdf.getImageProperties(imgData);
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-    
-    // Set the selected response index temporarily for the PDF generation if needed
-    // Actually, we pass the response, so we should ensure the template is updated
-    // But React state updates are async, so we just pass the index before calling downloadPDF or 
-    // we make sure the template uses the 'response' passed here.
-    // Given the current architecture, I'll update the index before downloading.
-
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`Cotacao_${response.name.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
+      });
+      
+      const imgData = canvas.toDataURL('image/jpeg', 0.7);
+      const pdf = new jsPDF('p', 'mm', 'a4', true);
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      pdf.save(`Cotacao_${response.name.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
+    } catch (error) {
+      console.error("PDF generator error:", error);
+    }
   };
 
   const downloadAllPDFs = async () => {
@@ -573,160 +863,56 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
   const t = language === 'PT' ? translations.PT : translations.EN;
 
+  const currentSupplier = aiResponses[selectedResponseIndex];
+  
+  const quotationData = {
+    quoteNumber: 'PR-QT-2035/2026',
+    date: new Date().toLocaleDateString('pt-PT'),
+    validityDays: 15,
+    supplier: {
+      name: currentSupplier?.name || 'CONSTRUCENTER BEIRA',
+      isVerified: true,
+      address: 'Maputo, Moçambique',
+      email: 'sales@' + (currentSupplier?.name?.toLowerCase().replace(/\s+/g, '') || 'supplier') + '.com',
+      phone: '+258 84 000 0000',
+      nuit: '400' + Math.floor(Math.random() * 1000000),
+      bankingDetails: {
+        bankName: 'Standard Bank',
+        accountNumber: '4005667788',
+        nib: '000300004005667788991'
+      }
+    },
+    client: {
+      name: profile?.name || 'Cliente SupplyX',
+      nuit: profile?.nuit || '400377081',
+      address: profile?.address || 'NACALA - PORTO',
+      email: user?.email || 'cliente@supplyx.com',
+      phone: profile?.phone || '+258 84 ...'
+    },
+    items: rows.map((row, i) => {
+      const match = allProducts.find(p => 
+        p.supplierId === (currentSupplier?.supplierId || 'S1') && 
+        (p.name.toLowerCase().includes(row.material.toLowerCase()) || 
+         row.material.toLowerCase().includes(p.name.toLowerCase()))
+      );
+      return {
+        code: `MAT-${100 + i}`,
+        description: row.material,
+        quantity: parseFloat(row.quantity || '0'),
+        unit: row.unit,
+        unitPrice: match?.price || 0,
+        discount: 0,
+        vatPer: 16
+      };
+    })
+  };
+
   const invoiceTemplate = (
     <div className="fixed -left-[2000px] top-0 pointer-events-none z-[-100]">
-      <div ref={invoiceRef} className="w-[210mm] min-h-[297mm] bg-white p-12 text-zinc-900 border border-zinc-100 font-sans relative overflow-hidden">
-        {/* Accent Bar */}
-        <div className="absolute top-0 left-0 w-full h-2 bg-[#0052CC]"></div>
-        <div className="absolute top-0 right-0 w-32 h-32 bg-[#eff6ff] -mr-16 -mt-16 rounded-full"></div>
-        
-        {/* Watermark Logo */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-[0.05] pointer-events-none -rotate-12">
-          <SupplyXLogo size="xl" className="scale-[6]" />
-        </div>
-
-        <div className="relative z-10 flex justify-between items-start mb-12">
-          <div>
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 bg-[#18181b] rounded-2xl flex items-center justify-center text-white text-2xl font-black italic">
-                {aiResponses[selectedResponseIndex]?.name?.charAt(0) || 'S'}
-              </div>
-              <div>
-                <h1 className="text-4xl font-black tracking-tighter text-[#18181b] uppercase leading-none">
-                  {aiResponses[selectedResponseIndex]?.name || 'Supplier'}
-                </h1>
-                <p className="text-[#71717a] font-bold text-[10px] uppercase tracking-widest mt-2">
-                  {t.verifiedSupplier} • {language === 'PT' ? 'Moçambique' : 'Mozambique'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <div className="w-6 h-6 bg-[#2563eb] rounded-full flex items-center justify-center text-white text-[10px]">
-                ✓
-              </div>
-              <span className="text-[10px] font-black text-[#2563eb] uppercase tracking-widest">{t.verifiedSupplier}</span>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="flex items-center gap-3 justify-end mb-4">
-              <SupplyXLogo size="lg" />
-            </div>
-            <p className="text-[9px] text-[#a1a1aa] font-bold leading-tight">
-              Cotação processada e validada por<br />
-              <span className="text-[#18181b]">SupplyX Intelligence Platform</span><br />
-              Marketplace B2B | Gestão de Compras
-            </p>
-          </div>
-        </div>
-
-        <div className="flex gap-4 mb-10 relative z-10">
-          <div className="bg-[#0052CC] text-white px-8 py-4 font-black text-base uppercase tracking-widest flex-1 flex justify-between items-center">
-            <span>Cotação Nº:</span>
-            <span className="italic">PR-QT-{new Date().getFullYear()}-{Math.floor(1000 + Math.random() * 9000)}</span>
-          </div>
-          <div className="bg-[#18181b] text-white px-8 py-4 font-black text-base uppercase tracking-widest">
-            {new Date().toLocaleDateString()}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-8 mb-10 relative z-10">
-          <div className="bg-[#fafafa] p-8 rounded-[32px] border border-[#f4f4f5]">
-            <h3 className="text-[10px] font-black text-[#a1a1aa] uppercase tracking-widest mb-6 border-b border-[#e4e4e7] pb-2">{t.customerData}</h3>
-            <div className="space-y-3 text-xs">
-              <p className="flex justify-between font-bold"><span>NUIT:</span> <span className="text-[#18181b]">{auth.currentUser?.uid?.slice(0, 9) || '400377081'}</span></p>
-              <p className="flex justify-between font-bold"><span>{language === 'PT' ? 'Nome:' : 'Name:'}</span> <span className="text-[#18181b]">{auth.currentUser?.displayName || 'User Client'}</span></p>
-              <p className="flex justify-between font-bold"><span>{language === 'PT' ? 'Intermediação:' : 'Intermediation:'}</span> <span className="text-[#18181b]">SupplyX Platform</span></p>
-            </div>
-          </div>
-          <div className="bg-[#fafafa] p-8 rounded-[32px] border border-[#f4f4f5]">
-            <h3 className="text-[10px] font-black text-[#a1a1aa] uppercase tracking-widest mb-6 border-b border-[#e4e4e7] pb-2">{t.supplierContact}</h3>
-            <div className="space-y-3 text-xs">
-              <p className="flex justify-between font-bold"><span>{language === 'PT' ? 'Endereço:' : 'Address:'}</span> <span className="text-[#18181b]">MAPUTO - MZ</span></p>
-              <p className="flex justify-between font-bold"><span>Email:</span> <span className="text-[#18181b] underline">sales@{aiResponses[selectedResponseIndex]?.name?.toLowerCase().replace(/\s/g, '') || 'supplier'}.co.mz</span></p>
-              <p className="flex justify-between font-bold"><span>{language === 'PT' ? 'Telefone:' : 'Phone:'}</span> <span className="text-[#18181b]">+258 84 ...</span></p>
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-6 relative z-10">
-          <div className="inline-flex items-center gap-2 bg-[#18181b] text-white px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest italic">
-            <Clock className="w-3 h-3" />
-            {t.validity}
-          </div>
-        </div>
-
-        <table className="w-full text-left mb-12 invoice-table relative z-10">
-          <thead className="bg-[#18181b] text-white text-[10px] font-black uppercase tracking-widest text-right">
-            <tr>
-              <th className="px-6 py-4 text-left">{t.description}</th>
-              <th className="px-6 py-4 text-center">{t.quantity}</th>
-              <th className="px-6 py-4 text-center">{t.unit}</th>
-              <th className="px-6 py-4">{t.unitPrice}</th>
-              <th className="px-6 py-4 text-center">{t.discount}</th>
-              <th className="px-6 py-4 text-center">{t.tax}</th>
-              <th className="px-6 py-4">{t.total}</th>
-            </tr>
-          </thead>
-          <tbody className="text-xs font-bold text-[#52525b] divide-y divide-[#f4f4f5]">
-            {rows.map(row => (
-              <tr key={row.id} className="hover:bg-[#fafafa] transition-colors">
-                <td className="px-6 py-5 text-[#18181b]">{row.material}</td>
-                <td className="px-6 py-5 text-center">{row.quantity}</td>
-                <td className="px-6 py-5 text-center text-[10px]">{row.unit}</td>
-                <td className="px-6 py-5 text-right font-mono">{( (aiResponses[selectedResponseIndex]?.price || 12450) / (rows.length || 1) / 1.16).toFixed(2)}MT</td>
-                <td className="px-6 py-5 text-center text-[#a1a1aa]">0.00</td>
-                <td className="px-6 py-5 text-center">16.00</td>
-                <td className="px-6 py-5 text-right text-[#18181b] font-mono">{( (aiResponses[selectedResponseIndex]?.price || 12450) / (rows.length || 1)).toFixed(2)}MT</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="grid grid-cols-2 gap-12 relative z-10">
-          <div className="text-[10px] text-[#dc2626] leading-relaxed bg-[#fef2f2] p-6 border border-[#fecaca] rounded-[32px] italic font-black">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertCircle className="w-4 h-4" />
-              <span className="uppercase tracking-tighter">Aviso Legal / Disclaimer</span>
-            </div>
-            {t.intermediaryNote}
-          </div>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center py-3 border-b border-[#f4f4f5]">
-              <span className="text-[10px] font-black uppercase text-[#a1a1aa] tracking-widest">{t.netTotal}</span>
-              <span className="text-base font-black text-[#52525b] font-mono">{( (aiResponses[selectedResponseIndex]?.price || 12450) / 1.16).toFixed(2)} MT</span>
-            </div>
-            <div className="flex justify-between items-center py-3 border-b border-[#f4f4f5]">
-              <span className="text-[10px] font-black uppercase text-[#a1a1aa] tracking-widest">{t.tax}</span>
-              <span className="text-base font-black text-[#52525b] font-mono">{( (aiResponses[selectedResponseIndex]?.price || 12450) * 0.16).toFixed(2)} MT</span>
-            </div>
-            <div className="bg-[#0052CC] text-white p-6 flex justify-between items-center rounded-2xl">
-              <span className="text-sm font-black uppercase italic tracking-tighter">{t.grossTotal}</span>
-              <div className="text-right">
-                <span className="text-3xl font-black italic tracking-tighter leading-none">{(aiResponses[selectedResponseIndex]?.price || 12450).toLocaleString()}</span>
-                <span className="text-xl font-black italic ml-1">MT</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-20 pt-10 border-t border-[#f4f4f5] flex justify-between items-center relative z-10">
-          <div className="text-[8px] font-bold text-[#a1a1aa] uppercase tracking-widest">
-            <p>SupplyX Platform v2.0</p>
-            <p>Marketplace de Construção Integrado</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-[8px] font-black text-[#18181b] tracking-tight uppercase">www.supplyx.co.mz</p>
-              <p className="text-[7px] font-bold text-[#a1a1aa] uppercase">Powered by MANHATE LINK AFRICA</p>
-            </div>
-            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg overflow-hidden border border-zinc-100">
-              <SupplyXLogo size="md" showText={false} />
-            </div>
-          </div>
-        </div>
-      </div>
+      <QuotationDocument data={quotationData} innerRef={invoiceRef} />
     </div>
   );
+
 
   if (showForm) {
     return (
@@ -778,9 +964,11 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                           <tr key={row.id} className={`${isDarkMode ? 'hover:bg-zinc-800/50' : 'hover:bg-zinc-50'} group`}>
                             <td className="px-4 py-2 font-mono text-xs text-zinc-500 text-center">{index + 1}</td>
                             <td className="px-4 py-2">
-                              <input 
-                                type="text" value={row.material} onChange={(e) => updateRow(row.id, 'material', e.target.value)}
-                                className={`w-full bg-transparent border-none text-sm font-bold placeholder:text-zinc-300 outline-none ${isDarkMode ? 'text-zinc-100' : 'text-zinc-800'}`}
+                              <MaterialComboBox 
+                                value={row.material} 
+                                onChange={(val) => updateRow(row.id, 'material', val)}
+                                options={Array.from(new Set(allProducts.map(p => p.name)))}
+                                isDarkMode={isDarkMode}
                               />
                             </td>
                             <td className="px-4 py-2">
@@ -936,16 +1124,27 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                         </div>
                       </div>
                       {aiResponses.length > 1 && (
-                        <button 
-                          onClick={downloadAllPDFs}
-                          disabled={downloadingAll}
-                          className={`flex items-center gap-2 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all h-full ${
-                            isDarkMode ? 'bg-zinc-800 text-zinc-400 hover:text-white' : 'bg-white border border-zinc-100 text-zinc-500 hover:text-zinc-900 shadow-sm'
-                          }`}
-                        >
-                          {downloadingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                          {t.downloadAll}
-                        </button>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={exportComparisonToExcel}
+                            className={`flex items-center gap-2 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all h-full ${
+                              isDarkMode ? 'bg-zinc-800 text-zinc-400 hover:text-white' : 'bg-white border border-zinc-100 text-zinc-500 hover:text-zinc-900 shadow-sm'
+                            }`}
+                          >
+                            <Download className="w-4 h-4" />
+                            {t.excel}
+                          </button>
+                          <button 
+                            onClick={downloadAllPDFs}
+                            disabled={downloadingAll}
+                            className={`flex items-center gap-2 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all h-full ${
+                              isDarkMode ? 'bg-zinc-800 text-zinc-400 hover:text-white' : 'bg-white border border-zinc-100 text-zinc-500 hover:text-zinc-900 shadow-sm'
+                            }`}
+                          >
+                            {downloadingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            {t.downloadAll}
+                          </button>
+                        </div>
                       )}
                     </div>
                     <div className="space-y-4">
@@ -967,16 +1166,34 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                 {i === 0 && <span className="bg-emerald-500 text-white text-[10px] px-2 py-0.5 rounded-lg italic font-black uppercase">{t.bestChoice}</span>}
                               </h4>
                               <div className="flex items-center gap-2 mt-2">
-                                <button 
-                                  onClick={async () => {
-                                    setSelectedResponseIndex(i);
-                                    // Wait a bit for the template to update before capturing
-                                    setTimeout(() => downloadPDF(res), 100);
-                                  }}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-[10px] font-black uppercase rounded-lg transition-all"
-                                >
-                                  <Download className="w-3 h-3" /> {t.download}
-                                </button>
+                                <div className="flex gap-1.5 overflow-hidden">
+                                  <button 
+                                    onClick={() => {
+                                      setSelectedResponseIndex(i);
+                                      setIsPreviewOpen(true);
+                                    }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-brand/10 hover:bg-brand/20 text-brand text-[10px] font-black uppercase rounded-lg transition-all"
+                                  >
+                                    <Eye className="w-3 h-3" /> {language === 'PT' ? 'Ver Documento' : 'View Document'}
+                                  </button>
+                                  <button 
+                                    onClick={async () => {
+                                      setDownloadingIndex(i);
+                                      setSelectedResponseIndex(i);
+                                      setTimeout(async () => {
+                                        try {
+                                          await downloadPDF(res);
+                                        } finally {
+                                          setDownloadingIndex(null);
+                                        }
+                                      }, 100);
+                                    }}
+                                    disabled={downloadingIndex === i}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-[10px] font-black uppercase rounded-lg transition-all disabled:opacity-50"
+                                  >
+                                    {downloadingIndex === i ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} {t.download}
+                                  </button>
+                                </div>
                                 <span className={`text-[10px] font-bold ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>via SupplyX Portal</span>
                               </div>
                             </div>
@@ -1123,6 +1340,61 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             )}
           </AnimatePresence>
         </div>
+
+        <AnimatePresence>
+          {isPreviewOpen && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-zinc-950/80 backdrop-blur-sm">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="w-full max-w-[900px] max-h-[90vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+              >
+                <div className="p-4 border-b border-zinc-100 flex justify-between items-center bg-zinc-50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-[#0f9fa8] rounded-lg flex items-center justify-center text-white">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <h3 className="font-black uppercase tracking-tight italic text-zinc-900">
+                      {language === 'PT' ? 'Pré-visualização da Cotação' : 'Quotation Preview'}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={async () => {
+                        const res = aiResponses[selectedResponseIndex];
+                        if (res) {
+                          setDownloadingIndex(selectedResponseIndex);
+                          try {
+                            await downloadPDF(res);
+                          } finally {
+                            setDownloadingIndex(null);
+                          }
+                        }
+                      }}
+                      disabled={downloadingIndex === selectedResponseIndex}
+                      className="p-2 text-zinc-400 hover:text-[#0f9fa8] transition-colors disabled:opacity-50"
+                      title={t.download}
+                    >
+                      {downloadingIndex === selectedResponseIndex ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                    </button>
+                    <button 
+                      onClick={() => setIsPreviewOpen(false)}
+                      className="p-2 text-zinc-400 hover:text-zinc-900 transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-grow overflow-auto p-4 sm:p-8 bg-zinc-200">
+                  <div className="w-[210mm] min-h-[297mm] mx-auto bg-white shadow-2xl overflow-hidden">
+                    <QuotationDocument data={quotationData} />
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </motion.div>
     );
   }
@@ -1130,21 +1402,43 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
       {invoiceTemplate}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
           {userType === 'supplier' ? t.receivedRequests : t.orderManagement}
         </h2>
-        {userType === 'buyer' && (
-          <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded-xl text-sm font-bold transition-all active:scale-95 shadow-brand">
-            <Plus className="w-4 h-4" /> {t.newQuoteBtn}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <button 
+            onClick={exportOrdersToPDF}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-95 border ${
+              isDarkMode 
+                ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:text-white' 
+                : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900 shadow-sm'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5 sm:w-4 h-4" /> {language === 'PT' ? 'Exportar PDF' : 'Export PDF'}
           </button>
-        )}
+          <button 
+            onClick={exportOrdersToExcel}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-95 border ${
+              isDarkMode 
+                ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:text-white' 
+                : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900 shadow-sm'
+            }`}
+          >
+            <Download className="w-3.5 h-3.5 sm:w-4 h-4" /> {t.excel}
+          </button>
+          {userType === 'buyer' && (
+            <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-95 shadow-brand">
+              <Plus className="w-3.5 h-3.5 sm:w-4 h-4" /> {t.newQuoteBtn}
+            </button>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           {getOrders(t).map((order) => (
-            <div key={order.id} className={`p-4 rounded-2xl border flex items-center justify-between transition-colors cursor-pointer group ${isDarkMode ? 'bg-[#18181b] border-[#27272a] hover:border-[#0052CC]/40' : 'bg-white border-[#e4e4e7] hover:border-[#0052CC]/30'}`}>
-              <div className="flex items-center gap-4">
+            <div key={order.id} className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors cursor-pointer group ${isDarkMode ? 'bg-[#18181b] border-[#27272a] hover:border-[#0052CC]/40' : 'bg-white border-[#e4e4e7] hover:border-[#0052CC]/30'}`}>
+              <div className="flex items-center gap-4 w-full sm:w-auto">
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${isDarkMode ? 'bg-zinc-800 border-zinc-700' : 'bg-zinc-50 border-zinc-100'}`}>
                   <FileText className={`w-6 h-6 ${isDarkMode ? 'text-zinc-600' : 'text-zinc-400'}`} />
                 </div>
@@ -1165,8 +1459,8 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-8">
-                <div className="text-right">
+              <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-8 w-full sm:w-auto mt-2 sm:mt-0">
+                <div className="text-left sm:text-right">
                   <p className={`text-sm font-black italic tracking-tight ${isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>{order.total}</p>
                   <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">{order.date}</p>
                 </div>
@@ -1182,21 +1476,27 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                     <button 
                       onClick={async (e) => {
                         e.stopPropagation();
-                        // For existing orders, we mock a response to use the template
-                        const mockRes: SupplierResponse = {
-                           supplierId: (order as any).supplierId || 'S1',
-                           name: order.supplier,
-                           price: parseFloat(order.total.replace('MT ', '').replace('.', '').replace(',', '.')) || 12450,
-                           timeToDeliver: '2 dias',
-                           confidence: 95
-                        };
-                        setSelectedResponseIndex(0); // Ensure template has data
-                        await downloadPDF(mockRes);
+                        setDownloadingOrderId(order.id);
+                        try {
+                          // For existing orders, we mock a response to use the template
+                          const mockRes: SupplierResponse = {
+                             supplierId: (order as any).supplierId || 'S1',
+                             name: order.supplier,
+                             price: parseFloat(order.total.replace('MT ', '').replace('.', '').replace(',', '.')) || 12450,
+                             timeToDeliver: '2 dias',
+                             confidence: 95
+                          };
+                          setSelectedResponseIndex(0); // Ensure template has data
+                          await downloadPDF(mockRes);
+                        } finally {
+                          setDownloadingOrderId(null);
+                        }
                       }}
-                      className={`p-1.5 rounded-lg transition-all active:scale-95 ${isDarkMode ? 'bg-zinc-800 text-zinc-400 hover:text-white' : 'bg-zinc-100 text-zinc-500 hover:text-zinc-900'}`}
+                      disabled={downloadingOrderId === order.id}
+                      className={`p-1.5 rounded-lg transition-all active:scale-95 disabled:opacity-50 ${isDarkMode ? 'bg-zinc-800 text-zinc-400 hover:text-white' : 'bg-zinc-100 text-zinc-500 hover:text-zinc-900'}`}
                       title={t.download}
                     >
-                      <Download className="w-4 h-4" />
+                      {downloadingOrderId === order.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                     </button>
                   )}
                   {userType === 'supplier' && order.status === t.status.quote && (

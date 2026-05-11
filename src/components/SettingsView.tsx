@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, User, Bell, Shield, CreditCard, HelpCircle, Moon, Sun, Monitor, Loader2, CheckCircle2, Eye, ArrowLeft } from 'lucide-react';
-import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { Settings, User, Bell, Shield, CreditCard, HelpCircle, Moon, Sun, Monitor, Loader2, CheckCircle2, Eye, ArrowLeft, Upload, FileImage, Image as ImageIcon } from 'lucide-react';
+import { db, auth, handleFirestoreError, OperationType, uploadFile } from '../lib/firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import ProfileModal from './ProfileModal';
@@ -26,6 +26,7 @@ export default function SettingsView({
   const { profile, refreshProfile } = useAuth();
   const [isEditingProfile, setIsEditingProfile] = useState(initialIsEditing);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState<{ photo: boolean; cover: boolean }>({ photo: false, cover: false });
 
   useEffect(() => {
     if (initialIsEditing) {
@@ -84,6 +85,52 @@ export default function SettingsView({
       handleFirestoreError(err, OperationType.UPDATE, `users/${auth.currentUser.uid}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'photo' | 'cover') => {
+    console.log(`handleFileChange triggered for ${type}`);
+    const file = e.target.files?.[0];
+    if (!file) {
+      console.log('No file selected');
+      return;
+    }
+    console.log('File selected:', { name: file.name, size: file.size, type: file.type });
+
+    if (!auth.currentUser) {
+      console.log('User not authenticated');
+      alert(language === 'PT' ? 'Você precisa estar logado para carregar imagens.' : 'You must be logged in to upload images.');
+      return;
+    }
+
+    // Validate if it's an image
+    if (!file.type.startsWith('image/')) {
+      alert(language === 'PT' ? 'Por favor, selecione uma imagem válida.' : 'Please select a valid image.');
+      return;
+    }
+
+    setIsUploading(prev => ({ ...prev, [type]: true }));
+    try {
+      const path = `users/${auth.currentUser.uid}/${type}_${Date.now()}_${file.name}`;
+      console.log('Calling uploadFile with path:', path);
+      const url = await uploadFile(path, file);
+      console.log('uploadFile returned URL/Data:', url.substring(0, 50) + '...');
+      
+      const field = type === 'photo' ? 'photoURL' : 'coverURL';
+      setFormData(prev => ({ ...prev, [field]: url }));
+
+      // Save immediately to Firestore
+      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+        [field]: url,
+        updatedAt: serverTimestamp()
+      });
+      await refreshProfile();
+      
+    } catch (err: any) {
+      console.error('Final upload error caught in SettingsView:', err);
+      alert(language === 'PT' ? `Erro: ${err.message}` : `Error: ${err.message}`);
+    } finally {
+      setIsUploading(prev => ({ ...prev, [type]: false }));
     }
   };
 
@@ -279,7 +326,12 @@ export default function SettingsView({
               <input 
                 type="text"
                 value={formData.nuit}
-                onChange={(e) => setFormData({ ...formData, nuit: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, '');
+                  if (val.length <= 9) {
+                    setFormData({ ...formData, nuit: val });
+                  }
+                }}
                 className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
                 placeholder="123 456 789"
               />
@@ -325,34 +377,68 @@ export default function SettingsView({
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.labels.photoUrl}</label>
-                <input 
-                  type="text"
-                  value={formData.photoURL}
-                  onChange={(e) => setFormData({ ...formData, photoURL: e.target.value })}
-                  className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
-                  placeholder="https://images.unsplash.com/..."
-                />
+                <div className="flex gap-4">
+                  <div className="flex-1 relative">
+                    <input 
+                      type="text"
+                      value={formData.photoURL}
+                      onChange={(e) => setFormData({ ...formData, photoURL: e.target.value })}
+                      className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
+                      placeholder="https://images.unsplash.com/..."
+                    />
+                  </div>
+                  <label className={`shrink-0 flex items-center justify-center w-14 h-14 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:bg-brand/5 hover:border-brand/50 ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-500' : 'bg-zinc-50 border-zinc-100 text-zinc-400'}`}>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => handleFileChange(e, 'photo')} 
+                    />
+                    {isUploading.photo ? (
+                      <Loader2 className="w-5 h-5 animate-spin text-brand" />
+                    ) : (
+                      <Upload className="w-5 h-5" />
+                    )}
+                  </label>
+                </div>
               </div>
               {formData.photoURL && (
                 <div className={`w-20 h-20 rounded-2xl overflow-hidden border-2 ${isDarkMode ? 'border-zinc-800' : 'border-zinc-100'}`}>
-                  <img src={formData.photoURL} alt="Avatar Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <img src={formData.photoURL} alt="Avatar Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
                 </div>
               )}
             </div>
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.labels.coverUrl}</label>
-                <input 
-                  type="text"
-                  value={formData.coverURL}
-                  onChange={(e) => setFormData({ ...formData, coverURL: e.target.value })}
-                  className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
-                  placeholder="https://images.unsplash.com/..."
-                />
+                <div className="flex gap-4">
+                  <div className="flex-1 relative">
+                    <input 
+                      type="text"
+                      value={formData.coverURL}
+                      onChange={(e) => setFormData({ ...formData, coverURL: e.target.value })}
+                      className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
+                      placeholder="https://images.unsplash.com/..."
+                    />
+                  </div>
+                  <label className={`shrink-0 flex items-center justify-center w-14 h-14 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:bg-brand/5 hover:border-brand/50 ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-500' : 'bg-zinc-50 border-zinc-100 text-zinc-400'}`}>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => handleFileChange(e, 'cover')} 
+                    />
+                    {isUploading.cover ? (
+                      <Loader2 className="w-5 h-5 animate-spin text-brand" />
+                    ) : (
+                      <Upload className="w-5 h-5" />
+                    )}
+                  </label>
+                </div>
               </div>
               {formData.coverURL && (
                 <div className={`w-full h-20 rounded-2xl overflow-hidden border-2 ${isDarkMode ? 'border-zinc-800' : 'border-zinc-100'}`}>
-                  <img src={formData.coverURL} alt="Cover Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <img src={formData.coverURL} alt="Cover Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
                 </div>
               )}
             </div>

@@ -91,7 +91,7 @@ export default function CartModal({ isOpen, onClose, isDarkMode, language = 'PT'
                 items.map((item) => (
                   <div key={item.id} className={`flex gap-4 p-4 rounded-3xl border transition-all ${isDarkMode ? 'bg-zinc-950/50 border-zinc-800' : 'bg-zinc-50 border-zinc-100'}`}>
                     <div className="w-20 h-20 rounded-2xl overflow-hidden shrink-0">
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start mb-1">

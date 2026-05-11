@@ -114,7 +114,7 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
       exit={{ opacity: 0, y: -10 }}
       className="space-y-8"
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {activeStats.map((stat, i) => (
           <div key={`stat-${userType}-${i}`}>
             <StatCard 
@@ -132,17 +132,17 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
 
       <div className="space-y-4">
         <h3 className={`text-lg font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.categories}</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {categoryCards.map((cat) => (
             <button 
               key={cat.name}
               onClick={() => onCategoryClick?.(cat.name)}
-              className={`p-6 rounded-3xl border transition-all hover:scale-105 active:scale-95 flex flex-col items-center gap-3 group ${
+              className={`p-4 sm:p-6 rounded-3xl border transition-all hover:scale-105 active:scale-95 flex flex-col items-center gap-3 group ${
                 isDarkMode ? 'bg-zinc-900 border-zinc-800 hover:border-brand shadow-2xl' : 'bg-white border-zinc-100 hover:border-brand shadow-sm'
               }`}
             >
-              <span className="text-3xl transition-transform group-hover:scale-110">{cat.icon}</span>
-              <span className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-zinc-400 group-hover:text-white' : 'text-zinc-500 group-hover:text-zinc-900'}`}>
+              <span className="text-2xl sm:text-3xl transition-transform group-hover:scale-110">{cat.icon}</span>
+              <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-center ${isDarkMode ? 'text-zinc-400 group-hover:text-white' : 'text-zinc-500 group-hover:text-zinc-900'}`}>
                 {(t.catNames as any)[cat.name] || cat.name}
               </span>
             </button>
@@ -150,10 +150,12 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        <div className="xl:col-span-2 space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
           <SalesChart isDarkMode={isDarkMode} userType={userType} language={language} />
-          <TransactionList isDarkMode={isDarkMode} userType={userType} language={language} />
+          <div className="overflow-hidden">
+            <TransactionList isDarkMode={isDarkMode} userType={userType} language={language} />
+          </div>
         </div>
         
         <div className="space-y-8">

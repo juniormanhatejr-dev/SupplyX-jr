@@ -23,15 +23,15 @@ interface BudgetDonutChartProps {
 export default function BudgetDonutChart({ isDarkMode, language = 'PT' }: BudgetDonutChartProps) {
   const translations = {
     PT: {
-      title: 'Distribuição de Gastos',
-      subtitle: 'Por categoria de material',
-      total: 'Total Estimado',
+      title: 'Alocação de Fluxo',
+      subtitle: 'Distribuição Inteligente',
+      total: 'CapEx Total',
       value: 'MT 842.150'
     },
     EN: {
-      title: 'Spending Distribution',
-      subtitle: 'By material category',
-      total: 'Estimated Total',
+      title: 'Flow Allocation',
+      subtitle: 'Smart Distribution',
+      total: 'Total CapEx',
       value: 'MT 842,150'
     }
   }[language];
@@ -40,31 +40,35 @@ export default function BudgetDonutChart({ isDarkMode, language = 'PT' }: Budget
     <motion.div 
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      className={`p-10 rounded-[48px] border shadow-3xl h-full flex flex-col ${
-        isDarkMode ? 'bg-supplyx-dark border-white/5' : 'bg-white border-zinc-200'
+      className={`p-10 rounded-[32px] border h-full flex flex-col ${
+        isDarkMode ? 'bg-zinc-900 border-white/5 shadow-2xl' : 'bg-white border-zinc-100 shadow-sm'
       }`}
     >
-      <div className="mb-8">
-        <h3 className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-          {translations.title}
-        </h3>
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
-          {translations.subtitle}
-        </p>
+      <div className="flex items-center gap-4 mb-8">
+        <div className="w-1 h-8 bg-emerald-500 rounded-full" />
+        <div>
+          <h3 className={`text-xl font-black uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+            {translations.title}
+          </h3>
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-600">
+            {translations.subtitle}
+          </p>
+        </div>
       </div>
 
-      <div className="relative flex-grow min-h-[250px] flex items-center justify-center">
+      <div className="relative flex-grow min-h-[300px] flex items-center justify-center">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={data}
               cx="50%"
               cy="50%"
-              innerRadius={80}
-              outerRadius={110}
-              paddingAngle={8}
+              innerRadius={90}
+              outerRadius={115}
+              paddingAngle={4}
               dataKey="value"
               stroke="none"
+              animationDuration={1500}
             >
               {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />
@@ -72,33 +76,35 @@ export default function BudgetDonutChart({ isDarkMode, language = 'PT' }: Budget
             </Pie>
             <Tooltip 
               contentStyle={{ 
-                borderRadius: '24px', 
-                border: '1px solid rgba(255,255,255,0.1)',
-                backgroundColor: isDarkMode ? 'rgba(6, 8, 22, 0.95)' : '#ffffff',
-                backdropFilter: 'blur(20px)',
-                padding: '16px'
+                borderRadius: '12px', 
+                border: '1px solid rgba(255,255,255,0.05)',
+                backgroundColor: '#12141C',
+                padding: '12px',
+                fontFamily: 'JetBrains Mono'
               }}
-              itemStyle={{ fontWeight: '900', fontSize: '10px', textTransform: 'uppercase' }}
+              itemStyle={{ fontWeight: '900', fontSize: '9px', textTransform: 'uppercase', color: '#fff' }}
             />
           </PieChart>
         </ResponsiveContainer>
         
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <p className="text-[8px] font-black uppercase text-zinc-500 tracking-widest mb-1">{translations.total}</p>
-          <p className={`text-xl font-black italic ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{translations.value}</p>
+          <p className="text-[9px] font-black uppercase text-zinc-600 tracking-widest mb-1 font-mono">{translations.total}</p>
+          <p className={`text-2xl font-mono font-black ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{translations.value}</p>
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-2 gap-4">
-        {data.slice(0, 4).map((item, i) => (
-          <div key={i} className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-            <div className="overflow-hidden">
-               <p className={`text-[9px] font-black uppercase truncate ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>{item.name}</p>
-               <p className={`text-[10px] font-bold ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{item.value}%</p>
+      <div className="mt-8 space-y-4">
+        <div className="grid grid-cols-2 gap-6">
+          {data.slice(0, 4).map((item, i) => (
+            <div key={i} className="flex items-center gap-4 bg-zinc-800/20 p-3 rounded-lg border border-white/5">
+              <div className="w-1 h-6 rounded-full" style={{ backgroundColor: item.color }} />
+              <div className="overflow-hidden">
+                 <p className={`text-[9px] font-black uppercase tracking-wider truncate text-zinc-500`}>{item.name}</p>
+                 <p className={`text-base font-mono font-black ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{item.value}%</p>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </motion.div>
   );

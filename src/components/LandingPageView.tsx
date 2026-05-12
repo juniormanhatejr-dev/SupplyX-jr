@@ -221,111 +221,122 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-60 pb-40 overflow-hidden">
-        {/* Background Gradients */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1400px] h-[800px] bg-supplyx-blue/5 blur-[160px] rounded-full -z-10 animate-pulse-slow" />
-        <div className="absolute top-1/2 right-[-10%] w-[600px] h-[600px] bg-supplyx-blue/5 blur-[120px] rounded-full -z-10" />
-
+      <section className="relative pt-64 pb-48 overflow-hidden industrial-grid">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-supplyx-blue/20 to-transparent" />
+        
         <div className="max-w-[1600px] mx-auto px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
             <motion.div
-              initial={{ opacity: 0, x: -50 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8 }}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
               className="text-left"
             >
-              <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-10">
-                <span className="w-2 h-2 rounded-full bg-supplyx-blue animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-supplyx-blue">Mainstage AFRICA 2026</span>
+              <div className="inline-flex items-center gap-4 px-5 py-2 rounded-lg bg-zinc-900 border border-white/5 mb-12">
+                <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue shadow-[0_0_8px_#0052CC]" />
+                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-400">Logistics Infrastructure v4.0</span>
               </div>
               
-              <h1 className="text-6xl md:text-8xl font-black italic tracking-tighter mb-10 leading-[0.95]">
-                <span className="block text-white mb-2">{t.hero.title.split('Logistics')[0]}</span>
-                <span className="text-supplyx-blue text-glow italic">Logistics</span>
-                <span className="block text-white mt-2">Structure</span>
+              <h1 className="text-7xl md:text-9xl font-black tracking-tighter mb-12 leading-[0.85] uppercase text-white">
+                Supply <span className="text-supplyx-blue">Chain</span> <br />
+                Performance.
               </h1>
               
-              <p className="text-xl md:text-2xl text-zinc-500 max-w-xl mb-14 font-medium leading-relaxed">
+              <p className="text-xl md:text-2xl text-zinc-500 max-w-xl mb-16 font-medium leading-relaxed">
                 {t.hero.subtitle}
               </p>
               
               <div className="flex flex-col sm:flex-row items-center gap-6">
                 <button 
                   onClick={onGetStarted}
-                  className="group relative w-full sm:w-auto px-12 py-7 rounded-[24px] bg-supplyx-blue text-white font-black italic text-xl shadow-3xl shadow-blue-500/20 active:scale-95 transition-all text-center"
+                  className="group w-full sm:w-auto px-14 py-8 rounded-xl bg-supplyx-blue text-white font-black uppercase text-sm tracking-widest hover:bg-blue-600 transition-all text-center flex items-center justify-center gap-4"
                 >
-                  <span className="relative z-10 flex items-center justify-center gap-4">
-                    {t.hero.cta1}
-                    <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform" />
-                  </span>
+                  {t.hero.cta1}
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </button>
                 <button 
-                  className="w-full sm:w-auto px-12 py-7 rounded-[24px] border-2 border-white/5 hover:bg-white/5 font-black italic text-xl transition-all flex items-center justify-center gap-4 text-white"
+                  className="w-full sm:w-auto px-12 py-8 rounded-xl border border-white/10 bg-white/5 font-black uppercase text-sm tracking-widest hover:bg-white/10 transition-all flex items-center justify-center gap-4 text-white"
                 >
-                  <Play className="w-5 h-5 fill-white" />
+                  <Play className="w-4 h-4 fill-white" />
                   {t.hero.cta2}
                 </button>
               </div>
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, scale: 0.8, x: 100 }}
-              animate={{ opacity: 1, scale: 1, x: 0 }}
-              transition={{ duration: 1, delay: 0.2 }}
-              className="relative"
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className="relative hidden lg:block"
             >
-              {/* Image Placeholder with high-end feel */}
-              <div className="relative z-10 glass-dark rounded-[64px] p-6 border border-white/5 shadow-3xl overflow-hidden aspect-square flex items-center justify-center group">
-                 <div className="absolute inset-0 bg-gradient-to-br from-supplyx-blue/10 to-transparent pointer-events-none" />
-                 <div className="relative z-20 text-center space-y-10 group-hover:scale-105 transition-transform duration-1000">
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="w-32 h-32 rounded-3xl bg-supplyx-blue/20 flex items-center justify-center shadow-2xl">
-                          <Truck className="w-12 h-12 text-supplyx-blue" />
-                        </div>
-                        <div className="w-32 h-32 rounded-3xl bg-supplyx-deep border border-white/10 flex items-center justify-center mt-12 shadow-2xl">
-                          <ShieldCheck className="w-12 h-12 text-green-500" />
-                        </div>
+              <div className="relative z-10 glass-dark rounded-[40px] p-12 border border-white/5 shadow-2xl relative overflow-hidden">
+                 <div className="absolute top-0 right-0 p-8">
+                    <Zap className="w-8 h-8 text-supplyx-blue" />
+                 </div>
+                 
+                 <div className="space-y-12">
+                    <div>
+                       <p className="text-[10px] font-black uppercase tracking-[0.4em] text-supplyx-blue mb-4">Network Status</p>
+                       <div className="flex items-end gap-2">
+                          <div className="text-5xl font-mono font-black text-white italic">12,450</div>
+                          <p className="text-[10px] font-black uppercase text-zinc-500 mb-2">Active Nodes</p>
+                       </div>
                     </div>
-                    <div className="p-8 rounded-[32px] bg-supplyx-deep border border-white/10 shadow-2xl">
-                        <div className="flex gap-2 mb-4">
-                          {[1,2,3,4,5].map(i => <div key={i} className="w-1 h-1 rounded-full bg-supplyx-blue" />)}
-                        </div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500">Blockchain Integrity Ledger</p>
-                        <p className="text-2xl font-black italic text-white mt-2">#8A2F9...41C</p>
+
+                    <div className="space-y-6">
+                       {[
+                         { label: 'Blockchain Sync', value: 'Live', col: 'text-emerald-500' },
+                         { label: 'AI Prediction Latency', value: '4ms', col: 'text-supplyx-blue' },
+                         { label: 'Region Expansion', value: 'Active', col: 'text-white' }
+                       ].map((stat, i) => (
+                         <div key={i} className="flex justify-between items-center py-4 border-b border-white/5">
+                            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{stat.label}</span>
+                            <span className={`text-xs font-mono font-black uppercase ${stat.col}`}>{stat.value}</span>
+                         </div>
+                       ))}
+                    </div>
+
+                    <div className="p-8 rounded-2xl bg-supplyx-deep border border-white/10">
+                       <p className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500 mb-6">Latest Transaction Hash</p>
+                       <div className="font-mono text-sm text-supplyx-blue truncate">0x8F2A...9C1B47D2E5F3A0B1C4</div>
                     </div>
                  </div>
               </div>
-              {/* Orbits */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] border border-white/5 rounded-full -z-10 animate-spin-slow opacity-30" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[140%] h-[140%] border border-white/5 rounded-full -z-10 animate-spin-slow-reverse opacity-10" />
+
+              {/* Minimal Industrial Accents */}
+              <div className="absolute -top-12 -right-12 w-48 h-48 border border-white/5 rounded-full" />
+              <div className="absolute -bottom-8 -left-8 w-32 h-32 border border-supplyx-blue/10 rounded-full" />
             </motion.div>
           </div>
         </div>
       </section>
 
       {/* Problem Section (The Trust Gap) */}
-      <section id="problem" className="py-40 border-y border-white/5 bg-white/[0.02]">
+      <section id="problem" className="py-48 border-y border-white/5 industrial-grid">
         <div className="max-w-[1600px] mx-auto px-6">
-          <div className="max-w-3xl mb-32">
-            <h2 className="text-5xl md:text-7xl font-black italic uppercase tracking-tighter mb-8 leading-none">
-              {t.problem.title}
-            </h2>
-            <p className="text-2xl text-zinc-500 font-medium leading-relaxed italic">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-end mb-32">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.5em] text-supplyx-blue mb-8">Case for Change</p>
+              <h2 className="text-6xl md:text-8xl font-black uppercase tracking-tighter mb-0 leading-none text-white">
+                {t.problem.title}
+              </h2>
+            </div>
+            <p className="text-xl text-zinc-500 font-medium leading-relaxed italic max-w-xl">
               {t.problem.subtitle}
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-1px bg-white/5 border border-white/5 overflow-hidden rounded-[24px]">
             {t.problem.items.map((item, i) => (
               <motion.div
                 key={i}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.2 }}
-                className="p-12 rounded-[48px] bg-supplyx-dark/50 border border-white/5 group hover:border-supplyx-blue/30 transition-all shadow-3xl"
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ delay: i * 0.1 }}
+                className="p-16 bg-supplyx-deep group hover:bg-zinc-900/50 transition-all"
               >
-                <div className="text-4xl font-black italic text-zinc-700 mb-10 group-hover:text-supplyx-blue transition-colors">0{i + 1}</div>
-                <h3 className="text-2xl font-black italic uppercase mb-6 text-white">{item.title}</h3>
+                <div className="font-mono text-sm text-supplyx-blue mb-12">SECTION_0{i + 1}</div>
+                <h3 className="text-2xl font-black uppercase mb-8 text-white tracking-tight">{item.title}</h3>
                 <p className="text-lg text-zinc-500 leading-relaxed font-medium">{item.desc}</p>
               </motion.div>
             ))}
@@ -334,28 +345,32 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
       </section>
 
       {/* The SupplyX Engine (The Solution) */}
-      <section id="solution" className="py-40">
+      <section id="solution" className="py-48">
         <div className="max-w-[1600px] mx-auto px-6">
           <div className="text-center mb-40">
-            <h2 className="text-5xl md:text-7xl font-black italic uppercase tracking-tighter mb-8">{t.solution.title}</h2>
-            <p className="text-xl text-zinc-500 font-black uppercase tracking-[0.4em]">{t.solution.subtitle}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.6em] text-supplyx-blue mb-8">Proprietary Technology Stack</p>
+            <h2 className="text-6xl md:text-8xl font-black uppercase tracking-tighter mb-0 text-white italic">{t.solution.title}</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
             {t.solution.engines.map((engine, i) => (
               <motion.div
                 key={i}
-                whileHover={{ y: -20 }}
-                className="group relative p-14 rounded-[64px] glass-dark border border-white/5 hover:border-supplyx-blue transition-all duration-500"
+                whileHover={{ y: -10 }}
+                className="group relative p-16 rounded-[32px] bg-zinc-900/30 border border-white/5 hover:border-supplyx-blue transition-all duration-300 h-full flex flex-col"
               >
-                <div className="absolute inset-0 bg-gradient-to-b from-supplyx-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-[64px]" />
-                <div className="relative z-10">
-                  <div className="w-24 h-24 rounded-[32px] bg-supplyx-deep flex items-center justify-center text-supplyx-blue mb-12 border border-white/10 group-hover:bg-supplyx-blue group-hover:text-white transition-all shadow-3xl group-hover:scale-110">
-                    <engine.icon className="w-12 h-12" />
+                <div className="relative z-10 flex-grow">
+                  <div className="w-20 h-20 rounded-[20px] bg-zinc-800 border border-white/5 flex items-center justify-center text-supplyx-blue mb-12 group-hover:bg-supplyx-blue group-hover:text-white transition-all shadow-xl group-hover:scale-105">
+                    <engine.icon className="w-10 h-10" />
                   </div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.4em] text-supplyx-blue mb-4">{engine.subtitle}</p>
-                  <h3 className="text-3xl font-black italic uppercase mb-8 text-white tracking-tight">{engine.title}</h3>
-                  <p className="text-lg text-zinc-500 font-medium leading-relaxed group-hover:text-zinc-300 transition-colors">{engine.desc}</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.4em] text-supplyx-blue mb-6">{engine.subtitle}</p>
+                  <h3 className="text-3xl font-black uppercase mb-8 text-white tracking-tight leading-tight">{engine.title}</h3>
+                  <p className="text-xl text-zinc-400 font-medium leading-relaxed group-hover:text-zinc-300 transition-colors">{engine.desc}</p>
+                </div>
+                
+                <div className="mt-12 pt-12 border-t border-white/5 flex justify-between items-center">
+                   <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Protocol Engine v2.4</span>
+                   <ArrowRight className="w-5 h-5 text-zinc-700 group-hover:text-supplyx-blue transition-colors" />
                 </div>
               </motion.div>
             ))}
@@ -364,18 +379,13 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
       </section>
 
       {/* Stats - Full Width High Impact */}
-      <section className="py-32 bg-supplyx-blue relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-           <div className="absolute top-0 left-0 w-full h-full animate-marquee whitespace-nowrap text-[150px] font-black italic tracking-tighter text-white uppercase select-none">
-             TRIPLE ENGINE LOGISTICS • ON-CHAIN TRUST • AI DEMAND FORECASTING • 
-           </div>
-        </div>
+      <section className="py-24 bg-supplyx-blue relative overflow-hidden border-y border-white/10">
         <div className="max-w-[1600px] mx-auto px-6 relative z-10">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-20">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-24 divide-x divide-white/10">
              {t.stats.map((stat, i) => (
-                <div key={i} className="text-center group">
-                   <p className="text-6xl md:text-8xl font-black italic text-white tracking-tighter mb-4 group-hover:scale-110 transition-transform duration-500">{stat.value}</p>
-                   <p className="text-[12px] font-black uppercase tracking-[0.4em] text-supplyx-deep/60">{stat.label}</p>
+                <div key={i} className="px-12 first:pl-0 group">
+                   <p className="text-sm font-black uppercase tracking-[0.4em] text-supplyx-deep/60 mb-6">{stat.label}</p>
+                   <p className="text-7xl lg:text-9xl font-black italic text-white tracking-tighter group-hover:scale-105 transition-transform duration-500">{stat.value}</p>
                 </div>
              ))}
           </div>
@@ -383,75 +393,74 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
       </section>
 
       {/* Complete Ecosystem (Features) */}
-      <section className="py-40">
-        <div className="max-w-[1600px] mx-auto px-6">
-          <div className="flex flex-col lg:flex-row items-end justify-between mb-32 gap-12">
-            <div className="max-w-2xl">
-              <h2 className="text-5xl md:text-6xl font-black italic uppercase tracking-tighter mb-8 text-white">{t.features.title}</h2>
-              <div className="w-32 h-2 bg-supplyx-blue rounded-full" />
-            </div>
-            <p className="text-xl text-zinc-500 font-medium italic lg:text-right max-w-sm">Every tool you need to scale production and distribution across borders.</p>
-          </div>
+      <section className="py-48 industrial-grid">
+        <div className="max-w-[1600px] mx-auto px-6 text-center">
+           <div className="max-w-3xl mx-auto mb-40">
+              <p className="text-[10px] font-black uppercase tracking-[0.6em] text-supplyx-blue mb-8">Integrated Ecosystem</p>
+              <h2 className="text-6xl md:text-8xl font-black uppercase tracking-tighter mb-12 text-white italic">{t.features.title}</h2>
+              <p className="text-2xl text-zinc-500 font-medium leading-relaxed italic mx-auto">Scalable infrastructure for sovereign trade.</p>
+           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
             {t.features.items.map((feature, i) => (
-              <div key={i} className="p-12 rounded-[48px] border border-white/5 hover:bg-white/5 transition-all group cursor-default">
-                <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center text-zinc-500 group-hover:bg-supplyx-blue/10 group-hover:text-supplyx-blue transition-all mb-10">
-                  <feature.icon className="w-8 h-8" />
+              <div key={i} className="p-14 rounded-[40px] border border-white/5 bg-zinc-900/20 hover:bg-zinc-900/40 transition-all group cursor-default">
+                <div className="w-14 h-14 rounded-xl bg-zinc-800 border border-white/5 flex items-center justify-center text-zinc-500 group-hover:bg-supplyx-blue/10 group-hover:text-supplyx-blue transition-all mb-12">
+                  <feature.icon className="w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-black italic uppercase mb-4 text-white">{feature.title}</h3>
-                <p className="text-zinc-500 font-medium leading-relaxed group-hover:text-zinc-400 transition-colors">{feature.desc}</p>
+                <h3 className="text-2xl font-black uppercase mb-6 text-white tracking-tight italic">{feature.title}</h3>
+                <p className="text-lg text-zinc-500 font-medium leading-relaxed group-hover:text-zinc-400 transition-colors">{feature.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* How it Works - Modern Horizontal Loop */}
-      <section id="how" className="py-40 bg-supplyx-dark/50 border-y border-white/5 overflow-hidden">
-        <div className="max-w-[1600px] mx-auto px-6 mb-32">
-          <h2 className="text-5xl md:text-7xl font-black italic uppercase tracking-tighter text-center mb-8">{t.howItWorks.title}</h2>
-          <div className="w-40 h-2 bg-supplyx-blue mx-auto rounded-full" />
-        </div>
-
+      {/* How it Works - Industrial Vertical Steps */}
+      <section id="how" className="py-48 bg-supplyx-dark border-y border-white/5">
         <div className="max-w-[1600px] mx-auto px-6">
-           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-             {t.howItWorks.steps.map((step, i) => (
-               <div key={i} className="relative p-10 pt-20 rounded-[48px] bg-supplyx-deep border border-white/5 group hover:border-supplyx-blue/50 transition-all">
-                  <div className="absolute top-10 left-10 text-8xl font-black italic text-white/5 group-hover:text-supplyx-blue/10 transition-colors">
-                    {i + 1}
-                  </div>
-                  <div className="relative z-10">
-                    <h3 className="text-2xl font-black uppercase italic tracking-tight text-white mb-6 leading-tight">{step.title}</h3>
-                    <p className="text-lg text-zinc-500 font-medium leading-relaxed group-hover:text-zinc-400 transition-colors">{step.desc}</p>
-                  </div>
-               </div>
-             ))}
+           <div className="grid grid-cols-1 lg:grid-cols-3 gap-24">
+              <div className="lg:sticky lg:top-40 h-fit">
+                 <p className="text-[10px] font-black uppercase tracking-[0.5em] text-supplyx-blue mb-8">Implementation Flow</p>
+                 <h2 className="text-6xl font-black uppercase tracking-tighter text-white mb-12 leading-none italic">{t.howItWorks.title}</h2>
+                 <p className="text-xl text-zinc-500 font-medium leading-relaxed italic max-w-sm mb-12">Deployment across your supply chain nodes in 4 phases.</p>
+                 <button onClick={onGetStarted} className="px-10 py-5 rounded-xl bg-supplyx-blue text-white text-[10px] font-black uppercase tracking-[0.4em] hover:bg-blue-600 transition-all">Start Onboarding</button>
+              </div>
+
+              <div className="lg:col-span-2 space-y-12">
+                 {t.howItWorks.steps.map((step, i) => (
+                   <div key={i} className="group relative p-16 rounded-[48px] bg-zinc-900/30 border border-white/5 hover:border-supplyx-blue/30 transition-all">
+                      <div className="flex gap-12 items-start">
+                         <div className="text-7xl font-mono font-black text-zinc-800 group-hover:text-supplyx-blue transition-colors">0{i + 1}</div>
+                         <div>
+                            <h3 className="text-3xl font-black uppercase mb-8 text-white tracking-tight">{step.title}</h3>
+                            <p className="text-xl text-zinc-500 font-medium leading-relaxed group-hover:text-zinc-300 transition-colors max-w-xl">{step.desc}</p>
+                         </div>
+                      </div>
+                   </div>
+                 ))}
+              </div>
            </div>
         </div>
       </section>
 
       {/* FAQ Center */}
-      <section className="py-40">
+      <section className="py-48 industrial-grid">
         <div className="max-w-4xl mx-auto px-6">
           <div className="text-center mb-32">
-            <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter mb-8">{t.faq.title}</h2>
-            <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-white/5 border border-white/10">
-              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500">Need more info?</span>
-              <a href="mailto:support@supplyx.africa" className="text-[10px] font-black uppercase tracking-[0.3em] text-supplyx-blue hover:underline">Contact Intelligence Team</a>
-            </div>
+            <p className="text-[10px] font-black uppercase tracking-[0.5em] text-supplyx-blue mb-8">Intelligence Center</p>
+            <h2 className="text-5xl md:text-7xl font-black uppercase tracking-tighter mb-8 text-white italic">{t.faq.title}</h2>
           </div>
 
           <div className="space-y-4">
             {t.faq.questions.map((item, i) => (
-              <details key={i} className="group glass-dark rounded-[32px] border border-white/5 overflow-hidden open:ring-2 open:ring-supplyx-blue/30 transition-all">
+              <details key={i} className="group glass-dark rounded-[24px] border border-white/5 overflow-hidden open:ring-1 open:ring-supplyx-blue transition-all">
                 <summary className="flex items-center justify-between p-10 cursor-pointer list-none">
-                  <span className="text-xl font-black italic uppercase tracking-tight text-white">{item.q}</span>
-                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-supplyx-blue group-open:rotate-180 transition-transform">
+                  <span className="text-2xl font-black uppercase tracking-tight text-white italic">{item.q}</span>
+                  <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-zinc-600 group-open:rotate-180 transition-transform">
                      <ChevronDown className="w-6 h-6" />
                   </div>
                 </summary>
-                <div className="px-10 pb-10 text-lg text-zinc-500 font-medium leading-relaxed border-t border-white/5 pt-10">
+                <div className="px-10 pb-10 text-xl text-zinc-500 font-medium leading-relaxed border-t border-white/5 pt-10">
                   {item.a}
                 </div>
               </details>
@@ -461,47 +470,45 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
       </section>
 
       {/* CTA Section - The Closing */}
-      <section className="py-40 relative">
-        <div className="max-w-[1400px] mx-auto px-6">
-          <div className="relative rounded-[80px] p-20 md:p-40 text-center overflow-hidden bg-supplyx-blue border border-white/20 shadow-3xl group">
-             <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-white/20 blur-[160px] rounded-full -translate-y-1/2 translate-x-1/2 animate-pulse-slow" />
-             <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-supplyx-deep/20 blur-[120px] rounded-full translate-y-1/2 -translate-x-1/2" />
-             
+      <section className="py-48 relative overflow-hidden bg-supplyx-deep">
+        <div className="max-w-[1600px] mx-auto px-6">
+          <div className="relative rounded-[40px] p-24 md:p-48 text-center overflow-hidden bg-zinc-900 border border-white/5 group industrial-grid">
              <div className="relative z-10">
-               <h2 className="text-5xl md:text-8xl font-black italic tracking-tighter mb-16 uppercase leading-none text-white">
-                 Start Building <br /> <span className="text-supplyx-deep italic">On Trust.</span>
-               </h2>
-               <div className="flex flex-col sm:flex-row items-center justify-center gap-8">
-                  <button 
-                    onClick={onGetStarted}
-                    className="group w-full sm:w-auto px-16 py-8 rounded-[32px] bg-white text-supplyx-blue font-black italic text-2xl shadow-3xl hover:scale-110 active:scale-95 transition-all"
-                  >
-                    {language === 'PT' ? 'Unir-se à Rede' : 'Join the Network'}
-                  </button>
-                  <button 
-                    className="w-full sm:w-auto px-12 py-8 rounded-[32px] border-2 border-white/30 text-white font-black italic text-2xl hover:bg-white/10 transition-all"
-                  >
-                    Contact Sales
-                  </button>
-               </div>
+                <p className="text-[10px] font-black uppercase tracking-[0.8em] text-supplyx-blue mb-12">Institutional Onboarding</p>
+                <h2 className="text-6xl md:text-9xl font-black tracking-tighter mb-20 uppercase leading-[0.85] text-white">
+                   Standardize <br /> <span className="text-supplyx-blue italic">Global Trade.</span>
+                </h2>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-8">
+                   <button 
+                     onClick={onGetStarted}
+                     className="group w-full sm:w-auto px-16 py-8 rounded-xl bg-supplyx-blue text-white font-black uppercase text-sm tracking-[0.2em] hover:bg-blue-600 transition-all"
+                   >
+                     {language === 'PT' ? 'Solicitar Acesso' : 'Request Access'}
+                   </button>
+                   <button 
+                     className="w-full sm:w-auto px-14 py-8 rounded-xl border border-white/10 text-white font-black uppercase text-sm tracking-[0.2em] hover:bg-white/5 transition-all"
+                   >
+                     Documentation
+                   </button>
+                </div>
              </div>
           </div>
         </div>
       </section>
 
-      {/* Ultra Modern Footer */}
-      <footer className="pt-40 pb-20 border-t border-white/5">
+      {/* Industrial Footer */}
+      <footer className="pt-48 pb-20 border-t border-white/5 bg-supplyx-deep">
         <div className="max-w-[1600px] mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-20 mb-40">
-            <div className="md:col-span-4 space-y-12">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-24 mb-48">
+            <div className="md:col-span-4 space-y-16">
               <SupplyXLogo size="lg" isDark={true} />
-              <p className="text-2xl text-zinc-500 font-medium italic leading-relaxed max-w-sm">
+              <p className="text-xl text-zinc-600 font-medium leading-relaxed max-w-sm italic">
                 {t.footer.desc}
               </p>
               <div className="flex gap-4">
                 {[Twitter, Linkedin, Instagram, Mail].map((Icon, i) => (
-                  <a key={i} href="#" className="w-16 h-16 rounded-[24px] bg-white/5 flex items-center justify-center text-zinc-500 hover:text-white hover:bg-supplyx-blue transition-all border border-white/5 shadow-xl">
-                    <Icon className="w-6 h-6" />
+                  <a key={i} href="#" className="w-14 h-14 rounded-xl bg-zinc-900 flex items-center justify-center text-zinc-600 hover:text-supplyx-blue hover:bg-zinc-800 transition-all border border-white/5">
+                    <Icon className="w-5 h-5" />
                   </a>
                 ))}
               </div>
@@ -510,7 +517,7 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
             <div className="md:col-span-8 grid grid-cols-2 lg:grid-cols-4 gap-12">
                <div className="space-y-8">
                   <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-supplyx-blue">Infrastructure</h4>
-                  <ul className="space-y-6 text-base font-black uppercase tracking-widest text-zinc-600">
+                  <ul className="space-y-4 text-xs font-black uppercase tracking-widest text-zinc-600">
                     <li><a href="#" className="hover:text-white transition-colors">On-chain Ledger</a></li>
                     <li><a href="#" className="hover:text-white transition-colors">Predictive Engine</a></li>
                     <li><a href="#" className="hover:text-white transition-colors">Node Network</a></li>
@@ -518,7 +525,7 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
                </div>
                <div className="space-y-8">
                   <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-supplyx-blue">Ecosystem</h4>
-                  <ul className="space-y-6 text-base font-black uppercase tracking-widest text-zinc-600">
+                  <ul className="space-y-4 text-xs font-black uppercase tracking-widest text-zinc-600">
                     <li><a href="#" className="hover:text-white transition-colors">Manufacturers</a></li>
                     <li><a href="#" className="hover:text-white transition-colors">Logistics Hub</a></li>
                     <li><a href="#" className="hover:text-white transition-colors">Mobile Fleet</a></li>
@@ -526,7 +533,7 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
                </div>
                <div className="space-y-8">
                   <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-supplyx-blue">Resources</h4>
-                  <ul className="space-y-6 text-base font-black uppercase tracking-widest text-zinc-600">
+                  <ul className="space-y-4 text-xs font-black uppercase tracking-widest text-zinc-600">
                     <li><a href="#" className="hover:text-white transition-colors">API Docs</a></li>
                     <li><a href="#" className="hover:text-white transition-colors">Whitepaper</a></li>
                     <li><a href="#" className="hover:text-white transition-colors">Case Studies</a></li>
@@ -534,9 +541,9 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
                </div>
                <div className="space-y-8">
                   <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-supplyx-blue">Legal</h4>
-                  <ul className="space-y-6 text-base font-black uppercase tracking-widest text-zinc-600">
+                  <ul className="space-y-4 text-xs font-black uppercase tracking-widest text-zinc-600">
                     <li><a href="#" className="hover:text-white transition-colors">Privacy</a></li>
-                    <li><a href="#" className="hover:text-white transition-colors">Protocol Audit</a></li>
+                    <li><a href="#" className="hover:text-white transition-colors">Security Audit</a></li>
                     <li><a href="#" className="hover:text-white transition-colors">Compliance</a></li>
                   </ul>
                </div>
@@ -545,13 +552,13 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
           
           <div className="flex flex-col lg:flex-row items-center justify-between gap-10 pt-16 border-t border-white/5">
              <div className="flex items-center gap-12">
-                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-700">© 2026 SUPPLYX CORE PLATFORM</p>
-                <div className="hidden sm:flex items-center gap-4 text-[10px] font-black uppercase tracking-[0.4em] text-supplyx-blue">
-                   <div className="w-2 h-2 rounded-full bg-supplyx-blue" />
-                   SYSTEM STATUS: OPERATIONAL
+                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-800">© 2026 SUPPLYX CORE INFRASTRUCTURE</p>
+                <div className="hidden sm:flex items-center gap-6 text-[10px] font-black uppercase tracking-[0.5em] text-supplyx-blue">
+                   <div className="w-1.5 h-1.5 rounded-full bg-supplyx-blue" />
+                   NODES: 12,450 ONLINE
                 </div>
              </div>
-             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-700">{t.footer.rights} POWERED BY MANHATE LINK ÁFRICA</p>
+             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-800">MANHATE LINK ÁFRICA • GLOBAL OPERATIONS</p>
           </div>
         </div>
       </footer>

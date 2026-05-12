@@ -132,23 +132,25 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
         ))}
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div className="flex items-center justify-between">
-          <h3 className={`text-lg font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.categories}</h3>
-          <div className="h-px bg-supplyx-blue/10 flex-1 mx-6 hidden sm:block" />
+          <div className="flex items-center gap-4">
+             <div className="w-1.5 h-6 bg-supplyx-blue rounded-full" />
+             <h3 className={`text-xl font-black uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.categories}</h3>
+          </div>
+          <button className="text-[10px] font-black uppercase tracking-widest text-supplyx-blue hover:underline">View Logistics Catalog</button>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
           {categoryCards.map((cat) => (
             <button 
               key={cat.name}
               onClick={() => onCategoryClick?.(cat.name)}
-              className={`p-8 rounded-[40px] border transition-all hover:-translate-y-2 active:scale-95 flex flex-col items-center gap-4 group relative overflow-hidden ${
-                isDarkMode ? 'bg-supplyx-dark border-white/5 hover:border-supplyx-blue shadow-3xl' : 'bg-white border-zinc-100 hover:border-brand shadow-sm'
+              className={`p-10 rounded-[24px] border transition-all hover:border-supplyx-blue active:scale-95 flex flex-col items-center gap-6 group relative overflow-hidden ${
+                isDarkMode ? 'bg-zinc-900 border-white/5 shadow-2xl' : 'bg-white border-zinc-100 shadow-sm'
               }`}
             >
-              <div className="absolute -top-12 -right-12 w-24 h-24 bg-supplyx-blue/5 rounded-full blur-2xl group-hover:bg-supplyx-blue/10 transition-colors" />
-              <span className="text-4xl transition-transform group-hover:scale-125 duration-500 relative z-10">{cat.icon}</span>
-              <span className={`text-[10px] font-black uppercase tracking-[0.2em] text-center relative z-10 ${isDarkMode ? 'text-zinc-500 group-hover:text-white' : 'text-zinc-500 group-hover:text-zinc-900'}`}>
+              <span className="text-4xl transition-transform group-hover:scale-110 duration-500 relative z-10">{cat.icon}</span>
+              <span className={`text-[10px] font-black uppercase tracking-[0.3em] text-center relative z-10 ${isDarkMode ? 'text-zinc-500 group-hover:text-white' : 'text-zinc-400 group-hover:text-zinc-900'}`}>
                 {(t.catNames as any)[cat.name] || cat.name}
               </span>
             </button>
@@ -167,76 +169,72 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
         </div>
 
         <div className="lg:col-span-2 space-y-12">
-          <div className="overflow-hidden">
-            <TransactionList isDarkMode={isDarkMode} userType={userType} language={language} />
-          </div>
+          <TransactionList isDarkMode={isDarkMode} userType={userType} language={language} />
         </div>
         
-        <div className="space-y-12 h-full flex flex-col">
+        <div className="space-y-8 h-full flex flex-col">
           {/* SupplyX Intelligence Card */}
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="group glass rounded-[48px] p-10 text-white relative overflow-hidden border-white/5 shadow-2xl flex-shrink-0"
+            className="group bg-zinc-900 rounded-[32px] p-12 text-white relative overflow-hidden border border-white/5 shadow-2xl flex-shrink-0"
           >
+            <div className="absolute inset-0 industrial-grid opacity-10" />
             <div className="relative z-10">
-              <div className="flex justify-between items-start mb-8">
-                <div className="w-14 h-14 rounded-3xl bg-supplyx-blue flex items-center justify-center shadow-2xl shadow-blue-500/20 group-hover:scale-110 transition-transform">
-                  <Zap className="w-7 h-7 text-white" />
+              <div className="flex justify-between items-start mb-12">
+                <div className="w-16 h-16 rounded-2xl bg-zinc-800 border border-white/10 flex items-center justify-center group-hover:border-supplyx-blue transition-colors">
+                  <Zap className="w-8 h-8 text-supplyx-blue" />
                 </div>
-                <div className="px-3 py-1 bg-white/10 rounded-full text-[8px] font-black uppercase tracking-widest border border-white/10">
-                   Active Intelligence
+                <div className="px-4 py-2 bg-supplyx-blue/10 rounded-lg text-[9px] font-black uppercase tracking-widest border border-supplyx-blue/20 text-supplyx-blue">
+                   AI_CORE_ACTIVE
                 </div>
               </div>
-              <h3 className="text-2xl font-black italic uppercase tracking-tight mb-4">{t.aiTitle}</h3>
-              <p className="text-zinc-400 text-sm mb-10 font-medium leading-relaxed">{t.aiDesc}</p>
+              <h3 className="text-3xl font-black italic uppercase tracking-tighter mb-6">{t.aiTitle}</h3>
+              <p className="text-zinc-500 text-lg mb-12 font-medium leading-relaxed">{t.aiDesc}</p>
               <button 
                 onClick={onActivateIA}
-                className="w-full bg-supplyx-blue hover:bg-blue-600 text-white px-8 py-5 rounded-[24px] text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-3xl shadow-blue-500/20 flex items-center justify-center gap-3"
+                className="w-full bg-supplyx-blue hover:bg-blue-600 text-white px-8 py-6 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-blue-500/20"
               >
-                <Zap className="w-4 h-4 fill-white" />
-                {t.aiBtn}
+                Execute Analysis
               </button>
             </div>
-            <div className="absolute -right-16 -bottom-16 w-64 h-64 bg-supplyx-blue/10 blur-[100px] rounded-full group-hover:bg-supplyx-blue/20 transition-colors" />
           </motion.div>
 
           {/* Activity Feed */}
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6 }}
-            className={`flex-grow ${isDarkMode ? 'bg-supplyx-dark border-white/5 shadow-3xl' : 'bg-white border-zinc-200 shadow-sm'} rounded-[48px] border p-10 transition-colors flex flex-col`}
+            className={`${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100'} rounded-[32px] border p-12 transition-colors flex flex-col shadow-2xl shadow-black/20`}
           >
-            <div className="flex items-center justify-between mb-10 shrink-0">
-              <h4 className={`text-[10px] font-black uppercase tracking-[0.3em] transition-colors ${isDarkMode ? 'text-zinc-500' : 'text-zinc-900'}`}>Recent Events</h4>
-              <div className="flex items-center gap-2">
-                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                 <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">Live Flow</span>
+            <div className="flex items-center justify-between mb-12 shrink-0">
+              <h4 className={`text-[10px] font-black uppercase tracking-[0.4em] transition-colors ${isDarkMode ? 'text-zinc-500' : 'text-zinc-900'}`}>System Events</h4>
+              <div className="flex items-center gap-3">
+                 <div className="w-1.5 h-1.5 rounded-full bg-supplyx-blue" />
+                 <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Real-time</span>
               </div>
             </div>
-            <div className="space-y-6 flex-grow overflow-y-auto custom-scrollbar pr-2 max-h-[350px]">
+            <div className="space-y-8 flex-grow overflow-y-auto custom-scrollbar pr-4 max-h-[400px]">
               {[
-                { time: '2m ago', user: 'Logística Maputo', action: 'Material em rota', desc: 'Saída Nacala Port', type: 'logistics' },
-                { time: '15m ago', user: 'Votorantim', action: 'Cotação aceita', desc: 'OC-2401 Confirmada', type: 'order' },
-                { time: '1h ago', user: 'Fernando M.', action: 'Pagamento enviado', desc: 'MT 12.450 (BIM)', type: 'payment' },
-                { time: '3h ago', user: 'System IA', action: 'Oportunidade detectada', desc: 'Economia de 12% em Aço', type: 'ai' },
-                { time: '5h ago', user: 'Beira Express', action: 'Entrega finalizada', desc: 'LOG-003 Entregue', type: 'logistics' },
+                { time: '2m', user: 'Logística Maputo', action: 'Material Dispatch', desc: 'Saída Nacala Port', type: 'logistics' },
+                { time: '15m', user: 'Votorantim', action: 'Quote Accepted', desc: 'OC-2401 Confirmed', type: 'order' },
+                { time: '1h', user: 'Fernando M.', action: 'Payment Executed', desc: 'MT 12.450 (BIM)', type: 'payment' },
+                { time: '3h', user: 'Predictive Core', action: 'Arbitrage Opportunity', desc: 'Economia de 12% em Aço', type: 'ai' },
               ].map((activity, i) => (
-                <div key={i} className="flex gap-4 group cursor-pointer">
-                  <div className={`w-1 h-10 rounded-full shrink-0 transition-colors ${
+                <div key={i} className="flex gap-6 group cursor-pointer">
+                  <div className={`w-px h-12 shrink-0 transition-colors ${
                     activity.type === 'logistics' ? 'bg-supplyx-blue' :
                     activity.type === 'order' ? 'bg-emerald-500' :
                     activity.type === 'ai' ? 'bg-amber-500' : 'bg-zinc-700'
                   }`} />
                   <div className="flex-grow">
-                    <div className="flex justify-between items-start mb-0.5">
-                       <p className={`text-[10px] font-black uppercase tracking-tight ${isDarkMode ? 'text-zinc-300' : 'text-zinc-900'}`}>{activity.action}</p>
-                       <span className="text-[8px] font-black text-zinc-600 uppercase whitespace-nowrap">{activity.time}</span>
+                    <div className="flex justify-between items-start mb-2">
+                       <p className={`text-base font-black uppercase tracking-tight ${isDarkMode ? 'text-zinc-300' : 'text-zinc-900'}`}>{activity.action}</p>
+                       <span className="font-mono text-[9px] font-black text-zinc-600 uppercase bg-zinc-800/50 px-2 py-1 rounded">{activity.time}</span>
                     </div>
-                    <p className="text-[10px] font-bold text-zinc-500 leading-none mb-1">{activity.user}</p>
-                    <p className="text-[9px] font-medium text-zinc-600 italic">{activity.desc}</p>
+                    <p className="text-[10px] font-bold text-zinc-500 leading-none mb-1 uppercase tracking-widest">{activity.user}</p>
+                    <p className="text-[10px] font-medium text-zinc-600 italic">{activity.desc}</p>
                   </div>
                 </div>
               ))}

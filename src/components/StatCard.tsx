@@ -20,46 +20,44 @@ const sparkData = [
 export default function StatCard({ label, value, change, trend, icon: Icon, delay = 0, isDarkMode }: StatCardProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
-      className={`p-10 rounded-[48px] border transition-all hover:-translate-y-2 group relative overflow-hidden flex flex-col justify-between h-full ${
-        isDarkMode ? 'bg-supplyx-dark border-white/5 shadow-3xl' : 'bg-white border-zinc-200'
+      className={`p-8 rounded-[32px] border transition-all hover:border-supplyx-blue/50 group relative overflow-hidden flex flex-col justify-between h-full ${
+        isDarkMode ? 'bg-supplyx-dark border-white/5 shadow-2xl' : 'bg-white border-zinc-100 shadow-sm'
       }`}
       id={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}
     >
-      <div className="absolute -top-12 -right-12 w-32 h-32 bg-supplyx-blue/5 rounded-full blur-2xl group-hover:bg-supplyx-blue/10 transition-colors" />
-      
       <div className="relative z-10">
         <div className="flex justify-between items-start mb-8">
-          <div className={`p-4 rounded-2xl transition-all shadow-xl ${
-            isDarkMode ? 'bg-supplyx-deep group-hover:bg-supplyx-blue group-hover:scale-110 shadow-black' : 'bg-zinc-50 group-hover:bg-brand/5'
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+            isDarkMode ? 'bg-zinc-800' : 'bg-zinc-50'
           }`}>
-            <Icon className={`w-8 h-8 transition-colors ${
-              isDarkMode ? 'text-supplyx-blue group-hover:text-white' : 'text-zinc-600 group-hover:text-brand'
+            <Icon className={`w-6 h-6 transition-colors ${
+              isDarkMode ? 'text-zinc-500 group-hover:text-supplyx-blue' : 'text-zinc-400 group-hover:text-supplyx-blue'
             }`} />
           </div>
-          <div className={`flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border
-            ${trend === 'up' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border-rose-500/20'}`}>
-            {trend === 'up' ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+          <div className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border
+            ${trend === 'up' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/10' : 'bg-rose-500/10 text-rose-500 border-rose-500/10'}`}>
+            {trend === 'up' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
             {change}
           </div>
         </div>
         
-        <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-2 truncate ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>{label}</p>
-        <h3 className={`text-4xl font-black italic tracking-tighter truncate leading-none mb-6 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{value}</h3>
+        <p className={`text-[10px] font-black uppercase tracking-[0.4em] mb-4 truncate ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>{label}</p>
+        <h3 className={`text-4xl font-mono font-black tracking-tighter truncate leading-none mb-2 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{value}</h3>
       </div>
 
       {/* Sparkline */}
-      <div className="h-16 w-full -mb-2 mt-4 relative z-10 opacity-50 group-hover:opacity-100 transition-opacity">
+      <div className="h-12 w-full mt-6 relative z-10 opacity-30 group-hover:opacity-100 transition-opacity">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={sparkData}>
             <Area 
-              type="monotone" 
+              type="step" 
               dataKey="v" 
-              stroke={trend === 'up' ? '#10b981' : '#f43f5e'} 
-              fill={trend === 'up' ? '#10b98120' : '#f43f5e20'}
-              strokeWidth={3}
+              stroke={trend === 'up' ? '#10b981' : '#ef4444'} 
+              fill={trend === 'up' ? '#10b98110' : '#ef444410'}
+              strokeWidth={2}
               dot={false}
             />
           </AreaChart>

@@ -11,6 +11,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
+import { OptimizedImage } from './ui/OptimizedImage';
 
 interface CartModalProps {
   isOpen: boolean;

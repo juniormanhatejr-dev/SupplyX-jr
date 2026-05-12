@@ -404,16 +404,16 @@ export default function ProductsView({
     });
 
     return () => unsubscribe();
-  }, [userType]);
+  }, [userType, supplierId]); // Added supplierId to dependencies
 
     const baseProducts = activeCategory === 'All' || activeCategory === 'Tudo'
-    ? (products.length > 0 ? products : bestOffers.map(p => ({ 
+    ? (products.length > 0 ? products : (userType === 'buyer' ? bestOffers.map(p => ({ 
         ...p, 
         id: p.id.toString(), 
         supplierId: 'demo',
         name: language === 'PT' ? p.descPT : p.descEN,
         category: language === 'PT' ? p.categoryPT : p.categoryEN
-      } as any)))
+      } as any)) : []))
     : products.filter(item => item.category === activeCategory);
 
   const displayProducts = baseProducts.filter(item => {

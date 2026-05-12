@@ -147,6 +147,14 @@ export default function LogisticsView({ isDarkMode, language }: LogisticsViewPro
   const [allShipments, setAllShipments] = useState(initialShipments);
   const [showBooking, setShowBooking] = useState(false);
   const [showArchiveSuccess, setShowArchiveSuccess] = useState(false);
+  const [selectedShipment, setSelectedShipment] = useState<any>(initialShipments[0]);
+
+  const timelineSteps = [
+    { label: language === 'PT' ? 'Saída do Depósito' : 'Warehouse Exit', status: 'completed', time: '08:00', location: 'Nacala Logistics Hub' },
+    { label: language === 'PT' ? 'Posto de Controle A1' : 'Checkpoint A1', status: 'completed', time: '10:30', location: 'BR-101 North' },
+    { label: language === 'PT' ? 'Em Trânsito' : 'In Transit', status: 'current', time: '12:45', location: 'Cruising at 80km/h' },
+    { label: language === 'PT' ? 'Entrega Estimada' : 'Estimated Delivery', status: 'pending', time: '14:30', location: 'Maputo Central' },
+  ];
 
   const archiveCompleted = () => {
     const finishedStatus = t.statuses.finished;
@@ -505,20 +513,31 @@ export default function LogisticsView({ isDarkMode, language }: LogisticsViewPro
       animate={{ opacity: 1, y: 0 }}
       className="space-y-8"
     >
-      <div className={`p-8 rounded-3xl border flex flex-col md:flex-row justify-between items-center gap-6 ${
-        isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'
+      <div className={`p-10 rounded-[48px] border flex flex-col lg:flex-row justify-between items-center gap-8 ${
+        isDarkMode ? 'bg-zinc-900 border-white/5 shadow-3xl' : 'bg-white border-zinc-100 shadow-sm'
       }`}>
-        <div className="text-center md:text-left">
-          <h2 className={`text-2xl font-black italic tracking-tighter uppercase mb-1 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.title}</h2>
-          <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">{t.subtitle}</p>
+        <div className="text-center lg:text-left flex items-center gap-6">
+           <div className="w-16 h-16 rounded-[24px] bg-supplyx-blue/10 flex items-center justify-center text-supplyx-blue">
+             <Truck className="w-8 h-8" />
+           </div>
+           <div>
+             <h2 className={`text-3xl font-black italic tracking-tighter uppercase mb-2 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.title}</h2>
+             <p className="text-zinc-500 text-[11px] font-black uppercase tracking-[0.3em]">{t.subtitle}</p>
+           </div>
         </div>
-        <button 
-          onClick={() => setShowBooking(true)}
-          className="bg-brand hover:bg-brand-hover text-white px-8 py-4 rounded-2xl text-sm font-black italic uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-brand/20 flex items-center gap-3"
-        >
-          <Handshake className="w-5 h-5" />
-          {t.btnHire}
-        </button>
+        <div className="flex items-center gap-4">
+           <div className="hidden sm:flex items-center gap-3 px-6 py-3 bg-white/5 rounded-2xl border border-white/5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Network Secure</span>
+           </div>
+           <button 
+             onClick={() => setShowBooking(true)}
+             className="bg-supplyx-blue hover:bg-blue-600 text-white px-10 py-5 rounded-[24px] text-sm font-black italic uppercase tracking-widest transition-all active:scale-95 shadow-3xl shadow-blue-500/20 flex items-center gap-4"
+           >
+             <Plus className="w-6 h-6 border-2 border-white/20 rounded-full" />
+             {t.btnHire}
+           </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -581,116 +600,212 @@ export default function LogisticsView({ isDarkMode, language }: LogisticsViewPro
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className={`rounded-3xl border overflow-hidden ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-950 border-white/10'}`}>
-          <div className="p-6 border-b border-white/5 flex items-center justify-between">
-            <h3 className="text-white text-sm font-black uppercase italic tracking-tighter flex items-center gap-2">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              {t.liveTracking}
-            </h3>
-            <span className="text-[10px] font-black text-brand">MT / GMT+2</span>
-          </div>
-          
-          <div className="p-6 space-y-6 max-h-[400px] overflow-y-auto custom-scrollbar">
-            {allShipments.filter(s => s.status !== t.statuses.finished).map(s => (
-              <div key={s.id} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="text-xs font-black text-brand mb-1">{s.id}</h4>
-                    <p className="text-sm font-black text-white italic tracking-tight">{s.material}</p>
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase">{s.carrier}</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] font-black text-emerald-500 block mb-1">ETA {s.ETA}</span>
-                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${s.status === t.statuses.transit ? 'bg-blue-500/20 text-blue-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                      {s.status}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${s.progress}%` }}
-                      className="h-full bg-brand"
-                    />
-                  </div>
-                  <div className="flex justify-between text-[9px] font-black text-zinc-500 uppercase tracking-widest">
-                    <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {s.origin}</span>
-                    <span className="flex items-center gap-1"> {s.progress}% <Navigation2 className="w-3 h-3 text-white" /> {s.destination}</span>
-                  </div>
-                </div>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-12">
+        <div className={`xl:col-span-2 rounded-[48px] border overflow-hidden relative group ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100 shadow-xl'}`}>
+          <div className="p-10 border-b border-white/5 flex items-center justify-between relative z-10">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-supplyx-blue/10 flex items-center justify-center">
+                <Navigation2 className="w-6 h-6 text-supplyx-blue" />
               </div>
-            ))}
+              <div>
+                <h3 className={`text-xl font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.liveTracking}</h3>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Global Logistics Grid v2.4</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-full">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Active nodes: 1,242</span>
+              </div>
+            </div>
           </div>
           
-          <div className="p-6 bg-zinc-950/50 mt-auto flex items-center justify-center gap-4 text-[10px] font-black text-zinc-600 uppercase tracking-widest">
-             <div className="flex items-center gap-2"><div className="w-2 h-2 bg-brand rounded-full" /> {language === 'PT' ? 'FROTA' : 'FLEET'}</div>
-             <div className="flex items-center gap-2"><div className="w-2 h-2 bg-emerald-500 rounded-full" /> {language === 'PT' ? 'ROTA' : 'ROUTE'}</div>
-             <div className="flex items-center gap-2"><div className="w-2 h-2 bg-zinc-800 rounded-full" /> {language === 'PT' ? 'BASE' : 'HUB'}</div>
+          <div className="h-[500px] relative bg-supplyx-deep/20 overflow-hidden">
+             <div className="absolute inset-0 opacity-20 pointer-events-none">
+                <svg width="100%" height="100%" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice">
+                   <path d="M100 200 Q 200 100 400 250 T 700 300" stroke="#3B82F6" strokeWidth="2" fill="none" strokeDasharray="10 10" />
+                   <path d="M50 400 Q 250 350 450 450 T 750 350" stroke="#3B82F6" strokeWidth="2" fill="none" strokeDasharray="10 10" />
+                   <circle cx="100" cy="200" r="4" fill="#3B82F6" />
+                   <circle cx="700" cy="300" r="4" fill="#3B82F6" />
+                   <circle cx="50" cy="400" r="4" fill="#3B82F6" />
+                   <circle cx="750" cy="350" r="4" fill="#3B82F6" />
+                </svg>
+             </div>
+
+             {allShipments.filter(s => s.status !== t.statuses.finished).map((s, idx) => (
+                <motion.div 
+                  key={s.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="absolute"
+                  style={{ top: `${20 + idx * 25}%`, left: `${15 + idx * 30}%` }}
+                >
+                   <div className="relative group/shipment cursor-pointer" onClick={() => setSelectedShipment(s)}>
+                      <div className="absolute -inset-4 bg-supplyx-blue/20 blur-xl rounded-full animate-pulse" />
+                      <div className={`p-4 rounded-2xl bg-supplyx-deep border-2 transition-all ${selectedShipment?.id === s.id ? 'border-supplyx-blue scale-110 shadow-2xl' : 'border-white/10 opacity-70'}`}>
+                         <Truck className="w-6 h-6 text-supplyx-blue mb-2" />
+                         <div className="text-[8px] font-black uppercase text-white tracking-widest">{s.id}</div>
+                      </div>
+                      
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 w-48 p-4 glass-dark rounded-2xl border border-white/10 opacity-0 group-hover/shipment:opacity-100 transition-opacity z-50 pointer-events-none text-white">
+                         <p className="text-[10px] font-black text-supplyx-blue uppercase mb-1">{s.carrier}</p>
+                         <p className="text-xs font-black text-white italic truncate">{s.material}</p>
+                         <div className="flex justify-between items-center mt-3 text-[8px] font-black text-zinc-500 uppercase tracking-widest">
+                            <span>ETA {s.ETA}</span>
+                            <span>{s.progress}%</span>
+                         </div>
+                      </div>
+                   </div>
+                </motion.div>
+             ))}
+             
+             <div className="absolute bottom-6 left-6 right-6 flex items-center justify-between pointer-events-none">
+                <div className="p-6 rounded-3xl bg-zinc-950/80 backdrop-blur-md border border-white/10 flex gap-8">
+                   <div className="text-center">
+                      <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest mb-1">Avg Lead Time</p>
+                      <p className="text-xl font-black italic text-white leading-none">2.4d</p>
+                   </div>
+                   <div className="w-px h-10 bg-white/10" />
+                   <div className="text-center">
+                      <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest mb-1">Efficiency Ratio</p>
+                      <p className="text-xl font-black italic text-emerald-500 leading-none">98.2%</p>
+                   </div>
+                </div>
+                <div className="p-4 rounded-2xl bg-zinc-950/80 backdrop-blur-md border border-white/10 text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                   Live Telemetry Link Status: <span className="text-emerald-500">Stable</span>
+                </div>
+             </div>
           </div>
         </div>
 
-        <div className={`p-8 rounded-3xl border flex flex-col ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-zinc-100 shadow-sm'}`}>
-          <div className="flex items-center justify-between mb-8">
-            <h3 className={`text-lg font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.shipmentStatus}</h3>
-            <button className={`p-2 rounded-xl transition-all ${isDarkMode ? 'bg-zinc-800 hover:bg-zinc-700' : 'bg-zinc-50 hover:bg-zinc-100'}`}>
-               <Search className="w-4 h-4 text-zinc-500" />
-            </button>
+        <div className={`rounded-[48px] border p-12 relative overflow-hidden flex flex-col ${isDarkMode ? 'bg-zinc-900 border-white/5 shadow-3xl' : 'bg-white border-zinc-100 shadow-sm'}`}>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-supplyx-blue/5 rounded-full blur-3xl -z-10" />
+          
+          <div className="flex items-center justify-between mb-12">
+            <div>
+              <h3 className={`text-xl font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>Intelligence Tracker</h3>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Tracking ID: {selectedShipment?.id}</p>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-supplyx-blue/10 flex items-center justify-center text-supplyx-blue">
+               <ShieldCheck className="w-6 h-6" />
+            </div>
           </div>
 
-          <div className="space-y-4 flex-1">
-            {allShipments.map((s) => (
-              <div 
-                key={s.id}
-                className={`p-5 rounded-2xl border transition-all hover:scale-[1.01] ${
-                  isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-100'
-                }`}
-              >
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                      s.status === t.statuses.finished ? 'bg-emerald-500/10 text-emerald-500' : 'bg-brand/10 text-brand'
-                    }`}>
-                      <Package className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className={`text-sm font-black italic tracking-tighter ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{s.material}</h4>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] font-bold text-zinc-500 uppercase">{s.id}</span>
-                        <span className="text-zinc-300">•</span>
-                        <span className="text-[10px] font-bold text-zinc-500 uppercase">{s.carrier}</span>
+          <div className="flex-1 relative">
+             <div className="absolute left-[15px] top-4 bottom-4 w-1 bg-white/5 rounded-full" />
+             
+             <div className="space-y-10 relative">
+                {timelineSteps.map((step, i) => (
+                   <div key={i} className={`flex gap-6 relative group ${step.status === 'pending' ? 'opacity-30' : ''}`}>
+                      <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 relative z-10 transition-all ${
+                         step.status === 'completed' ? 'bg-emerald-500 border-emerald-500 text-white' : 
+                         step.status === 'current' ? 'bg-supplyx-blue border-supplyx-blue text-white animate-pulse-slow' : 
+                         isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-500' : 'bg-white border-zinc-200 text-zinc-400'
+                      }`}>
+                         {step.status === 'completed' ? <CheckCircle2 className="w-4 h-4" /> : <div className="w-2 h-2 rounded-full bg-current" />}
                       </div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${
-                      s.status === t.statuses.finished ? 'bg-emerald-500/10 text-emerald-500' : 
-                      s.status === t.statuses.transit ? 'bg-blue-500/10 text-blue-500' : 'bg-amber-500/10 text-amber-500'
-                    }`}>
-                      {s.status}
-                    </span>
-                  </div>
+                      
+                      <div className="flex-1 pt-1">
+                         <div className="flex justify-between items-start mb-1">
+                            <h4 className={`text-sm font-black uppercase tracking-tight italic ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{step.label}</h4>
+                            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{step.time}</span>
+                         </div>
+                         <p className="text-[10px] font-bold text-zinc-500 uppercase flex items-center gap-2">
+                           <MapPin className="w-3 h-3 text-supplyx-blue" />
+                           {step.location}
+                         </p>
+                      </div>
+                   </div>
+                ))}
+             </div>
+          </div>
+
+          <div className="mt-12 p-8 rounded-3xl bg-white/[0.02] border border-white/5 space-y-4">
+             <div className="flex justify-between items-center text-[10px] font-black uppercase text-zinc-500 tracking-widest">
+                <span>Final Destination</span>
+                <span className={isDarkMode ? 'text-white italic' : 'text-zinc-900 italic'}>{selectedShipment?.destination}</span>
+             </div>
+             <button className={`w-full py-4 border rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 ${isDarkMode ? 'bg-white/5 border-white/10 text-white hover:bg-white/10' : 'bg-zinc-50 border-zinc-100 text-zinc-600 hover:bg-zinc-100'}`}>
+                <Download className="w-4 h-4" />
+                Proof of Delivery (WIP)
+             </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-8">
+        <div className="flex items-center justify-between">
+          <h3 className={`text-xl font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.shipmentStatus}</h3>
+          <div className="flex gap-4">
+             <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <input 
+                   type="text" 
+                   placeholder={t.searchPlaceholder}
+                   className={`pl-10 pr-4 py-3 rounded-xl border text-[10px] font-black uppercase outline-none transition-all w-64 ${
+                      isDarkMode ? 'bg-white/5 border-white/5 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-200'
+                   }`}
+                />
+             </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {allShipments.map((s) => (
+            <motion.div 
+              key={s.id}
+              whileHover={{ scale: 1.02 }}
+              onClick={() => setSelectedShipment(s)}
+              className={`p-8 rounded-[40px] border transition-all cursor-pointer group relative overflow-hidden ${
+                selectedShipment?.id === s.id ? (isDarkMode ? 'bg-supplyx-dark border-supplyx-blue shadow-2xl' : 'bg-zinc-50 border-supplyx-blue') :
+                isDarkMode ? 'bg-zinc-900/50 border-white/5 hover:border-white/10' : 'bg-white border-zinc-100 shadow-sm'
+              }`}
+            >
+              <div className="flex justify-between items-start mb-8">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
+                  s.status === t.statuses.finished ? 'bg-emerald-500/10 text-emerald-500' : 
+                  s.status === t.statuses.transit ? 'bg-supplyx-blue/10 text-supplyx-blue' : 'bg-amber-500/10 text-amber-500'
+                }`}>
+                  <Package className="w-7 h-7" />
+                </div>
+                <div className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-full ${
+                  s.status === t.statuses.finished ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 
+                  s.status === t.statuses.transit ? 'bg-supplyx-blue/10 text-supplyx-blue border border-supplyx-blue/20' : 
+                  'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                }`}>
+                  {s.status}
                 </div>
               </div>
-            ))}
-          </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <p className="text-[10px] font-black text-supplyx-blue uppercase tracking-widest mb-1">{s.id} • {s.carrier}</p>
+                  <h4 className={`text-lg font-black italic uppercase tracking-tighter leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{s.material}</h4>
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-black uppercase text-zinc-500 tracking-[0.2em]">
+                    <span>Efficiency</span>
+                    <span className={isDarkMode ? 'text-white' : 'text-zinc-900'}>{s.progress}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${s.progress}%` }}
+                      className={`h-full ${s.status === t.statuses.finished ? 'bg-emerald-500' : 'bg-supplyx-blue'}`}
+                    />
+                  </div>
+                </div>
 
-          <button 
-            onClick={archiveCompleted}
-            className={`w-full mt-8 py-4 px-4 rounded-2xl border-2 border-dashed font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
-            isDarkMode ? 'border-zinc-800 text-zinc-500 hover:border-brand/40 hover:text-brand' : 'border-zinc-100 text-zinc-400 hover:border-brand hover:text-brand'
-          }`}>
-            {showArchiveSuccess ? (
-              <>
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                {language === 'PT' ? 'Envios arquivados!' : 'Shipments archived!'}
-              </>
-            ) : (
-              language === 'PT' ? '+ Arquivar envios finalizados' : '+ Archive completed shipments'
-            )}
-          </button>
+                <div className="flex justify-between items-center pt-4 border-t border-white/5">
+                  <p className="text-[9px] font-black text-zinc-500 uppercase flex items-center gap-2">
+                    <MapPin className="w-3 h-3" /> {s.destination}
+                  </p>
+                  <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-supplyx-blue transition-colors group-hover:translate-x-1" />
+                </div>
+              </div>
+            </motion.div>
+          ))}
         </div>
       </div>
     </motion.div>

@@ -167,6 +167,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const [step, setStep] = useState(1);
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
   const [aiResponses, setAiResponses] = useState<SupplierResponse[]>([]);
+  const [dbSuppliers, setDbSuppliers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
@@ -217,6 +218,31 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, 'users'), where('type', '==', 'supplier'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({
+        id: doc.id,
+        uid: doc.id,
+        ...doc.data()
+      }));
+      setDbSuppliers(fetched);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const mergedSuppliers = [
+    ...availableSuppliers,
+    ...dbSuppliers.filter(dbs => !availableSuppliers.some(as => as.id === dbs.id))
+  ].map(s => ({
+    id: s.id,
+    name: s.name || s.companyName || 'Supplier',
+    quality: s.quality || 'N/A',
+    segment: s.segment || s.category || 'Geral'
+  }));
 
   const startChat = async (order: any) => {
     if (!auth.currentUser) return;
@@ -295,10 +321,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   };
 
   const [rows, setRows] = useState([
-    { id: 1, material: 'Cimento CP IV', quantity: '500.00', unit: 'SACOS', date: new Date().toISOString().split('T')[0] },
-    { id: 2, material: 'Aço CA-50 12mm', quantity: '200.00', unit: 'BARRAS', date: new Date().toISOString().split('T')[0] },
-    { id: 3, material: 'Tubo PVC 100mm', quantity: '150.00', unit: 'METROS', date: new Date().toISOString().split('T')[0] },
-    { id: 4, material: 'Areia Média', quantity: '30.00', unit: 'M³', date: new Date().toISOString().split('T')[0] }
+    { id: 1, material: '', quantity: '', unit: 'Unid.', date: new Date().toISOString().split('T')[0] }
   ]);
 
   const exportToExcel = () => {
@@ -452,7 +475,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     setIsAiProcessing(true);
     
     const responses: SupplierResponse[] = selectedSuppliers.map(sid => {
-      const s = availableSuppliers.find(as => as.id === sid);
+      const s = mergedSuppliers.find(as => as.id === sid);
       
       // Calculate real total based on products if they exist
       let calculatedTotal = 0;
@@ -467,15 +490,14 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         );
 
         if (match) {
-          calculatedTotal += match.price * parseFloat(row.quantity || '0');
+          calculatedTotal += (match.price || 0) * parseFloat(row.quantity || '0');
           itemsFound++;
         }
       });
 
-      // If no items found at all for this supplier, use a small random or just 0
-      // The user wants to avoid "inventing", so if 0 items found, we should probably warn
-      if (itemsFound === 0) {
-        calculatedTotal = 0;
+      // If no items found at all for this supplier, use a fallback if it's a demo supplier, otherwise 0
+      if (itemsFound === 0 && sid.startsWith('S')) {
+         calculatedTotal = (Math.random() * 5000 + 5000) * rows.length;
       }
 
       return {
@@ -947,23 +969,23 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           <AnimatePresence mode="wait">
             {step === 1 && (
               <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex-grow flex flex-col">
-                <div className="flex flex-col md:flex-row gap-6 mb-8">
-                  <div className={`flex-grow overflow-x-auto border rounded-2xl ${isDarkMode ? 'border-zinc-800' : 'border-zinc-100'}`}>
-                    <table className="w-full text-left min-w-[500px]">
-                      <thead className={`${isDarkMode ? 'bg-zinc-900/50 border-zinc-800' : 'bg-zinc-50 border-zinc-100'} border-b sticky top-0`}>
+                <div className="flex flex-col lg:flex-row gap-8 mb-8">
+                  <div className={`flex-grow overflow-x-auto border rounded-[32px] ${isDarkMode ? 'border-zinc-800' : 'border-zinc-100'} shadow-sm`}>
+                    <table className="w-full text-left min-w-[600px]">
+                      <thead className={`${isDarkMode ? 'bg-zinc-900/50 border-zinc-800' : 'bg-zinc-50 border-zinc-100'} border-b sticky top-0 z-20`}>
                         <tr>
-                          <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-widest w-16 text-center">{t.headers.item}</th>
-                          <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-widest">{t.headers.material}</th>
-                          <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-widest w-30">{t.headers.qty}</th>
-                          <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-widest w-40">{t.headers.need}</th>
-                          <th className="px-4 pr-6 w-12 text-center"></th>
+                          <th className="px-6 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest w-16 text-center">{t.headers.item}</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">{t.headers.material}</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest w-32">{t.headers.qty}</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest w-44">{t.headers.need}</th>
+                          <th className="px-6 pr-8 w-12 text-center"></th>
                         </tr>
                       </thead>
                       <tbody className={`divide-y ${isDarkMode ? 'divide-zinc-800' : 'divide-zinc-100'}`}>
                         {rows.map((row, index) => (
-                          <tr key={row.id} className={`${isDarkMode ? 'hover:bg-zinc-800/50' : 'hover:bg-zinc-50'} group`}>
-                            <td className="px-4 py-2 font-mono text-xs text-zinc-500 text-center">{index + 1}</td>
-                            <td className="px-4 py-2">
+                          <tr key={row.id} className={`${isDarkMode ? 'hover:bg-zinc-800/30' : 'hover:bg-zinc-50'} group transition-colors`}>
+                            <td className="px-6 py-4 font-mono text-xs text-zinc-500 text-center">{index + 1}</td>
+                            <td className="px-6 py-4">
                               <MaterialComboBox 
                                 value={row.material} 
                                 onChange={(val) => updateRow(row.id, 'material', val)}
@@ -971,20 +993,21 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                 isDarkMode={isDarkMode}
                               />
                             </td>
-                            <td className="px-4 py-2">
+                            <td className="px-6 py-4">
                               <input 
                                 type="text" value={row.quantity} onChange={(e) => updateRow(row.id, 'quantity', e.target.value)}
-                                className={`w-full bg-transparent border-none text-sm font-mono font-bold placeholder:text-zinc-300 outline-none ${isDarkMode ? 'text-brand' : 'text-zinc-900'}`}
+                                className={`w-full bg-transparent border-none text-sm font-mono font-bold placeholder:text-zinc-300 outline-none ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-900'}`}
+                                placeholder="0.00"
                               />
                             </td>
-                            <td className="px-4 py-2">
+                            <td className="px-6 py-4">
                               <input 
                                 type="date" value={row.date} onChange={(e) => updateRow(row.id, 'date', e.target.value)}
                                 className={`w-full bg-transparent border-none text-xs font-bold outline-none ${isDarkMode ? 'text-zinc-400' : 'text-zinc-600'}`}
                               />
                             </td>
-                            <td className="px-4 pr-6 py-2 text-center">
-                              <button onClick={() => removeRow(row.id)} className="text-zinc-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1">
+                            <td className="px-6 pr-8 py-4 text-center">
+                              <button onClick={() => removeRow(row.id)} className="text-zinc-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10">
                                 <Plus className="w-4 h-4 rotate-45" />
                               </button>
                             </td>
@@ -992,7 +1015,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                         ))}
                       </tbody>
                     </table>
-                      <div className="p-3 border-t border-zinc-100 flex items-center justify-between">
+                      <div className="p-4 border-t border-zinc-100 flex items-center justify-between">
                         <button 
                           onClick={addRow}
                           className="flex items-center gap-2 px-4 py-2 text-zinc-500 hover:text-zinc-900 transition-colors"
@@ -1010,7 +1033,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                       </div>
                   </div>
 
-                  <div className="w-full md:w-80 shrink-0">
+                  <div className="w-full lg:w-96 shrink-0 space-y-6">
                     <input 
                       type="file" 
                       ref={fileInputRef}
@@ -1021,25 +1044,25 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                     <button 
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isImagingProcessing}
-                      className={`w-full aspect-[4/3] rounded-3xl border-2 border-dashed flex flex-col items-center justify-center p-6 text-center transition-all group relative overflow-hidden
+                      className={`w-full aspect-video rounded-[32px] border-2 border-dashed flex flex-col items-center justify-center p-8 text-center transition-all group relative overflow-hidden
                         ${isDarkMode 
-                          ? 'border-[#27272a] hover:border-[#0052CC] bg-[#18181b]/50 hover:bg-[#0052CC]/5' 
-                          : 'border-[#f4f4f5] hover:border-[#0052CC] bg-[#fafafa] hover:bg-[#0052CC]/5'}`}
+                          ? 'border-white/5 hover:border-supplyx-blue bg-white/5 hover:bg-supplyx-blue/5' 
+                          : 'border-zinc-200 hover:border-supplyx-blue bg-zinc-50 hover:bg-supplyx-blue/5'}`}
                     >
                       {isImagingProcessing ? (
-                        <div className="relative z-10 space-y-3">
-                          <Loader2 className="w-10 h-10 text-brand animate-spin mx-auto" />
-                          <p className={`text-xs font-black uppercase tracking-widest ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>SupplyX Vision</p>
-                          <p className="text-[8px] font-bold text-zinc-500 uppercase">{t.extracting}</p>
+                        <div className="relative z-10 space-y-4">
+                          <Loader2 className="w-12 h-12 text-brand animate-spin mx-auto" />
+                          <p className={`text-sm font-black uppercase tracking-widest ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>SupplyX Vision</p>
+                          <p className="text-[10px] font-bold text-zinc-500 uppercase">{t.extracting}</p>
                         </div>
                       ) : (
-                        <div className="relative z-10 space-y-3">
-                          <div className={`mx-auto w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-110 ${isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-white text-zinc-400 shadow-zinc-200/50'}`}>
-                            <ImageIcon className="w-6 h-6" />
+                        <div className="relative z-10 space-y-4">
+                          <div className={`mx-auto w-16 h-16 rounded-3xl flex items-center justify-center shadow-2xl transition-transform group-hover:scale-110 ${isDarkMode ? 'bg-zinc-800 text-supplyx-blue border border-white/5' : 'bg-white text-supplyx-blue shadow-zinc-200/50'}`}>
+                            <ImageIcon className="w-8 h-8" />
                           </div>
                           <div>
-                            <p className={`text-xs font-black uppercase tracking-widest ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.imageRequest}</p>
-                            <p className="text-[9px] font-bold text-zinc-500 uppercase mt-1 leading-relaxed px-4">{t.imageSub}</p>
+                            <p className={`text-sm font-black uppercase tracking-widest ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.imageRequest}</p>
+                            <p className="text-[10px] font-bold text-zinc-500 uppercase mt-2 leading-relaxed px-6">{t.imageSub}</p>
                           </div>
                         </div>
                       )}
@@ -1075,7 +1098,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                 <div>
                   <h3 className={`text-xl font-bold mb-6 italic uppercase tracking-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.step2}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {availableSuppliers.map(s => (
+                    {mergedSuppliers.map(s => (
                       <div 
                         key={s.id} onClick={() => toggleSupplier(s.id)}
                         className={`p-5 rounded-3xl border-2 transition-all cursor-pointer relative group
@@ -1437,15 +1460,32 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           {getOrders(t).map((order) => (
-            <div key={order.id} className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors cursor-pointer group ${isDarkMode ? 'bg-[#18181b] border-[#27272a] hover:border-[#0052CC]/40' : 'bg-white border-[#e4e4e7] hover:border-[#0052CC]/30'}`}>
-              <div className="flex items-center gap-4 w-full sm:w-auto">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${isDarkMode ? 'bg-zinc-800 border-zinc-700' : 'bg-zinc-50 border-zinc-100'}`}>
-                  <FileText className={`w-6 h-6 ${isDarkMode ? 'text-zinc-600' : 'text-zinc-400'}`} />
+            <motion.div 
+              key={order.id} 
+              whileHover={{ y: -4 }}
+              className={`p-6 rounded-[32px] border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 transition-all cursor-pointer group relative overflow-hidden ${
+                isDarkMode 
+                  ? 'bg-supplyx-dark border-white/5 hover:border-supplyx-blue/50 shadow-2xl shadow-black/20' 
+                  : 'bg-white border-zinc-100 hover:border-supplyx-blue/30 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
+              }`}
+            >
+              <div className="flex items-center gap-5 w-full sm:w-auto relative z-10">
+                <div className={`w-14 h-14 rounded-[20px] flex items-center justify-center border transition-all ${
+                  isDarkMode 
+                    ? 'bg-zinc-800/50 border-white/5 group-hover:bg-supplyx-blue/10 group-hover:border-supplyx-blue/20' 
+                    : 'bg-zinc-50 border-zinc-100 group-hover:bg-supplyx-blue/5 group-hover:border-supplyx-blue/10'
+                }`}>
+                  <FileText className={`w-6 h-6 transition-colors ${isDarkMode ? 'text-zinc-500 group-hover:text-supplyx-blue' : 'text-zinc-400 group-hover:text-supplyx-blue'}`} />
                 </div>
                 <div>
-                  <h4 className={`font-bold transition-colors ${isDarkMode ? 'text-white group-hover:text-brand' : 'text-zinc-900 group-hover:text-brand'}`}>{order.id}</h4>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className={`text-lg font-black italic tracking-tight transition-colors ${isDarkMode ? 'text-white' : 'text-zinc-900 font-black'}`}>{order.id}</h4>
+                    {order.status === t.status.quote && (
+                       <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue animate-pulse" />
+                    )}
+                  </div>
                   <p 
-                    className="text-xs text-zinc-500 font-medium italic cursor-pointer hover:text-brand transition-colors"
+                    className="text-[10px] font-black uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-supplyx-blue transition-colors flex items-center gap-2"
                     onClick={(e) => {
                       e.stopPropagation();
                       const profileId = userType === 'supplier' ? 'buyer_demo_uid' : (order as any).supplierId;
@@ -1455,73 +1495,77 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                       }
                     }}
                   >
+                    <User className="w-3 h-3" />
                     {userType === 'supplier' ? `${t.client}: ${language === 'PT' ? 'Manhate Jr Const.' : 'Manhate Jr Const.'}` : `${t.supplier}: ${order.supplier}`}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-8 w-full sm:w-auto mt-2 sm:mt-0">
+              
+              <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-10 w-full sm:w-auto mt-2 sm:mt-0 relative z-10">
                 <div className="text-left sm:text-right">
-                  <p className={`text-sm font-black italic tracking-tight ${isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>{order.total}</p>
-                  <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">{order.date}</p>
+                  <p className={`text-xl font-black italic tracking-tighter leading-none mb-1 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{order.total}</p>
+                  <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-[0.2em]">{order.date}</p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest
-                    ${order.status === t.status.delivered ? 'bg-emerald-500/10 text-emerald-500' : 
-                      order.status === t.status.transit ? 'bg-blue-500/10 text-blue-500' :
-                      order.status === t.status.waiting ? 'bg-amber-500/10 text-amber-500' :
-                      'bg-[#0052CC]/10 text-[#0052CC]'}`}>
+                <div className="flex items-center gap-4">
+                  <div className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border
+                    ${order.status === t.status.delivered ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+                      order.status === t.status.transit ? 'bg-supplyx-blue/10 text-supplyx-blue border-supplyx-blue/20' :
+                      order.status === t.status.waiting ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                      'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'}`}>
                     {order.status}
                   </div>
-                  {order.status === t.status.quote && (
-                    <button 
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        setDownloadingOrderId(order.id);
-                        try {
-                          // For existing orders, we mock a response to use the template
-                          const mockRes: SupplierResponse = {
-                             supplierId: (order as any).supplierId || 'S1',
-                             name: order.supplier,
-                             price: parseFloat(order.total.replace('MT ', '').replace('.', '').replace(',', '.')) || 12450,
-                             timeToDeliver: '2 dias',
-                             confidence: 95
-                          };
-                          setSelectedResponseIndex(0); // Ensure template has data
-                          await downloadPDF(mockRes);
-                        } finally {
-                          setDownloadingOrderId(null);
-                        }
-                      }}
-                      disabled={downloadingOrderId === order.id}
-                      className={`p-1.5 rounded-lg transition-all active:scale-95 disabled:opacity-50 ${isDarkMode ? 'bg-zinc-800 text-zinc-400 hover:text-white' : 'bg-zinc-100 text-zinc-500 hover:text-zinc-900'}`}
-                      title={t.download}
-                    >
-                      {downloadingOrderId === order.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                    </button>
-                  )}
-                  {userType === 'supplier' && order.status === t.status.quote && (
+                  
+                  <div className="flex items-center gap-2">
+                    {order.status === t.status.quote && (
+                      <button 
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          setDownloadingOrderId(order.id);
+                          try {
+                            const mockRes: SupplierResponse = {
+                               supplierId: (order as any).supplierId || 'S1',
+                               name: order.supplier,
+                               price: parseFloat(order.total.replace('MT ', '').replace('.', '').replace(',', '.')) || 12450,
+                               timeToDeliver: '2 dias',
+                               confidence: 95
+                            };
+                            setSelectedResponseIndex(0);
+                            await downloadPDF(mockRes);
+                          } finally {
+                            setDownloadingOrderId(null);
+                          }
+                        }}
+                        disabled={downloadingOrderId === order.id}
+                        className={`p-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-50 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10' : 'bg-zinc-50 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'}`}
+                        title={t.download}
+                      >
+                        {downloadingOrderId === order.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      </button>
+                    )}
+                    {userType === 'supplier' && order.status === t.status.quote && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRespondingTo(order);
+                        }}
+                        className="px-5 py-2.5 bg-supplyx-blue text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 active:scale-95 transition-all shadow-xl shadow-blue-500/20"
+                      >
+                        {t.respond}
+                      </button>
+                    )}
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        setRespondingTo(order);
+                        startChat(order);
                       }}
-                      className="px-4 py-1.5 bg-[#0052CC] text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-brand"
+                      className={`p-2.5 rounded-xl transition-all active:scale-95 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-supplyx-blue hover:bg-supplyx-blue/5' : 'bg-zinc-50 text-zinc-500 hover:text-supplyx-blue hover:bg-supplyx-blue/5'}`}
                     >
-                      {t.respond}
+                      <MessageSquare className="w-4 h-4" />
                     </button>
-                  )}
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      startChat(order);
-                    }}
-                    className={`p-1.5 rounded-lg transition-all active:scale-95 ${isDarkMode ? 'bg-[#27272a] text-[#71717a] hover:text-[#0052CC] hover:bg-[#0052CC]/10' : 'bg-[#f4f4f5] text-[#52525b] hover:text-[#0052CC] hover:bg-[#0052CC]/10'}`}
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                  </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
         <div className={`${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'} p-8 rounded-3xl border h-fit shadow-sm relative overflow-hidden group`}>

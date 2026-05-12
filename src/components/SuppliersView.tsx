@@ -3,7 +3,7 @@ import { Handshake, Search, Star, MapPin, ExternalLink, MoreVertical, ArrowLeft,
 import { OptimizedImage } from './ui/OptimizedImage';
 import { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 
 interface Supplier {
   id: string;
@@ -32,25 +32,22 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile }: S
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
 
   useEffect(() => {
-    const fetchSuppliers = async () => {
-      try {
-        setLoading(true);
-        const q = query(collection(db, 'users'), where('type', '==', 'supplier'));
-        const snapshot = await getDocs(q);
-        const fetched = snapshot.docs.map(doc => ({
-          id: doc.id,
-          uid: doc.id,
-          ...doc.data()
-        })) as Supplier[];
-        setSuppliers(fetched);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.LIST, 'users');
-      } finally {
-        setLoading(false);
-      }
-    };
+    const q = query(collection(db, 'users'), where('type', '==', 'supplier'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({
+        id: doc.id,
+        uid: doc.id,
+        ...doc.data()
+      })) as Supplier[];
+      setSuppliers(fetched);
+      setLoading(false);
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'users');
+      setLoading(false);
+    });
 
-    fetchSuppliers();
+    return () => unsubscribe();
   }, []);
 
   const filteredSuppliers = suppliers.filter(s => 

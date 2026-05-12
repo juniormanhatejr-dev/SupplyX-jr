@@ -73,9 +73,10 @@ interface MaterialComboBoxProps {
   onChange: (value: string) => void;
   options: string[];
   isDarkMode?: boolean;
+  language?: 'PT' | 'EN';
 }
 
-function MaterialComboBox({ value, onChange, options, isDarkMode }: MaterialComboBoxProps) {
+function MaterialComboBox({ value, onChange, options, isDarkMode, language }: MaterialComboBoxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -96,32 +97,33 @@ function MaterialComboBox({ value, onChange, options, isDarkMode }: MaterialComb
 
   return (
     <div ref={containerRef} className="relative w-full">
-      <input 
-        type="text" 
-        value={value} 
-        onChange={(e) => {
-          onChange(e.target.value);
-          setIsOpen(true);
-          setHighlightedIndex(-1);
-        }}
-        onFocus={() => setIsOpen(true)}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            setHighlightedIndex(prev => Math.min(prev + 1, filteredOptions.length - 1));
-          } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setHighlightedIndex(prev => Math.max(prev - 1, 0));
-          } else if (e.key === 'Enter' && highlightedIndex >= 0) {
-            e.preventDefault();
-            onChange(filteredOptions[highlightedIndex]);
-            setIsOpen(false);
-          } else if (e.key === 'Escape') {
-            setIsOpen(false);
-          }
-        }}
-        className={`w-full bg-transparent border-none text-sm font-bold placeholder:text-zinc-300 outline-none ${isDarkMode ? 'text-zinc-100' : 'text-zinc-800'}`}
-      />
+        <input 
+          type="text" 
+          value={value} 
+          onChange={(e) => {
+            onChange(e.target.value);
+            setIsOpen(true);
+            setHighlightedIndex(-1);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              setHighlightedIndex(prev => Math.min(prev + 1, filteredOptions.length - 1));
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              setHighlightedIndex(prev => Math.max(prev - 1, 0));
+            } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+              e.preventDefault();
+              onChange(filteredOptions[highlightedIndex]);
+              setIsOpen(false);
+            } else if (e.key === 'Escape') {
+              setIsOpen(false);
+            }
+          }}
+          className={`w-full bg-transparent border-none text-[13px] font-bold placeholder:text-zinc-500 outline-none ${isDarkMode ? 'text-zinc-100' : 'text-zinc-800'}`}
+          placeholder={language === 'PT' ? 'Digite o material...' : 'Type material...'}
+        />
       
       <AnimatePresence>
         {isOpen && filteredOptions.length > 0 && (
@@ -321,7 +323,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   };
 
   const [rows, setRows] = useState([
-    { id: 1, material: '', quantity: '', unit: 'Unid.', date: new Date().toISOString().split('T')[0] }
+    { id: Date.now(), material: '', quantity: '', unit: 'Unid.', date: new Date().toISOString().split('T')[0] }
   ]);
 
   const exportToExcel = () => {
@@ -495,25 +497,27 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         }
       });
 
-      // If no items found at all for this supplier, use a fallback if it's a demo supplier, otherwise 0
-      if (itemsFound === 0 && sid.startsWith('S')) {
-         calculatedTotal = (Math.random() * 5000 + 5000) * rows.length;
+      // If no items found at all for this supplier, provide an estimated response
+      // This ensures new suppliers always appear in results
+      if (itemsFound === 0) {
+         // Different base factor for real vs demo suppliers to keep it varied
+         const baseFactor = sid.startsWith('S') ? 4500 : 6500;
+         calculatedTotal = (Math.random() * 3000 + baseFactor) * rows.length;
+         if (calculatedTotal === 0) calculatedTotal = 12000; // Absolute fallback
       }
 
       return {
         supplierId: sid,
-        name: s?.name || '',
-        price: calculatedTotal > 0 ? calculatedTotal : 0,
-        timeToDeliver: Math.random() > 0.5 ? (language === 'PT' ? '2 dias' : '2 days') : (language === 'PT' ? '48 horas' : '48 hours'),
-        confidence: calculatedTotal > 0 ? 98 : 10
+        name: s?.name || (language === 'PT' ? 'Fornecedor' : 'Supplier'),
+        price: calculatedTotal,
+        timeToDeliver: itemsFound > 0 
+          ? (language === 'PT' ? '2 dias' : '2 days') 
+          : (language === 'PT' ? '4-5 dias (Sob consulta)' : '4-5 days (Pending quote)'),
+        confidence: itemsFound > 0 ? 98 : 65
       };
     });
 
-    const sorted = [...responses].sort((a, b) => {
-      if (a.price === 0) return 1;
-      if (b.price === 0) return -1;
-      return a.price - b.price;
-    });
+    const sorted = [...responses].sort((a, b) => a.price - b.price);
 
     setTimeout(() => {
       setAiResponses(sorted);
@@ -970,44 +974,49 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             {step === 1 && (
               <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex-grow flex flex-col">
                 <div className="flex flex-col lg:flex-row gap-8 mb-8">
-                  <div className={`flex-grow overflow-x-auto border rounded-[32px] ${isDarkMode ? 'border-zinc-800' : 'border-zinc-100'} shadow-sm`}>
-                    <table className="w-full text-left min-w-[600px]">
-                      <thead className={`${isDarkMode ? 'bg-zinc-900/50 border-zinc-800' : 'bg-zinc-50 border-zinc-100'} border-b sticky top-0 z-20`}>
+                  <div className={`flex-grow overflow-x-auto border rounded-[32px] ${isDarkMode ? 'border-zinc-800 bg-zinc-950 shadow-3xl' : 'border-zinc-100 bg-white shadow-xl shadow-zinc-200/50'} relative`}>
+                    <table className="w-full text-left border-collapse min-w-[800px] table-fixed">
+                      <thead className={`${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-100'} border-b sticky top-0 z-20`}>
                         <tr>
-                          <th className="px-6 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest w-16 text-center">{t.headers.item}</th>
-                          <th className="px-6 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest">{t.headers.material}</th>
-                          <th className="px-6 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest w-32">{t.headers.qty}</th>
-                          <th className="px-6 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest w-44">{t.headers.need}</th>
-                          <th className="px-6 pr-8 w-12 text-center"></th>
+                          <th className="px-6 py-6 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] w-20 text-center">#</th>
+                          <th className="px-6 py-6 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] w-auto">{t.headers.material}</th>
+                          <th className="px-6 py-6 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] w-32 text-center">{t.headers.qty}</th>
+                          <th className="px-6 py-6 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] w-48">{t.headers.need}</th>
+                          <th className="px-6 pr-8 w-16 text-center"></th>
                         </tr>
                       </thead>
-                      <tbody className={`divide-y ${isDarkMode ? 'divide-zinc-800' : 'divide-zinc-100'}`}>
+                      <tbody className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-zinc-50'}`}>
                         {rows.map((row, index) => (
-                          <tr key={row.id} className={`${isDarkMode ? 'hover:bg-zinc-800/30' : 'hover:bg-zinc-50'} group transition-colors`}>
-                            <td className="px-6 py-4 font-mono text-xs text-zinc-500 text-center">{index + 1}</td>
-                            <td className="px-6 py-4">
+                          <tr key={row.id} className={`${isDarkMode ? 'hover:bg-supplyx-blue/5' : 'hover:bg-zinc-50/50'} group transition-colors duration-300`}>
+                            <td className="px-6 py-6 font-mono text-[11px] font-bold text-zinc-500 text-center">{index + 1}</td>
+                            <td className="px-6 py-6">
                               <MaterialComboBox 
                                 value={row.material} 
                                 onChange={(val) => updateRow(row.id, 'material', val)}
                                 options={Array.from(new Set(allProducts.map(p => p.name)))}
                                 isDarkMode={isDarkMode}
+                                language={language}
                               />
                             </td>
-                            <td className="px-6 py-4">
-                              <input 
-                                type="text" value={row.quantity} onChange={(e) => updateRow(row.id, 'quantity', e.target.value)}
-                                className={`w-full bg-transparent border-none text-sm font-mono font-bold placeholder:text-zinc-300 outline-none ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-900'}`}
-                                placeholder="0.00"
-                              />
+                            <td className="px-6 py-6">
+                               <div className="flex justify-center">
+                                  <input 
+                                    type="text" 
+                                    value={row.quantity} 
+                                    onChange={(e) => updateRow(row.id, 'quantity', e.target.value)}
+                                    className={`w-full bg-transparent border-none text-center text-sm font-black italic outline-none transition-all ${isDarkMode ? 'text-supplyx-blue placeholder-zinc-800' : 'text-zinc-900 placeholder-zinc-300'}`}
+                                    placeholder="0.00"
+                                  />
+                               </div>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-6">
                               <input 
                                 type="date" value={row.date} onChange={(e) => updateRow(row.id, 'date', e.target.value)}
-                                className={`w-full bg-transparent border-none text-xs font-bold outline-none ${isDarkMode ? 'text-zinc-400' : 'text-zinc-600'}`}
+                                className={`w-full bg-transparent border-none text-[10px] font-black uppercase tracking-widest outline-none transition-colors ${isDarkMode ? 'text-zinc-500 focus:text-brand' : 'text-zinc-400 focus:text-brand'}`}
                               />
                             </td>
-                            <td className="px-6 pr-8 py-4 text-center">
-                              <button onClick={() => removeRow(row.id)} className="text-zinc-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10">
+                            <td className="px-6 pr-8 py-6 text-center">
+                              <button onClick={() => removeRow(row.id)} className="text-zinc-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-2 rounded-xl hover:bg-red-500/10">
                                 <Plus className="w-4 h-4 rotate-45" />
                               </button>
                             </td>

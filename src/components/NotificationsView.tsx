@@ -16,103 +16,6 @@ interface Notification {
   userType?: 'buyer' | 'supplier' | 'both';
 }
 
-const mockNotifications: Notification[] = [
-  // Buyer Notifications
-  {
-    id: '1',
-    type: 'promotion',
-    titlePT: 'Promoção: Cimento CP-II',
-    titleEN: 'Promo: Cement CP-II',
-    descPT: 'Desconto de 15% para pedidos acima de 500 sacos na Maputo Sul. Entre em contato com a Votorantim para garantir o preço.',
-    descEN: '15% discount for orders over 500 bags in Maputo South. Contact Votorantim to lock in the price.',
-    time: '2h ago',
-    date: '2024-05-05',
-    isRead: false,
-    priority: 'high',
-    userType: 'buyer'
-  },
-  {
-    id: 'b2',
-    type: 'order',
-    titlePT: 'Pedido #OC-2401 Entregue',
-    titleEN: 'Order #OC-2401 Delivered',
-    descPT: 'O seu pedido de cimento foi entregue com sucesso no estaleiro de Boane.',
-    descEN: 'Your cement order has been successfully delivered to the Boane site.',
-    time: '4h ago',
-    date: '2024-05-05',
-    isRead: false,
-    priority: 'medium',
-    userType: 'buyer'
-  },
-  {
-    id: '2',
-    type: 'supplier',
-    titlePT: 'Novo Fornecedor Próximo',
-    titleEN: 'New Nearby Supplier',
-    descPT: 'Ferragens Matola iniciou operações a 5km da sua localização. Especialistas em acabamentos finos e hidráulica.',
-    descEN: 'Matola Hardware started operations 5km from your location. Specialists in fine finishes and hydraulics.',
-    time: '5h ago',
-    date: '2024-05-05',
-    isRead: false,
-    priority: 'medium',
-    userType: 'buyer'
-  },
-  // Supplier Notifications
-  {
-    id: 's1',
-    type: 'rfq',
-    titlePT: 'Nova Cotação Solicitada',
-    titleEN: 'New RFQ Requested',
-    descPT: 'A Construtora Manhate solicitou cotação para 1000 tijolos cerâmicos. Responda agora para ganhar o contrato.',
-    descEN: 'Manhate Construction requested a quote for 1000 ceramic bricks. Respond now to win the contract.',
-    time: '30m ago',
-    date: '2024-05-05',
-    isRead: false,
-    priority: 'high',
-    userType: 'supplier'
-  },
-  {
-    id: 's2',
-    type: 'stock',
-    titlePT: 'Alerta de Stock Baixo',
-    titleEN: 'Low Stock Alert',
-    descPT: 'O seu stock de Vergalhão de 12mm está abaixo do limite de segurança (50 unidades restantes).',
-    descEN: 'Your 12mm Rebar stock is below the safety limit (50 units remaining).',
-    time: '3h ago',
-    date: '2024-05-05',
-    isRead: false,
-    priority: 'medium',
-    userType: 'supplier'
-  },
-  {
-    id: 's3',
-    type: 'order',
-    titlePT: 'Novo Pedido Recebido',
-    titleEN: 'New Order Received',
-    descPT: 'Você recebeu um novo pedido de "Acabamentos Elite" para o projeto Aeroporto.',
-    descEN: 'You received a new order from "Elite Finishes" for the Airport project.',
-    time: '6h ago',
-    date: '2024-05-05',
-    isRead: true,
-    priority: 'high',
-    userType: 'supplier'
-  },
-  // Both
-  {
-    id: '4',
-    type: 'system',
-    titlePT: 'Manutenção do Sistema',
-    titleEN: 'System Maintenance',
-    descPT: 'O SupplyX passará por uma atualização programada hoje à meia-noite por 15 minutes.',
-    descEN: 'SupplyX will undergo scheduled maintenance today at midnight for 15 minutes.',
-    time: '2d ago',
-    date: '2024-05-03',
-    isRead: true,
-    priority: 'low',
-    userType: 'both'
-  }
-];
-
 interface NotificationsViewProps {
   isDarkMode: boolean;
   language: 'PT' | 'EN';
@@ -120,7 +23,105 @@ interface NotificationsViewProps {
 }
 
 export default function NotificationsView({ isDarkMode, language, userType }: NotificationsViewProps) {
-  const filtered = mockNotifications.filter(n => n.userType === 'both' || n.userType === userType);
+  const getMockNotifications = (lang: 'PT' | 'EN'): Notification[] => [
+    // Buyer Notifications
+    {
+      id: '1',
+      type: 'promotion',
+      titlePT: 'Promoção: Cimento CP-II',
+      titleEN: 'Promo: Cement CP-II',
+      descPT: 'Desconto de 15% para pedidos acima de 500 sacos na Maputo Sul. Entre em contato com a Votorantim para garantir o preço.',
+      descEN: '15% discount for orders over 500 bags in Maputo South. Contact Votorantim to lock in the price.',
+      time: lang === 'PT' ? '2h atrás' : '2h ago',
+      date: '2024-05-05',
+      isRead: false,
+      priority: 'high',
+      userType: 'buyer'
+    },
+    {
+      id: 'b2',
+      type: 'order',
+      titlePT: 'Pedido #OC-2401 Entregue',
+      titleEN: 'Order #OC-2401 Delivered',
+      descPT: 'O seu pedido de cimento foi entregue com sucesso no estaleiro de Boane.',
+      descEN: 'Your cement order has been successfully delivered to the Boane site.',
+      time: lang === 'PT' ? '4h atrás' : '4h ago',
+      date: '2024-05-05',
+      isRead: false,
+      priority: 'medium',
+      userType: 'buyer'
+    },
+    {
+      id: '2',
+      type: 'supplier',
+      titlePT: 'Novo Fornecedor Próximo',
+      titleEN: 'New Nearby Supplier',
+      descPT: 'Ferragens Matola iniciou operações a 5km da sua localização. Especialistas em acabamentos finos e hidráulica.',
+      descEN: 'Matola Hardware started operations 5km from your location. Specialists in fine finishes and hydraulics.',
+      time: lang === 'PT' ? '5h atrás' : '5h ago',
+      date: '2024-05-05',
+      isRead: false,
+      priority: 'medium',
+      userType: 'buyer'
+    },
+    // Supplier Notifications
+    {
+      id: 's1',
+      type: 'rfq',
+      titlePT: 'Nova Cotação Solicitada',
+      titleEN: 'New RFQ Requested',
+      descPT: 'A Construtora Manhate solicitou cotação para 1000 tijolos cerâmicos. Responda agora para ganhar o contrato.',
+      descEN: 'Manhate Construction requested a quote for 1000 ceramic bricks. Respond now to win the contract.',
+      time: lang === 'PT' ? '30m atrás' : '30m ago',
+      date: '2024-05-05',
+      isRead: false,
+      priority: 'high',
+      userType: 'supplier'
+    },
+    {
+      id: 's2',
+      type: 'stock',
+      titlePT: 'Alerta de Stock Baixo',
+      titleEN: 'Low Stock Alert',
+      descPT: 'O seu stock de Vergalhão de 12mm está abaixo do limite de segurança (50 unidades restantes).',
+      descEN: 'Your 12mm Rebar stock is below the safety limit (50 units remaining).',
+      time: lang === 'PT' ? '3h atrás' : '3h ago',
+      date: '2024-05-05',
+      isRead: false,
+      priority: 'medium',
+      userType: 'supplier'
+    },
+    {
+      id: 's3',
+      type: 'order',
+      titlePT: 'Novo Pedido Recebido',
+      titleEN: 'New Order Received',
+      descPT: 'Você recebeu um novo pedido de "Acabamentos Elite" para o projeto Aeroporto.',
+      descEN: 'You received a new order from "Elite Finishes" for the Airport project.',
+      time: lang === 'PT' ? '6h atrás' : '6h ago',
+      date: '2024-05-05',
+      isRead: true,
+      priority: 'high',
+      userType: 'supplier'
+    },
+    // Both
+    {
+      id: '4',
+      type: 'system',
+      titlePT: 'Manutenção do Sistema',
+      titleEN: 'System Maintenance',
+      descPT: 'O SupplyX passará por uma atualização programada hoje à meia-noite por 15 minutes.',
+      descEN: 'SupplyX will undergo scheduled maintenance today at midnight for 15 minutes.',
+      time: lang === 'PT' ? '2d atrás' : '2d ago',
+      date: '2024-05-03',
+      isRead: true,
+      priority: 'low',
+      userType: 'both'
+    }
+  ];
+
+  const activeNotifications = getMockNotifications(language);
+  const filtered = activeNotifications.filter(n => n.userType === 'both' || n.userType === userType);
   const [notifications, setNotifications] = useState(filtered);
 
   const deleteNotification = (id: string) => {

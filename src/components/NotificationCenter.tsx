@@ -14,66 +14,6 @@ interface Notification {
   userType?: 'buyer' | 'supplier' | 'both';
 }
 
-const mockNotifications: Notification[] = [
-  // Buyer
-  {
-    id: '1',
-    type: 'promotion',
-    titlePT: 'Promoção: Cimento CP-II',
-    titleEN: 'Promo: Cement CP-II',
-    descPT: 'Desconto de 15% para pedidos acima de 500 sacos na Maputo Sul.',
-    descEN: '15% discount for orders over 500 bags in Maputo South.',
-    time: '2h ago',
-    isRead: false,
-    userType: 'buyer'
-  },
-  {
-    id: '2',
-    type: 'supplier',
-    titlePT: 'Novo Fornecedor Próximo',
-    titleEN: 'New Nearby Supplier',
-    descPT: 'Ferragens Matola iniciou operações a 5km da sua localização.',
-    descEN: 'Matola Hardware started operations 5km from your location.',
-    time: '5h ago',
-    isRead: false,
-    userType: 'buyer'
-  },
-  // Supplier
-  {
-    id: 's1',
-    type: 'rfq',
-    titlePT: 'Nova Cotação Solicitada',
-    titleEN: 'New RFQ Requested',
-    descPT: 'Cotação solicitada para 1000 tijolos cerâmicos.',
-    descEN: 'Quote requested for 1000 ceramic bricks.',
-    time: '30m ago',
-    isRead: false,
-    userType: 'supplier'
-  },
-  {
-    id: 's2',
-    type: 'stock',
-    titlePT: 'Alerta de Stock Baixo',
-    titleEN: 'Low Stock Alert',
-    descPT: 'Stock de Vergalhão de 12mm abaixo do limite.',
-    descEN: '12mm Rebar stock below the limit.',
-    time: '3h ago',
-    isRead: false,
-    userType: 'supplier'
-  },
-  {
-    id: 's3',
-    type: 'order',
-    titlePT: 'Novo Pedido Recebido',
-    titleEN: 'New Order Received',
-    descPT: 'Você recebeu um novo pedido de "Acabamentos Elite".',
-    descEN: 'You received a new order from "Elite Finishes".',
-    time: '6h ago',
-    isRead: true,
-    userType: 'supplier'
-  }
-];
-
 interface NotificationCenterProps {
   isDarkMode: boolean;
   language: 'PT' | 'EN';
@@ -82,8 +22,69 @@ interface NotificationCenterProps {
 }
 
 export default function NotificationCenter({ isDarkMode, language, onViewAll, userType }: NotificationCenterProps) {
+  const getMockNotifications = (lang: 'PT' | 'EN'): Notification[] => [
+    // Buyer
+    {
+      id: '1',
+      type: 'promotion',
+      titlePT: 'Promoção: Cimento CP-II',
+      titleEN: 'Promo: Cement CP-II',
+      descPT: 'Desconto de 15% para pedidos acima de 500 sacos na Maputo Sul.',
+      descEN: '15% discount for orders over 500 bags in Maputo South.',
+      time: lang === 'PT' ? '2h atrás' : '2h ago',
+      isRead: false,
+      userType: 'buyer'
+    },
+    {
+      id: '2',
+      type: 'supplier',
+      titlePT: 'Novo Fornecedor Próximo',
+      titleEN: 'New Nearby Supplier',
+      descPT: 'Ferragens Matola iniciou operações a 5km da sua localização.',
+      descEN: 'Matola Hardware started operations 5km from your location.',
+      time: lang === 'PT' ? '5h atrás' : '5h ago',
+      isRead: false,
+      userType: 'buyer'
+    },
+    // Supplier
+    {
+      id: 's1',
+      type: 'rfq',
+      titlePT: 'Nova Cotação Solicitada',
+      titleEN: 'New RFQ Requested',
+      descPT: 'Cotação solicitada para 1000 tijolos cerâmicos.',
+      descEN: 'Quote requested for 1000 ceramic bricks.',
+      time: lang === 'PT' ? '30m atrás' : '30m ago',
+      isRead: false,
+      userType: 'supplier'
+    },
+    {
+      id: 's2',
+      type: 'stock',
+      titlePT: 'Alerta de Stock Baixo',
+      titleEN: 'Low Stock Alert',
+      descPT: 'Stock de Vergalhão de 12mm abaixo do limite.',
+      descEN: '12mm Rebar stock below the limit.',
+      time: lang === 'PT' ? '3h atrás' : '3h ago',
+      isRead: false,
+      userType: 'supplier'
+    },
+    {
+      id: 's3',
+      type: 'order',
+      titlePT: 'Novo Pedido Recebido',
+      titleEN: 'New Order Received',
+      descPT: 'Você recebeu um novo pedido de "Acabamentos Elite".',
+      descEN: 'You received a new order from "Elite Finishes".',
+      time: lang === 'PT' ? '6h atrás' : '6h ago',
+      isRead: true,
+      userType: 'supplier'
+    }
+  ];
+
   const [isOpen, setIsOpen] = useState(false);
-  const filtered = mockNotifications.filter(n => n.userType === 'both' || !n.userType || n.userType === userType);
+  const activeNotifications = getMockNotifications(language);
+  const filtered = activeNotifications.filter(n => n.userType === 'both' || !n.userType || n.userType === userType);
   const [notifications, setNotifications] = useState(filtered);
 
   const t = {

@@ -39,7 +39,8 @@ export default function ReportsView({ isDarkMode, language }: ReportsViewProps) 
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
-      pdf.save(`Relatório_Performance_${new Date().getTime()}.pdf`);
+      const filename = language === 'PT' ? `Relatório_Performance_${new Date().getTime()}.pdf` : `Performance_Report_${new Date().getTime()}.pdf`;
+      pdf.save(filename);
     } catch (error) {
       console.error('Error generating PDF:', error);
     } finally {

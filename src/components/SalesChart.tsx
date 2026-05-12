@@ -22,9 +22,10 @@ interface SalesChartProps {
   isDarkMode?: boolean;
   userType?: 'buyer' | 'supplier';
   language?: 'PT' | 'EN';
+  standalone?: boolean;
 }
 
-export default function SalesChart({ isDarkMode, userType = 'buyer', language = 'PT' }: SalesChartProps) {
+export default function SalesChart({ isDarkMode, userType = 'buyer', language = 'PT', standalone = true }: SalesChartProps) {
   const isSupplier = userType === 'supplier';
   
   const translations = {
@@ -46,11 +47,9 @@ export default function SalesChart({ isDarkMode, userType = 'buyer', language = 
     }
   }[language];
 
-  return (
-    <div className={`p-10 rounded-[32px] border h-full transition-all flex flex-col ${
-      isDarkMode ? 'bg-zinc-900 border-white/5 shadow-2xl' : 'bg-white border-zinc-100 shadow-sm'
-    }`} id="sales-chart-container">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-12 shrink-0">
+  const content = (
+    <>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 shrink-0">
         <div className="flex items-center gap-4">
            <div className="w-1 h-10 bg-supplyx-blue rounded-full" />
            <div>
@@ -84,7 +83,7 @@ export default function SalesChart({ isDarkMode, userType = 'buyer', language = 
         </div>
       </div>
 
-      <div className="flex-grow min-h-[300px] w-full">
+      <div className="flex-grow w-full h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDarkMode ? 'rgba(255,255,255,0.02)' : '#f4f4f5'} />
@@ -114,7 +113,7 @@ export default function SalesChart({ isDarkMode, userType = 'buyer', language = 
               }}
               labelStyle={{ fontWeight: '900', marginBottom: '8px', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.2em', color: '#0052CC', fontFamily: 'JetBrains Mono' }}
               itemStyle={{ fontWeight: '700', fontSize: '11px', padding: '2px 0', fontFamily: 'JetBrains Mono' }}
-              formatter={(value: any, name: string) => [`MT ${value.toLocaleString()}`, translations[name as keyof typeof translations]]}
+              formatter={(value: any, name: string) => [`MT ${value.toLocaleString()}`, name === 'actual' ? translations.actual : translations.forecast]}
             />
             <Area 
               type="stepAfter" 
@@ -124,6 +123,7 @@ export default function SalesChart({ isDarkMode, userType = 'buyer', language = 
               strokeDasharray="4 4"
               fillOpacity={0.05} 
               fill="#27272a" 
+              animationDuration={800}
             />
             <Area 
               type="monotone" 
@@ -132,11 +132,23 @@ export default function SalesChart({ isDarkMode, userType = 'buyer', language = 
               strokeWidth={3}
               fillOpacity={0.1} 
               fill="#0052CC" 
-              animationDuration={1500}
+              animationDuration={800}
             />
           </AreaChart>
         </ResponsiveContainer>
       </div>
+    </>
+  );
+
+  if (!standalone) {
+    return <div className="h-full w-full flex flex-col">{content}</div>;
+  }
+
+  return (
+    <div className={`p-6 rounded-[24px] border h-full transition-all flex flex-col ${
+      isDarkMode ? 'bg-zinc-900/50 border-white/5 shadow-2xl' : 'bg-white border-zinc-100 shadow-sm'
+    }`} id="sales-chart-container">
+      {content}
     </div>
   );
 }

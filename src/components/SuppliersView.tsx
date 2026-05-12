@@ -23,9 +23,10 @@ interface SuppliersViewProps {
   isDarkMode: boolean;
   language: 'PT' | 'EN';
   onViewProfile?: (uid: string) => void;
+  userType?: 'buyer' | 'supplier';
 }
 
-export default function SuppliersView({ isDarkMode, language, onViewProfile }: SuppliersViewProps) {
+export default function SuppliersView({ isDarkMode, language, onViewProfile, userType = 'buyer' }: SuppliersViewProps) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -90,6 +91,22 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile }: S
       noSuppliers: 'No suppliers found.'
     }
   }[language];
+
+  if (userType === 'supplier') {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <Handshake className="w-16 h-16 text-zinc-500 mb-6 opacity-20" />
+        <h3 className="text-xl font-black italic uppercase tracking-tighter text-zinc-500">
+          {language === 'PT' ? 'Acesso Restrito' : 'Restricted Access'}
+        </h3>
+        <p className="text-sm text-zinc-500 max-w-md mt-2 font-medium">
+          {language === 'PT' 
+            ? 'Para garantir uma concorrência justa, fornecedores não podem visualizar outros perfis de fornecedores na rede SupplyX.' 
+            : 'To ensure fair competition, suppliers are not allowed to view other supplier profiles on the SupplyX network.'}
+        </p>
+      </div>
+    );
+  }
 
   if (selectedSupplier) {
     return (
@@ -240,7 +257,7 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile }: S
               key={s.id}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.1 }}
+              transition={{ duration: 0.3, delay: i * 0.05 }}
               className={`p-6 rounded-3xl border transition-all group relative overflow-hidden ${
                 isDarkMode ? 'bg-zinc-950 border-zinc-800 hover:border-brand/30' : 'bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
               }`}

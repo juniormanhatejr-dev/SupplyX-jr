@@ -642,8 +642,11 @@ export default function ProductsView({
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {displayProducts.length > 0 ? displayProducts.map((item) => (
-            <div 
+            <motion.div
               key={item.id} 
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
               onClick={() => {
                 if (userType === 'buyer') {
                   setSelectedProductDetail(item);
@@ -722,7 +725,7 @@ export default function ProductsView({
                   )}
                 </div>
               </div>
-            </div>
+            </motion.div>
           )) : (
             <div className="col-span-full py-10 text-center">
               <p className="text-zinc-400 font-bold">{t.noProducts}</p>

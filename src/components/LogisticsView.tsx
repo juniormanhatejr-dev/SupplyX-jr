@@ -379,7 +379,7 @@ export default function LogisticsView({ isDarkMode, language }: LogisticsViewPro
                     <div className="flex items-center justify-between text-[10px] font-black uppercase text-zinc-400 mb-4">
                       <span>Km/MT: {carrier.pricePerKm}</span>
                       <span className="text-emerald-500 flex items-center gap-1">
-                        <ShieldCheck className="w-3 h-3" /> VERIFIED
+                        <ShieldCheck className="w-3 h-3" /> {language === 'PT' ? 'VERIFICADO' : 'VERIFIED'}
                       </span>
                     </div>
                     
@@ -615,7 +615,9 @@ export default function LogisticsView({ isDarkMode, language }: LogisticsViewPro
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-full">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Active nodes: 1,242</span>
+                <span className="text-[10px] font-black uppercase tracking-widest">
+                  {language === 'PT' ? 'Nós ativos: 1.242' : 'Active nodes: 1,242'}
+                </span>
               </div>
             </div>
           </div>
@@ -672,7 +674,7 @@ export default function LogisticsView({ isDarkMode, language }: LogisticsViewPro
                    </div>
                 </div>
                 <div className="p-4 rounded-2xl bg-zinc-950/80 backdrop-blur-md border border-white/10 text-[10px] font-black text-zinc-500 uppercase tracking-widest">
-                   Live Telemetry Link Status: <span className="text-emerald-500">Stable</span>
+                   {language === 'PT' ? 'Status do Link de Telemetria' : 'Live Telemetry Link Status'}: <span className="text-emerald-500">{language === 'PT' ? 'Estável' : 'Stable'}</span>
                 </div>
              </div>
           </div>
@@ -683,7 +685,7 @@ export default function LogisticsView({ isDarkMode, language }: LogisticsViewPro
           
           <div className="flex items-center justify-between mb-12">
             <div>
-              <h3 className={`text-xl font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>Intelligence Tracker</h3>
+              <h3 className={`text-xl font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{language === 'PT' ? 'Rastreador Inteligente' : 'Intelligence Tracker'}</h3>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Tracking ID: {selectedShipment?.id}</p>
             </div>
             <div className="w-12 h-12 rounded-2xl bg-supplyx-blue/10 flex items-center justify-center text-supplyx-blue">
@@ -722,12 +724,12 @@ export default function LogisticsView({ isDarkMode, language }: LogisticsViewPro
 
           <div className="mt-12 p-8 rounded-3xl bg-white/[0.02] border border-white/5 space-y-4">
              <div className="flex justify-between items-center text-[10px] font-black uppercase text-zinc-500 tracking-widest">
-                <span>Final Destination</span>
+                <span>{language === 'PT' ? 'Destino Final' : 'Final Destination'}</span>
                 <span className={isDarkMode ? 'text-white italic' : 'text-zinc-900 italic'}>{selectedShipment?.destination}</span>
              </div>
              <button className={`w-full py-4 border rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 ${isDarkMode ? 'bg-white/5 border-white/10 text-white hover:bg-white/10' : 'bg-zinc-50 border-zinc-100 text-zinc-600 hover:bg-zinc-100'}`}>
                 <Download className="w-4 h-4" />
-                Proof of Delivery (WIP)
+                {language === 'PT' ? 'Comprovante de Entrega (WIP)' : 'Proof of Delivery (WIP)'}
              </button>
           </div>
         </div>

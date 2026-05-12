@@ -51,7 +51,7 @@ export default function BudgetDonutChart({ isDarkMode, language = 'PT', standalo
         </div>
       </div>
 
-      <div className="relative flex-grow h-[250px] flex items-center justify-center">
+      <div className="relative flex-grow h-[250px] aspect-square mx-auto flex items-center justify-center">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie

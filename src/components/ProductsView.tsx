@@ -619,13 +619,13 @@ export default function ProductsView({
       </div>
 
       {/* Melhores Ofertas Section */}
-      <div className={`rounded-2xl p-5 mb-6 shadow-sm border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100'}`}>
-        <div className="flex justify-between items-start mb-6">
+      <div className={`rounded-[32px] p-8 mb-8 shadow-sm border ${isDarkMode ? 'bg-zinc-900/50 border-white/5 backdrop-blur-md' : 'bg-white border-zinc-100 shadow-sm'}`}>
+        <div className="flex justify-between items-start mb-8">
           <div>
-            <h2 className={`text-xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+            <h2 className={`text-2xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
               {userType === 'supplier' ? t.stats : t.offers}
             </h2>
-            <p className="text-zinc-400 text-sm font-medium">
+            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">
               {userType === 'supplier' ? t.manageDisplay : t.savingOffers}
             </p>
           </div>
@@ -735,19 +735,19 @@ export default function ProductsView({
       </div>
 
       {/* Personalização Rápida Section */}
-      <div className={`rounded-2xl p-5 shadow-sm border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100'}`}>
+      <div className={`rounded-[32px] p-8 shadow-sm border ${isDarkMode ? 'bg-zinc-900/50 border-white/5 backdrop-blur-md' : 'bg-white border-zinc-100 shadow-sm'}`}>
         <div 
           onClick={() => setSelectedService(t.quickPersonalize)}
-          className="flex justify-between items-center mb-1 cursor-pointer group/header"
+          className="flex justify-between items-center mb-2 cursor-pointer group/header"
         >
-          <div className="flex items-center gap-2">
-            <PencilRuler className={`w-5 h-5 transition-colors group-hover/header:text-brand ${isDarkMode ? 'text-zinc-300' : 'text-zinc-800'}`} />
-            <h2 className={`text-xl font-black tracking-tight transition-colors group-hover/header:text-brand ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.quickPersonalize}</h2>
+          <div className="flex items-center gap-4">
+            <PencilRuler className={`w-6 h-6 transition-colors group-hover/header:text-brand ${isDarkMode ? 'text-zinc-300' : 'text-zinc-800'}`} />
+            <h2 className={`text-2xl font-black italic uppercase tracking-tighter transition-colors group-hover/header:text-brand ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.quickPersonalize}</h2>
           </div>
           <ArrowRight className="w-5 h-5 text-zinc-400 group-hover/header:translate-x-1 group-hover/header:text-brand transition-all" />
         </div>
-        <p className="text-zinc-500 text-sm mb-6 flex items-center gap-2 font-medium">
-          {t.moqLow} <span className="text-zinc-300">•</span> {t.shippingDays} <span className="text-zinc-300">•</span> {t.trueToDesign}
+        <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mb-8 flex items-center gap-3">
+          {t.moqLow} <span className="w-1 h-1 rounded-full bg-zinc-700" /> {t.shippingDays} <span className="w-1 h-1 rounded-full bg-zinc-700" /> {t.trueToDesign}
         </p>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

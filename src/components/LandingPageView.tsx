@@ -33,10 +33,10 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
   const t = {
     PT: {
       hero: {
-        title: "Procurement para Construção, Reinventado.",
-        subtitle: "Gerencie fornecedores, materiais, RFQs, entregas e fluxos de aprovação em uma única plataforma inteligente.",
-        cta1: "Iniciar Procurement",
-        cta2: "Ver Dashboard"
+        title: "Controlo Total da sua Cadeia de Suprimentos.",
+        subtitle: "A plataforma operacional para procurement, logística e gestão de materiais em escala industrial.",
+        cta1: "Solicitar Demonstração",
+        cta2: "Explorar Dashboard"
       },
       problem: {
         title: "O Problema"
@@ -104,10 +104,10 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
     },
     EN: {
       hero: {
-        title: "Construction Procurement, Reinvented.",
-        subtitle: "Manage suppliers, materials, RFQs, deliveries and procurement workflows in one intelligent platform.",
-        cta1: "Start Procurement",
-        cta2: "View Dashboard"
+        title: "Complete Control of your Industrial Supply Chain.",
+        subtitle: "The unified operational platform for procurement, logistics, and material management at industrial scale.",
+        cta1: "Request Demo",
+        cta2: "Explore Dashboard"
       },
       problem: {
         title: "The Problem"
@@ -224,15 +224,15 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
               <h1 className="text-7xl md:text-9xl font-black tracking-tighter mb-12 leading-[0.85] uppercase text-white">
                 {language === 'PT' ? (
                   <>
-                    Procurement <br />
+                    Controlo <br />
                     Industrial, <br />
-                    <span className="text-supplyx-blue italic">Reinventado.</span>
+                    <span className="text-supplyx-blue italic">Simplificado.</span>
                   </>
                 ) : (
                   <>
-                    Construction <br />
-                    Procurement, <br />
-                    <span className="text-supplyx-blue italic">Reinvented.</span>
+                    Industrial <br />
+                    Control, <br />
+                    <span className="text-supplyx-blue italic">Unified.</span>
                   </>
                 )}
               </h1>
@@ -327,20 +327,20 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
       {/* Trust & Metrics Section */}
       <section className="py-24 bg-supplyx-dark border-y border-white/5">
         <div className="max-w-[1600px] mx-auto px-6">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-24">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-4 py-12 rounded-[32px] bg-white/[0.02] border border-white/5 backdrop-blur-sm">
             {t.trust.metrics.map((metric, i) => (
               <motion.div
                 key={i}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 10 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
+                transition={{ delay: i * 0.05 }}
                 viewport={{ once: true }}
-                className="text-center lg:text-left"
+                className="text-center group"
               >
-                <div className="text-5xl lg:text-7xl font-black text-white tracking-tighter mb-4 italic">
+                <div className="text-4xl lg:text-5xl font-black text-white tracking-tighter mb-2 italic group-hover:text-supplyx-blue transition-colors">
                   {metric.value}
                 </div>
-                <div className="text-[10px] font-black uppercase tracking-[0.4em] text-supplyx-blue">
+                <div className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">
                   {metric.label}
                 </div>
               </motion.div>

@@ -1434,34 +1434,42 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
       {invoiceTemplate}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h2 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-          {userType === 'supplier' ? t.receivedRequests : t.orderManagement}
-        </h2>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-10">
+        <div>
+          <h2 className={`text-2xl font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+            {userType === 'supplier' ? t.receivedRequests : t.orderManagement}
+          </h2>
+          <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">
+            {language === 'PT' ? 'Intermediação e Controle Documental' : 'Intermediation and Document Control'}
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button 
             onClick={exportOrdersToPDF}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-95 border ${
+            className={`flex items-center gap-2 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border ${
               isDarkMode 
-                ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:text-white' 
-                : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900 shadow-sm'
+                ? 'bg-zinc-900/50 border-white/5 text-zinc-300 hover:text-white backdrop-blur-md' 
+                : 'bg-white border-zinc-100 text-zinc-500 hover:text-zinc-900 shadow-sm'
             }`}
           >
-            <FileText className="w-3.5 h-3.5 sm:w-4 h-4" /> {language === 'PT' ? 'Exportar PDF' : 'Export PDF'}
+            <FileText className="w-4 h-4" /> {language === 'PT' ? 'Exportar PDF' : 'Export PDF'}
           </button>
           <button 
             onClick={exportOrdersToExcel}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-95 border ${
+            className={`flex items-center gap-2 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border ${
               isDarkMode 
-                ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:text-white' 
-                : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900 shadow-sm'
+                ? 'bg-zinc-900/50 border-white/5 text-zinc-300 hover:text-white backdrop-blur-md' 
+                : 'bg-white border-zinc-100 text-zinc-500 hover:text-zinc-900 shadow-sm'
             }`}
           >
-            <Download className="w-3.5 h-3.5 sm:w-4 h-4" /> {t.excel}
+            <Download className="w-4 h-4" /> {t.excel}
           </button>
           {userType === 'buyer' && (
-            <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-95 shadow-brand">
-              <Plus className="w-3.5 h-3.5 sm:w-4 h-4" /> {t.newQuoteBtn}
+            <button 
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 bg-brand text-white shadow-xl shadow-brand/20 hover:brightness-110 ml-2"
+            >
+              <Plus className="w-4 h-4" /> {t.newQuoteBtn}
             </button>
           )}
         </div>

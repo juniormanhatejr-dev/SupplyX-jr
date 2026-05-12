@@ -105,7 +105,9 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
         ${isDarkMode ? 'bg-supplyx-deep border-r border-white/5 shadow-3xl' : 'bg-white border-r border-zinc-200'}`}>
         
         <div className="p-8 flex items-center justify-between">
-          <SupplyXLogo size="md" isDark={isDarkMode} />
+          <div className={`p-4 rounded-[32px] border ${isDarkMode ? 'bg-zinc-900 shadow-2xl border-white/5' : 'bg-white border-zinc-100 shadow-sm'}`}>
+            <SupplyXLogo size="md" isDark={isDarkMode} />
+          </div>
           <button onClick={onClose} className="lg:hidden p-2 text-zinc-400 hover:text-white">
             <LogOut className="w-5 h-5 rotate-180" />
           </button>

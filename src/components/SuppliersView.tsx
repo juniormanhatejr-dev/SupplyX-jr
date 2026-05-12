@@ -163,25 +163,25 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, use
                   <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest flex items-center gap-2">
                     <MapPin className="w-3 h-3" /> {t.location}
                   </p>
-                  <p className={`text-sm font-bold ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{selectedSupplier.city || 'Maputo'}, {selectedSupplier.address || (language === 'PT' ? 'Moçambique' : 'Mozambique')}</p>
+                  <p className={`text-sm font-black italic uppercase tracking-tight ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{selectedSupplier.city || 'Maputo'}, {selectedSupplier.address || (language === 'PT' ? 'Moçambique' : 'Mozambique')}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest flex items-center gap-2">
                     <Mail className="w-3 h-3" /> {language === 'PT' ? 'E-mail:' : 'Email:'}
                   </p>
-                  <p className={`text-sm font-bold ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{selectedSupplier.email}</p>
+                  <p className={`text-sm font-black italic uppercase tracking-tight ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{selectedSupplier.email}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest flex items-center gap-2">
                     <Phone className="w-3 h-3" /> {language === 'PT' ? 'Telefone:' : 'Phone:'}
                   </p>
-                  <p className={`text-sm font-bold ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{selectedSupplier.phone}</p>
+                  <p className={`text-sm font-black italic uppercase tracking-tight ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{selectedSupplier.phone}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest flex items-center gap-2">
                     <Globe className="w-3 h-3" /> Website
                   </p>
-                  <p className={`text-sm font-bold ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>www.{selectedSupplier.name.toLowerCase().replace(/\s/g, '')}.co.mz</p>
+                  <p className={`text-sm font-black italic uppercase tracking-tight ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>www.{selectedSupplier.name.toLowerCase().replace(/\s/g, '')}.co.mz</p>
                 </div>
               </div>
             </div>
@@ -258,13 +258,13 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, use
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3, delay: i * 0.05 }}
-              className={`p-6 rounded-3xl border transition-all group relative overflow-hidden ${
-                isDarkMode ? 'bg-zinc-950 border-zinc-800 hover:border-brand/30' : 'bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
-              }`}
+              className={`p-6 rounded-[32px] border transition-all group relative overflow-hidden ${
+                isDarkMode ? 'bg-zinc-900/50 border-white/5 hover:border-brand/30' : 'bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
+              } backdrop-blur-md`}
             >
               <div className="flex justify-between items-start mb-6">
                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all group-hover:scale-110 overflow-hidden ${
-                  isDarkMode ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-100'
+                  isDarkMode ? 'bg-zinc-800 border border-white/5' : 'bg-zinc-50 border border-zinc-100'
                 }`}>
                   {s.photoURL ? (
                     <OptimizedImage 

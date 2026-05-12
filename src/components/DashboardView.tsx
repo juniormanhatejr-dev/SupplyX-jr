@@ -131,51 +131,50 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className="space-y-12"
+      className="space-y-6"
     >
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {activeStats.map((stat, i) => (
           <motion.div
             key={`stat-${userType}-${i}`}
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: i * 0.05 }}
-            className={`p-8 rounded-[24px] border ${
+            className={`p-6 rounded-[24px] border ${
               isDarkMode ? 'bg-zinc-900/50 border-white/5' : 'bg-white border-zinc-100 shadow-sm'
-            } relative overflow-hidden group`}
+            } relative overflow-hidden group hover:border-supplyx-blue/30 transition-all`}
           >
-            <div className="flex justify-between items-start mb-6">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
+            <div className="flex justify-between items-start mb-4">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
                 isDarkMode ? 'bg-zinc-800 text-zinc-400 group-hover:text-supplyx-blue' : 'bg-zinc-50 text-zinc-400 group-hover:text-supplyx-blue'
               }`}>
-                <stat.icon className="w-6 h-6" />
+                <stat.icon className="w-5 h-5" />
               </div>
-              <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black font-mono ${
+              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black font-mono ${
                 stat.trend === 'up' ? 'text-emerald-500 bg-emerald-500/10' : 'text-rose-500 bg-rose-500/10'
               }`}>
                 {stat.trend === 'up' ? '↑' : '↓'} {stat.change}
               </div>
             </div>
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-2">{stat.label}</p>
-            <p className="text-4xl font-black italic tracking-tighter text-white font-mono">{stat.value}</p>
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-1">{stat.label}</p>
+            <p className="text-3xl font-black italic tracking-tighter text-white font-mono">{stat.value}</p>
             
-            {/* Subtle industrial corner accent */}
-            <div className="absolute top-0 right-0 w-8 h-8 opacity-5 group-hover:opacity-20 transition-opacity">
-              <div className="absolute top-2 right-2 w-px h-4 bg-white" />
-              <div className="absolute top-2 right-2 w-4 h-px bg-white" />
+            <div className="absolute top-0 right-0 w-6 h-6 opacity-0 group-hover:opacity-10 transition-opacity">
+              <div className="absolute top-1 right-1 w-px h-3 bg-white" />
+              <div className="absolute top-1 right-1 w-3 h-px bg-white" />
             </div>
           </motion.div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         {/* Main Analytics + Map Section */}
-        <div className="xl:col-span-8 space-y-8">
-          <div className={`p-8 rounded-[40px] border ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100 shadow-sm'} relative overflow-hidden`}>
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-12">
+        <div className="xl:col-span-8 space-y-6">
+          <div className={`p-8 rounded-[32px] border ${isDarkMode ? 'bg-zinc-900/80 border-white/5' : 'bg-white border-zinc-100 shadow-sm'} relative overflow-hidden backdrop-blur-md`}>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-10">
                <div>
-                  <h3 className="text-3xl font-black uppercase tracking-tighter text-white italic">{language === 'PT' ? 'Integridade da Cadeia de Suprimentos' : 'Supply Chain Integrity'}</h3>
-                  <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest mt-1">{language === 'PT' ? 'Fluxo logístico em tempo real e gastos em procurement' : 'Real-time logistic flow & procurement spend'}</p>
+                  <h3 className="text-2xl font-black uppercase tracking-tighter text-white italic">{language === 'PT' ? 'Integridade Operacional' : 'Operational Integrity'}</h3>
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">{language === 'PT' ? 'Fluxo e telemetria em tempo real' : 'Real-time flow & telemetry'}</p>
                </div>
                <div className="flex items-center gap-3 bg-zinc-800 p-1.5 rounded-2xl border border-white/5">
                   <button className="px-5 py-2.5 rounded-xl bg-supplyx-blue text-white text-[10px] font-black uppercase tracking-widest shadow-lg">{t.spend}</button>
@@ -224,119 +223,119 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <TransactionList isDarkMode={isDarkMode} userType={userType} language={language} />
             
-            <div className="space-y-8">
-              <div className={`p-8 rounded-[40px] border ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100 shadow-sm'}`}>
+            <div className="space-y-6">
+              <div className={`p-8 rounded-[32px] border ${isDarkMode ? 'bg-zinc-900/80 border-white/5' : 'bg-white border-zinc-100 shadow-sm'} backdrop-blur-md`}>
                 <div className="flex items-center justify-between mb-8">
-                  <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500">{t.inventory}</h4>
+                  <h4 className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">{t.inventory}</h4>
                   <BarChart3 className="w-4 h-4 text-supplyx-blue" />
                 </div>
-                <div className="h-[400px]">
+                <div className="h-[350px]">
                   <BudgetDonutChart isDarkMode={isDarkMode} language={language} standalone={false} />
                 </div>
               </div>
 
-              <div className={`p-8 rounded-[40px] border flex items-center justify-between group transition-all cursor-pointer ${
+              <div className={`p-6 rounded-[24px] border flex items-center justify-between group transition-all cursor-pointer ${
                 isDarkMode ? 'bg-zinc-900 border-white/5 hover:border-supplyx-blue/30' : 'bg-white border-zinc-100 shadow-sm'
               }`}>
-                <div className="flex items-center gap-6">
-                  <div className="w-14 h-14 rounded-2xl bg-supplyx-blue/10 flex items-center justify-center text-supplyx-blue group-hover:bg-supplyx-blue group-hover:text-white transition-all">
-                    <Truck className="w-7 h-7" />
+                <div className="flex items-center gap-5">
+                  <div className="w-12 h-12 rounded-xl bg-supplyx-blue/10 flex items-center justify-center text-supplyx-blue group-hover:bg-supplyx-blue group-hover:text-white transition-all">
+                    <Truck className="w-6 h-6" />
                   </div>
                   <div>
-                    <h4 className="text-xl font-black italic uppercase tracking-tighter text-white">{t.logPortal}</h4>
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{t.fleetTracking}</p>
+                    <h4 className="text-lg font-black italic uppercase tracking-tighter text-white">{t.logPortal}</h4>
+                    <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">{t.fleetTracking}</p>
                   </div>
                 </div>
-                <ArrowRight className="w-6 h-6 text-zinc-700 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                <ArrowRight className="w-5 h-5 text-zinc-700 group-hover:text-white group-hover:translate-x-1 transition-all" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Right Sidebar: Intelligence & Activity */}
-        <div className="xl:col-span-4 space-y-8">
+        <div className="xl:col-span-4 space-y-6">
           <motion.div 
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className={`p-10 rounded-[40px] border relative overflow-hidden group ${
+            className={`p-10 rounded-[32px] border relative overflow-hidden group ${
               isDarkMode ? 'bg-zinc-900/50 border-white/5' : 'bg-white border-zinc-100'
-            }`}
+            } backdrop-blur-md`}
           >
             <div className="absolute top-0 right-0 p-8">
               <div className="w-2 h-2 rounded-full bg-supplyx-blue animate-ping" />
             </div>
             
-            <div className="flex items-center gap-4 mb-10">
-              <div className="w-14 h-14 rounded-2xl bg-zinc-800 border border-white/10 flex items-center justify-center">
-                <Zap className="w-7 h-7 text-supplyx-blue" />
+            <div className="flex items-center gap-4 mb-8">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-800 border border-white/10 flex items-center justify-center">
+                <Zap className="w-6 h-6 text-supplyx-blue" />
               </div>
               <div>
                 <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">{t.aiTitle}</h3>
-                <p className="text-[10px] font-black text-supplyx-blue uppercase tracking-widest">{t.coreIntel}</p>
+                <p className="text-[9px] font-black text-supplyx-blue uppercase tracking-widest">{t.coreIntel}</p>
               </div>
             </div>
             
-            <p className="text-zinc-500 text-sm font-medium leading-relaxed mb-10">
+            <p className="text-zinc-500 text-xs font-medium leading-relaxed mb-10">
               {t.aiDesc}
             </p>
             
             <button 
               onClick={onActivateIA}
-              className="w-full py-6 rounded-2xl bg-supplyx-blue text-white font-black text-xs uppercase tracking-widest hover:bg-blue-600 transition-all active:scale-95 shadow-2xl shadow-blue-500/20"
+              className="w-full py-5 rounded-2xl bg-supplyx-blue text-white font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 transition-all active:scale-95 shadow-2xl shadow-blue-500/20"
             >
               {t.startAi}
             </button>
             
-            <div className="mt-10 pt-10 border-t border-white/5 grid grid-cols-2 gap-6">
+            <div className="mt-8 pt-8 border-t border-white/5 grid grid-cols-2 gap-6">
                <div>
-                  <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-1">{t.latency}</p>
-                  <p className="text-sm font-black text-white font-mono">14ms</p>
+                  <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">{t.latency}</p>
+                  <p className="text-xs font-black text-white font-mono">14ms</p>
                </div>
                <div className="text-right">
-                  <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-1">{t.reliability}</p>
-                  <p className="text-sm font-black text-emerald-500 font-mono">99.9%</p>
+                  <p className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-1">{t.reliability}</p>
+                  <p className="text-xs font-black text-emerald-500 font-mono">99.9%</p>
                </div>
             </div>
           </motion.div>
 
-          <div className={`p-10 rounded-[40px] border ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100 shadow-sm'}`}>
-            <div className="flex items-center justify-between mb-10">
-               <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500">{t.liveOps}</h4>
-               <span className="text-[9px] font-black text-zinc-700 font-mono">UTC -05:00</span>
+          <div className={`p-8 rounded-[32px] border ${isDarkMode ? 'bg-zinc-900/80 border-white/5' : 'bg-white border-zinc-100 shadow-sm'} backdrop-blur-md`}>
+            <div className="flex items-center justify-between mb-8">
+               <h4 className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">{t.liveOps}</h4>
+               <span className="text-[8px] font-black text-zinc-700 font-mono">UTC +02:00</span>
             </div>
             
-            <div className="space-y-8">
+            <div className="space-y-6">
               {[
-                { time: '2m', user: 'Logística Maputo', action: t.actions.dispatch, desc: language === 'PT' ? 'Saída Porto de Nacala' : 'Departure Nacala Port', type: 'logistics' },
+                { time: '2m', user: 'Logística Nacala', action: t.actions.dispatch, desc: language === 'PT' ? 'Saída Porto de Nacala' : 'Departure Nacala Port', type: 'logistics' },
                 { time: '15m', user: 'Votorantim', action: t.actions.accepted, desc: 'OC-2401 Confirmed', type: 'order' },
                 { time: '1h', user: 'Fernando M.', action: t.actions.payment, desc: 'MT 12.450 (BIM)', type: 'payment' },
                 { time: '3h', user: 'Procurement AI', action: t.actions.optimization, desc: language === 'PT' ? 'Economia identificada' : 'Cost save identified', type: 'ai' },
               ].map((activity, i) => (
-                <div key={i} className="flex gap-6 items-start">
-                  <div className={`w-1 h-8 rounded-full mt-1 ${
+                <div key={i} className="flex gap-4 items-start">
+                  <div className={`w-1 h-6 rounded-full mt-1 ${
                     activity.type === 'logistics' ? 'bg-supplyx-blue' :
                     activity.type === 'order' ? 'bg-emerald-500' :
                     activity.type === 'ai' ? 'bg-supplyx-blue shadow-[0_0_8px_#3B82F6]' : 'bg-zinc-700'
                   }`} />
                   <div className="flex-grow">
-                    <div className="flex justify-between items-center mb-1">
-                       <p className="text-sm font-black text-white italic uppercase tracking-tight">{activity.action}</p>
-                       <span className="text-[9px] font-bold text-zinc-600">{activity.time}</span>
+                    <div className="flex justify-between items-center mb-0.5">
+                       <p className="text-xs font-black text-white italic uppercase tracking-tight">{activity.action}</p>
+                       <span className="text-[8px] font-bold text-zinc-600">{activity.time}</span>
                     </div>
-                    <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1">{activity.user}</p>
-                    <p className="text-[10px] text-zinc-600 italic">{activity.desc}</p>
+                    <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">{activity.user}</p>
+                    <p className="text-[9px] text-zinc-600 italic leading-tight">{activity.desc}</p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className={`p-10 rounded-[40px] border border-white/5 bg-zinc-900/30 overflow-hidden relative group cursor-pointer`}>
-            <div className="flex items-center justify-between mb-8">
-               <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500">{t.nextDeliveries}</h4>
+          <div className={`p-8 rounded-[32px] border border-white/5 bg-zinc-900/30 overflow-hidden relative group cursor-pointer backdrop-blur-md`}>
+            <div className="flex items-center justify-between mb-6">
+               <h4 className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500">{t.nextDeliveries}</h4>
                <Calendar className="w-4 h-4 text-zinc-600" />
             </div>
             <div className="space-y-4">
@@ -347,7 +346,7 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
                  <div key={i} className="flex justify-between items-center group-hover:translate-x-1 transition-transform">
                     <div>
                        <p className="text-xs font-black text-white italic uppercase tracking-tight">{d.item}</p>
-                       <p className="text-[9px] font-bold text-zinc-500 uppercase">{d.date}</p>
+                       <p className="text-[8px] font-bold text-zinc-500 uppercase">{d.date}</p>
                     </div>
                     <span className={`text-[9px] font-black uppercase tracking-widest ${d.color}`}>{d.status}</span>
                  </div>

@@ -183,8 +183,13 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
     try {
       if (mode === 'register') {
         // Basic validation
-        if (formData.name.trim().length === 0 || formData.userName.trim().length === 0) {
-          setError(language === 'PT' ? 'Por favor, preencha todos os campos obrigatórios.' : 'Please fill in all required fields.');
+        const isBuyer = type === 'buyer';
+        const isNameValid = formData.name.trim().length > 0;
+        const isUserNameValid = isBuyer || formData.userName.trim().length > 0;
+        const isNuitValid = formData.nuit.trim().length > 0;
+
+        if (!isNameValid || !isUserNameValid || !isNuitValid) {
+          setError(language === 'PT' ? 'Por favor, preencha todos os campos obrigatórios (Nome, NUIT).' : 'Please fill in all required fields (Name, Tax ID).');
           setIsLoading(false);
           return;
         }
@@ -204,7 +209,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
         try {
           await createProfileDoc(user.uid, {
             name: formData.name,
-            userName: formData.userName,
+            userName: type === 'buyer' ? formData.name : formData.userName,
             nuit: formData.nuit,
             address: formData.address,
             phone: formData.phone,
@@ -417,22 +422,32 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                       />
                     )}
                   </div>
-                  {type !== 'buyer' && (
-                    <>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <InputField 
+                      icon={FileText} 
+                      label={t.taxId} 
+                      placeholder="123 456 789" 
+                      isDarkMode={isDarkMode}
+                      badge={t.taxIdBadge}
+                      value={formData.nuit}
+                      onChange={(v) => {
+                        const numericValue = v.replace(/[^0-9]/g, '');
+                        if (numericValue.length <= 9) {
+                          setFormData({...formData, nuit: numericValue});
+                        }
+                      }}
+                    />
+                    {type === 'buyer' ? (
                       <InputField 
-                        icon={FileText} 
-                        label={t.taxId} 
-                        placeholder="123 456 789" 
+                        icon={Phone} 
+                        label={t.phone} 
+                        placeholder="+258 84 123 4567" 
                         isDarkMode={isDarkMode}
-                        badge={t.taxIdBadge}
-                        value={formData.nuit}
-                        onChange={(v) => {
-                          const numericValue = v.replace(/[^0-9]/g, '');
-                          if (numericValue.length <= 9) {
-                            setFormData({...formData, nuit: numericValue});
-                          }
-                        }}
+                        value={formData.phone}
+                        onChange={(v) => setFormData({...formData, phone: v})}
                       />
+                    ) : (
                       <InputField 
                         icon={MapPin} 
                         label={t.address} 
@@ -441,18 +456,19 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                         value={formData.address}
                         onChange={(v) => setFormData({...formData, address: v})}
                       />
-                    </>
-                  )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <InputField 
-                      icon={Phone} 
-                      label={t.phone} 
-                      placeholder="+258 84 123 4567" 
-                      isDarkMode={isDarkMode}
-                      value={formData.phone}
-                      onChange={(v) => setFormData({...formData, phone: v})}
-                    />
-                    {type !== 'buyer' && (
+                    )}
+                  </div>
+
+                  {type !== 'buyer' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <InputField 
+                        icon={Phone} 
+                        label={t.phone} 
+                        placeholder="+258 84 123 4567" 
+                        isDarkMode={isDarkMode}
+                        value={formData.phone}
+                        onChange={(v) => setFormData({...formData, phone: v})}
+                      />
                       <InputField 
                         icon={Mail} 
                         label={t.email} 
@@ -462,8 +478,8 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                         value={formData.email}
                         onChange={(v) => setFormData({...formData, email: v})}
                       />
-                    )}
-                  </div>
+                    </div>
+                  )}
                   
                   {type === 'logistics' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

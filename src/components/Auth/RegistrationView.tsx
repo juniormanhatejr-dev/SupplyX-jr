@@ -47,20 +47,26 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       buyerSub: 'Compre rápido e seguro',
       supplierTitle: 'FORNECEDOR',
       supplierSub: 'Ofereça seus produtos',
+      logisticsTitle: 'LOGÍSTICA',
+      logisticsSub: 'Gestão de frotas e carga',
       companyName: 'NOME DA EMPRESA / RAZÃO SOCIAL',
+      companyLogo: 'LOGO DA EMPRESA',
       userName: 'NOME DO RESPONSÁVEL / USUÁRIO',
       taxId: 'NUIT / IDENTIFICAÇÃO FISCAL',
       taxIdBadge: 'OBRIGATÓRIO',
       address: 'LOCALIZAÇÃO / ENDEREÇO COMPLETO',
       phone: 'TELEFONE / WHATSAPP',
       email: 'E-MAIL',
-      city: 'CIDADE',
+      city: 'PROVÍNCIA / CIDADE',
       sector: 'SETOR DE ATUAÇÃO',
+      fleetSize: 'TAMANHO DA FROTA',
+      specialization: 'ESPECIALIZAÇÃO LOGÍSTICA',
       password: 'SENHA DE ACESSO',
       passwordPlaceholder: 'Mínimo 6 caracteres',
       robot: 'Eu não sou um robô',
       createBuyer: 'CRIAR CONTA COMPRADOR',
       createSupplier: 'CRIAR CONTA FORNECEDOR',
+      createLogistics: 'CRIAR CONTA LOGÍSTICA',
       login: 'ENTRAR NA MINHA CONTA',
       orEnter: 'OU ENTRE COM',
       google: 'GOOGLE',
@@ -74,11 +80,15 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       },
       join: 'Junte-se ao',
       tagline: 'A PLATAFORMA QUE IMPULSIONA O SEU NEGÓCIO',
-      sectors: ['Construção Civil', 'Hidráulica', 'Elétrica', 'Acabamentos'],
+      sectors: ['Construção Civil', 'Hidráulica', 'Elétrica', 'Acabamentos', 'Serviços Gerais'],
       robotError: 'Por favor, valide que você não é um robô.',
       invalidEmail: 'Por favor, insira um e-mail válido.',
       welcome: 'Bem-vindo à SupplyX!',
-      defaultBio: (sector: string, city: string) => `Atuando no setor de ${sector} em ${city}.`
+      defaultBio: (sector: string, city: string) => `Atuando no setor de ${sector} em ${city}.`,
+      provinces: [
+        'Maputo Cidade', 'Maputo Província', 'Gaza', 'Inhambane', 'Sofala', 
+        'Manica', 'Tete', 'Zambézia', 'Nampula', 'Niassa', 'Cabo Delgado'
+      ]
     },
     EN: {
       slogan: 'Connecting Suppliers and Buyers',
@@ -86,20 +96,26 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       buyerSub: 'Buy fast and safe',
       supplierTitle: 'SUPPLIER',
       supplierSub: 'Offer your products',
+      logisticsTitle: 'LOGISTICS',
+      logisticsSub: 'Fleet and cargo management',
       companyName: 'COMPANY NAME / REGISTERED NAME',
+      companyLogo: 'COMPANY LOGO',
       userName: 'USER NAME / RESPONSIBLE NAME',
       taxId: 'TAX ID / VAT NUMBER',
       taxIdBadge: 'REQUIRED',
       address: 'LOCATION / FULL ADDRESS',
       phone: 'PHONE / WHATSAPP',
       email: 'EMAIL',
-      city: 'CITY',
+      city: 'PROVINCE / CITY',
       sector: 'INDUSTRY SECTOR',
+      fleetSize: 'FLEET SIZE',
+      specialization: 'LOGISTICS SPECIALIZATION',
       password: 'ACCESS PASSWORD',
       passwordPlaceholder: 'Minimum 6 characters',
       robot: "I'm not a robot",
       createBuyer: 'CREATE BUYER ACCOUNT',
       createSupplier: 'CREATE SUPPLIER ACCOUNT',
+      createLogistics: 'CREATE LOGISTICS ACCOUNT',
       login: 'LOGIN TO MY ACCOUNT',
       orEnter: 'OR ENTER WITH',
       google: 'GOOGLE',
@@ -113,16 +129,20 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       },
       join: 'Join',
       tagline: 'THE PLATFORM THAT BOOSTS YOUR BUSINESS',
-      sectors: ['Construction', 'Plumbing', 'Electrical', 'Finishing'],
+      sectors: ['Construction', 'Plumbing', 'Electrical', 'Finishing', 'General Services'],
       robotError: 'Please validate that you are not a robot.',
       invalidEmail: 'Please enter a valid email address.',
       welcome: 'Welcome to SupplyX!',
-      defaultBio: (sector: string, city: string) => `Operating in the ${sector} sector in ${city}.`
+      defaultBio: (sector: string, city: string) => `Operating in the ${sector} sector in ${city}.`,
+      provinces: [
+        'Maputo City', 'Maputo Province', 'Gaza', 'Inhambane', 'Sofala', 
+        'Manica', 'Tete', 'Zambézia', 'Nampula', 'Niassa', 'Cabo Delgado'
+      ]
     }
   }[language];
 
   const [mode, setMode] = useState<'login' | 'register'>('register');
-  const [type, setType] = useState<'buyer' | 'supplier'>('buyer');
+  const [type, setType] = useState<'buyer' | 'supplier' | 'logistics'>('buyer');
   const [formData, setFormData] = useState({
     name: '',
     userName: '',
@@ -132,7 +152,9 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
     email: '',
     password: '',
     sector: t.sectors[0],
-    city: 'Maputo'
+    city: 'Maputo Cidade',
+    fleetSize: '1-5',
+    specialization: 'Carga Geral'
   });
   const [isRobotValid, setIsRobotValid] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -190,6 +212,8 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
             type: type,
             sector: formData.sector,
             city: formData.city,
+            fleetSize: type === 'logistics' ? formData.fleetSize : null,
+            specialization: type === 'logistics' ? formData.specialization : null,
           });
         } catch (err) {
           // If Firestore fails, we still let them in but they might need to fix it later
@@ -209,7 +233,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
             userName: user.displayName || 'User',
             email: user.email || '',
             type: 'buyer', // Default to buyer on recovery
-          });
+          }, false);
         }
       }
 
@@ -229,9 +253,9 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
     }
   };
 
-  const createProfileDoc = async (uid: string, data: any) => {
+  const createProfileDoc = async (uid: string, data: any, isNew: boolean = true) => {
     try {
-      await setDoc(doc(db, 'users', uid), {
+      const profileData: any = {
         uid,
         name: data.name || '',
         userName: data.userName || '',
@@ -243,10 +267,20 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
         sector: data.sector || t.sectors[0],
         city: data.city || 'Maputo',
         bio: data.bio || (data.sector ? t.defaultBio(data.sector, data.city || 'Maputo') : t.welcome),
-        photoURL: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&q=80',
-        coverURL: 'https://images.unsplash.com/photo-1541746972996-4e0b0f43e02a?w=1000&q=80',
-        createdAt: serverTimestamp()
-      }, { merge: true });
+        photoURL: data.photoURL || (data.type === 'supplier' ? 'https://images.unsplash.com/photo-1599305096906-71e576f33e08?w=400&q=80' : 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&q=80'),
+        coverURL: data.coverURL || 'https://images.unsplash.com/photo-1541746972996-4e0b0f43e02a?w=1000&q=80',
+      };
+
+      if (isNew) {
+        profileData.createdAt = serverTimestamp();
+      } else {
+        profileData.updatedAt = serverTimestamp();
+      }
+
+      if (data.fleetSize) profileData.fleetSize = data.fleetSize;
+      if (data.specialization) profileData.specialization = data.specialization;
+
+      await setDoc(doc(db, 'users', uid), profileData, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `users/${uid}`);
     }
@@ -273,6 +307,10 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
 
       onSuccess();
     } catch (err: any) {
+      if (err.message?.includes('auth/popup-closed-by-user')) {
+        console.log('User closed the login popup');
+        return;
+      }
       console.error(err);
       setError(err.message);
     } finally {
@@ -308,27 +346,38 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
 
       <div className={`w-full max-w-md rounded-[48px] overflow-hidden border shadow-3xl relative glass-dark ${isDarkMode ? 'border-white/5' : 'bg-white border-zinc-100 shadow-zinc-200'}`}>
         {/* Header Tab */}
-        <div className="flex p-2">
+        <div className="flex p-1 gap-1">
           <button 
             onClick={() => setType('buyer')}
-            className={`flex-1 py-4 flex flex-col items-center gap-2 rounded-[32px] transition-all relative ${type === 'buyer' ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-white/5 opacity-40 grayscale'}`}
+            className={`flex-1 py-3 flex flex-col items-center gap-1.5 rounded-[24px] transition-all relative ${type === 'buyer' ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-white/5 opacity-40 grayscale'}`}
           >
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${type === 'buyer' ? 'bg-supplyx-blue text-white' : 'bg-zinc-700/50'}`}>
-              <ShoppingCart className="w-4 h-4" />
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${type === 'buyer' ? 'bg-supplyx-blue text-white' : 'bg-zinc-700/50'}`}>
+              <ShoppingCart className="w-3.5 h-3.5" />
             </div>
             <div className="text-center">
-              <p className="text-[10px] font-black uppercase tracking-tight text-white">{t.buyerTitle}</p>
+              <p className="text-[9px] font-black uppercase tracking-tight text-white">{t.buyerTitle}</p>
             </div>
           </button>
           <button 
             onClick={() => setType('supplier')}
-            className={`flex-1 py-4 flex flex-col items-center gap-2 rounded-[32px] transition-all relative ${type === 'supplier' ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-white/5 opacity-40 grayscale'}`}
+            className={`flex-1 py-3 flex flex-col items-center gap-1.5 rounded-[24px] transition-all relative ${type === 'supplier' ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-white/5 opacity-40 grayscale'}`}
           >
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${type === 'supplier' ? 'bg-supplyx-blue text-white' : 'bg-zinc-700/50'}`}>
-              <Package className="w-4 h-4" />
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${type === 'supplier' ? 'bg-supplyx-blue text-white' : 'bg-zinc-700/50'}`}>
+              <Package className="w-3.5 h-3.5" />
             </div>
             <div className="text-center">
-              <p className="text-[10px] font-black uppercase tracking-tight text-white">{t.supplierTitle}</p>
+              <p className="text-[9px] font-black uppercase tracking-tight text-white">{t.supplierTitle}</p>
+            </div>
+          </button>
+          <button 
+            onClick={() => setType('logistics')}
+            className={`flex-1 py-3 flex flex-col items-center gap-1.5 rounded-[24px] transition-all relative ${type === 'logistics' ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-white/5 opacity-40 grayscale'}`}
+          >
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${type === 'logistics' ? 'bg-supplyx-blue text-white' : 'bg-zinc-700/50'}`}>
+              <Activity className="w-3.5 h-3.5" />
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] font-black uppercase tracking-tight text-white">{t.logisticsTitle}</p>
             </div>
           </button>
         </div>
@@ -341,43 +390,59 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <InputField 
                       icon={Building2} 
-                      label={t.companyName} 
-                      placeholder="Ex: Manhate Jr Construction" 
+                      label={type === 'buyer' ? t.userName : t.companyName} 
+                      placeholder={type === 'buyer' ? "Ex: Fernando Manhate" : "Ex: Manhate Jr Construction"} 
                       isDarkMode={isDarkMode}
                       value={formData.name}
                       onChange={(v) => setFormData({...formData, name: v})}
                     />
-                    <InputField 
-                      icon={User} 
-                      label={t.userName} 
-                      placeholder="Ex: Fernando Manhate" 
-                      isDarkMode={isDarkMode}
-                      value={formData.userName}
-                      onChange={(v) => setFormData({...formData, userName: v})}
-                    />
+                    {type === 'buyer' ? (
+                      <InputField 
+                        icon={Mail} 
+                        label={t.email} 
+                        placeholder="email@exemplo.com" 
+                        isDarkMode={isDarkMode}
+                        type="email"
+                        value={formData.email}
+                        onChange={(v) => setFormData({...formData, email: v})}
+                      />
+                    ) : (
+                      <InputField 
+                        icon={User} 
+                        label={t.userName} 
+                        placeholder="Ex: Fernando Manhate" 
+                        isDarkMode={isDarkMode}
+                        value={formData.userName}
+                        onChange={(v) => setFormData({...formData, userName: v})}
+                      />
+                    )}
                   </div>
-                  <InputField 
-                    icon={FileText} 
-                    label={t.taxId} 
-                    placeholder="123 456 789" 
-                    isDarkMode={isDarkMode}
-                    badge={t.taxIdBadge}
-                    value={formData.nuit}
-                    onChange={(v) => {
-                      const numericValue = v.replace(/[^0-9]/g, '');
-                      if (numericValue.length <= 9) {
-                        setFormData({...formData, nuit: numericValue});
-                      }
-                    }}
-                  />
-                  <InputField 
-                    icon={MapPin} 
-                    label={t.address} 
-                    placeholder="Ex: Av. Eduardo Mondlane, Maputo" 
-                    isDarkMode={isDarkMode}
-                    value={formData.address}
-                    onChange={(v) => setFormData({...formData, address: v})}
-                  />
+                  {type !== 'buyer' && (
+                    <>
+                      <InputField 
+                        icon={FileText} 
+                        label={t.taxId} 
+                        placeholder="123 456 789" 
+                        isDarkMode={isDarkMode}
+                        badge={t.taxIdBadge}
+                        value={formData.nuit}
+                        onChange={(v) => {
+                          const numericValue = v.replace(/[^0-9]/g, '');
+                          if (numericValue.length <= 9) {
+                            setFormData({...formData, nuit: numericValue});
+                          }
+                        }}
+                      />
+                      <InputField 
+                        icon={MapPin} 
+                        label={t.address} 
+                        placeholder="Ex: Av. Eduardo Mondlane, Maputo" 
+                        isDarkMode={isDarkMode}
+                        value={formData.address}
+                        onChange={(v) => setFormData({...formData, address: v})}
+                      />
+                    </>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <InputField 
                       icon={Phone} 
@@ -387,16 +452,62 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                       value={formData.phone}
                       onChange={(v) => setFormData({...formData, phone: v})}
                     />
-                    <InputField 
-                      icon={Mail} 
-                      label={t.email} 
-                      placeholder="email@exemplo.com" 
-                      isDarkMode={isDarkMode}
-                      type="email"
-                      value={formData.email}
-                      onChange={(v) => setFormData({...formData, email: v})}
-                    />
+                    {type !== 'buyer' && (
+                      <InputField 
+                        icon={Mail} 
+                        label={t.email} 
+                        placeholder="email@exemplo.com" 
+                        isDarkMode={isDarkMode}
+                        type="email"
+                        value={formData.email}
+                        onChange={(v) => setFormData({...formData, email: v})}
+                      />
+                    )}
                   </div>
+                  
+                  {type === 'logistics' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5 flex-1">
+                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.fleetSize}</label>
+                        <div className={`relative flex items-center rounded-2xl border transition-all group overflow-hidden ${isDarkMode ? 'bg-zinc-800 border-zinc-700' : 'bg-zinc-50 border-zinc-100'}`}>
+                          <div className="pl-4 py-4 pr-3 text-zinc-500 group-focus-within:text-brand transition-colors">
+                            <Activity className="w-5 h-5" />
+                          </div>
+                          <select 
+                            className="flex-1 bg-transparent border-none outline-none py-4 text-xs font-bold appearance-none"
+                            value={formData.fleetSize}
+                            onChange={(e) => setFormData({...formData, fleetSize: e.target.value})}
+                          >
+                            <option value="1-5">1-5 Veículos</option>
+                            <option value="6-20">6-20 Veículos</option>
+                            <option value="21-50">21-50 Veículos</option>
+                            <option value="50+">Mais de 50</option>
+                          </select>
+                          <ChevronDown className="w-4 h-4 text-zinc-500 mr-4" />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5 flex-1">
+                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.specialization}</label>
+                        <div className={`relative flex items-center rounded-2xl border transition-all group overflow-hidden ${isDarkMode ? 'bg-zinc-800 border-zinc-700' : 'bg-zinc-50 border-zinc-100'}`}>
+                          <div className="pl-4 py-4 pr-3 text-zinc-500 group-focus-within:text-brand transition-colors">
+                            <Package className="w-5 h-5" />
+                          </div>
+                          <select 
+                            className="flex-1 bg-transparent border-none outline-none py-4 text-xs font-bold appearance-none"
+                            value={formData.specialization}
+                            onChange={(e) => setFormData({...formData, specialization: e.target.value})}
+                          >
+                            <option value="Carga Geral">Carga Geral</option>
+                            <option value="Refrigerados">Refrigerados</option>
+                            <option value="Produtos Perigosos">Produtos Perigosos</option>
+                            <option value="Materiais de Construção">Materiais de Construção</option>
+                          </select>
+                          <ChevronDown className="w-4 h-4 text-zinc-500 mr-4" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5 flex-1">
                       <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.city}</label>
@@ -409,12 +520,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                           value={formData.city}
                           onChange={(e) => setFormData({...formData, city: e.target.value})}
                         >
-                          <option>Maputo</option>
-                          <option>Matola</option>
-                          <option>Beira</option>
-                          <option>Nampula</option>
-                          <option>Tete</option>
-                          <option>Pemba</option>
+                          {t.provinces.map(p => <option key={p}>{p}</option>)}
                         </select>
                         <ChevronDown className="w-4 h-4 text-zinc-500 mr-4" />
                       </div>
@@ -494,7 +600,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
               type="submit"
               disabled={isLoading}
               className={`w-full py-5 rounded-2xl text-white font-black text-sm uppercase tracking-tighter italic transition-all active:scale-95 flex items-center justify-center gap-2 shadow-xl
-                ${type === 'buyer' ? 'bg-emerald-600 shadow-emerald-600/20' : 'bg-blue-600 shadow-blue-600/20'}
+                ${type === 'buyer' ? 'bg-emerald-600 shadow-emerald-600/20' : type === 'supplier' ? 'bg-blue-600 shadow-blue-600/20' : 'bg-orange-600 shadow-orange-600/20'}
               `}
             >
               {isLoading ? (
@@ -502,7 +608,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
               ) : (
                 mode === 'register' ? <Plus className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />
               )}
-              {mode === 'login' ? t.login : (type === 'buyer' ? t.createBuyer : t.createSupplier)}
+              {mode === 'login' ? t.login : (type === 'buyer' ? t.createBuyer : type === 'supplier' ? t.createSupplier : t.createLogistics)}
             </button>
 
             <button
@@ -531,7 +637,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
             <div className="w-6 h-6 flex items-center justify-center">
               <svg viewBox="0 0 24 24" className="w-5 h-5"><path fill="#EA4335" d="M12 5.04c2.14 0 3.86.73 5.37 2.16L21.01 3.5C18.66 1.34 15.63 0 12 0 7.31 0 3.32 2.69 1.38 6.64l4.08 3.16C6.44 7.08 8.99 5.04 12 5.04z"/><path fill="#4285F4" d="M23.49 12.27c0-.82-.07-1.61-.21-2.38H12v4.51h6.44c-.28 1.48-1.12 2.73-2.38 3.58l3.71 2.87c2.16-1.99 3.42-4.92 3.42-8.58z"/><path fill="#FBBC05" d="M5.46 14.71c-.24-.73-.38-1.5-.38-2.31s.14-1.58.38-2.31l-4.08-3.16C.5 8.78 0 10.33 0 12c0 1.67.5 3.22 1.38 4.61l4.08-3.16z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.94-2.91l-3.71-2.87c-1.1.74-2.51 1.18-4.23 1.18-3.25 0-6.01-2.2-7-5.17l-4.08 3.16C3.32 21.31 7.31 24 12 24z"/></svg>
             </div>
-            <span className="text-[11px] font-black uppercase tracking-tighter">{t.google} {type === 'buyer' ? (language === 'PT' ? 'COMPRADOR' : 'BUYER') : (language === 'PT' ? 'FORNECEDOR' : 'SUPPLIER')}</span>
+            <span className="text-[11px] font-black uppercase tracking-tighter">{t.google} {type === 'buyer' ? (language === 'PT' ? 'COMPRADOR' : 'BUYER') : type === 'supplier' ? (language === 'PT' ? 'FORNECEDOR' : 'SUPPLIER') : (language === 'PT' ? 'LOGÍSTICA' : 'LOGISTICS')}</span>
           </button>
         </div>
       </div>

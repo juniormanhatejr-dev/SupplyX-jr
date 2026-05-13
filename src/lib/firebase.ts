@@ -1,14 +1,40 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import imageCompression from 'browser-image-compression';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Enable offline persistence
+if (typeof window !== 'undefined') {
+  enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code === 'failed-precondition') {
+      // Multiple tabs open, persistence can only be enabled in one tab at a time.
+      console.warn('Firestore persistence failed: Multiple tabs open');
+    } else if (err.code === 'unimplemented') {
+      // The current browser does not support all of the features required to enable persistence
+      console.warn('Firestore persistence failed: Browser not supported');
+    }
+  });
+}
+
 export const auth = getAuth(app);
 export const storage = getStorage(app);
+
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+    console.log('Firebase connection test: Success');
+  } catch (error) {
+    if(error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration or internet connection.");
+    }
+  }
+}
+testConnection();
 
 console.log('Firebase initialized with bucket:', firebaseConfig.storageBucket);
 
@@ -72,10 +98,10 @@ export async function uploadFile(path: string, file: File): Promise<string> {
     try {
       console.log('Starting image compression...');
       const options = {
-        maxSizeMB: 0.5, // Reduced max size for fallback compatibility
-        maxWidthOrHeight: 1280,
+        maxSizeMB: 0.2, // Reduced from 0.5MB for faster loading
+        maxWidthOrHeight: 1024, // Reduced from 1280
         useWebWorker: true,
-        initialQuality: 0.7
+        initialQuality: 0.6 // Reduced from 0.7
       };
       
       if (path.includes('photo_') || path.includes('avatar')) {

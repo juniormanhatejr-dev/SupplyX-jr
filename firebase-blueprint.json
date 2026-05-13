@@ -12,8 +12,10 @@
         "address": { "type": "string" },
         "phone": { "type": "string" },
         "email": { "type": "string" },
-        "type": { "type": "string", "enum": ["buyer", "supplier"] },
+        "type": { "type": "string", "enum": ["buyer", "supplier", "logistics"] },
         "sector": { "type": "string" },
+        "fleetSize": { "type": "string" },
+        "specialization": { "type": "string" },
         "phone": { "type": "string" },
         "address": { "type": "string" },
         "bio": { "type": "string" },
@@ -22,7 +24,7 @@
         "city": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["uid", "name", "nuit", "email", "type"]
+      "required": ["uid", "name", "email", "type"]
     },
     "Order": {
       "title": "Order",
@@ -74,6 +76,7 @@
       "properties": {
         "participants": { "type": "array", "items": { "type": "string" } },
         "lastMessage": { "type": "string" },
+        "lastMessageSenderId": { "type": "string" },
         "updatedAt": { "type": "string", "format": "date-time" },
         "participantNames": { "type": "object" }
       }
@@ -85,8 +88,45 @@
       "properties": {
         "senderId": { "type": "string" },
         "text": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "fileType": { "type": "string" },
+        "fileName": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       }
+    },
+    "Truck": {
+      "title": "Truck",
+      "description": "Logistics vehicle details.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "model": { "type": "string" },
+        "plate": { "type": "string" },
+        "type": { "type": "string" },
+        "capacity": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "in_transit", "maintenance"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "model", "plate", "type", "capacity", "status"]
+    },
+    "Load": {
+      "title": "Load",
+      "description": "Cargo shipment handled by a logistics provider.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "origin": { "type": "string" },
+        "destination": { "type": "string" },
+        "material": { "type": "string" },
+        "weight": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "loading", "transit", "delivered"] },
+        "truckId": { "type": "string" },
+        "carrierId": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "origin", "destination", "material", "status", "carrierId"]
     }
   },
   "firestore": {
@@ -109,6 +149,14 @@
     "/chats/{chatId}/messages/{messageId}": {
       "schema": "ChatMessage",
       "description": "Conversation messages."
+    },
+    "/trucks/{truckId}": {
+      "schema": "Truck",
+      "description": "Logistics fleet vehicles."
+    },
+    "/loads/{loadId}": {
+      "schema": "Load",
+      "description": "Active cargo shipments."
     }
   }
 }

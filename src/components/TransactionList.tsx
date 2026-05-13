@@ -5,9 +5,10 @@ interface TransactionListProps {
   isDarkMode?: boolean;
   userType?: 'buyer' | 'supplier';
   language?: 'PT' | 'EN';
+  onNavigate?: (tab: string) => void;
 }
 
-export default function TransactionList({ isDarkMode, userType = 'buyer', language = 'PT' }: TransactionListProps) {
+export default function TransactionList({ isDarkMode, userType = 'buyer', language = 'PT', onNavigate }: TransactionListProps) {
   const isSupplier = userType === 'supplier';
 
   const t = {
@@ -76,6 +77,7 @@ export default function TransactionList({ isDarkMode, userType = 'buyer', langua
           </div>
         </div>
         <button 
+          onClick={() => onNavigate?.('Pedidos / Cotações')}
           className="px-6 py-3 rounded-lg bg-zinc-800 text-[10px] font-black uppercase tracking-widest text-supplyx-blue hover:bg-supplyx-blue hover:text-white transition-all shadow-xl active:scale-95"
         >
           {t.viewAll}

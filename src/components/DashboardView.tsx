@@ -18,12 +18,13 @@ import TransactionList from './TransactionList';
 interface DashboardViewProps {
   onActivateIA: () => void;
   onCategoryClick?: (category: string) => void;
+  onNavigate?: (tab: string) => void;
   isDarkMode?: boolean;
   language?: 'PT' | 'EN';
   userType?: 'buyer' | 'supplier';
 }
 
-export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMode, language, userType = 'buyer' }: DashboardViewProps) {
+export default function DashboardView({ onActivateIA, onCategoryClick, onNavigate, isDarkMode, language, userType = 'buyer' }: DashboardViewProps) {
   const translations = {
     PT: {
       stats: {
@@ -177,8 +178,18 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
                   <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">{language === 'PT' ? 'Fluxo e telemetria em tempo real' : 'Real-time flow & telemetry'}</p>
                </div>
                <div className="flex items-center gap-3 bg-zinc-800 p-1.5 rounded-2xl border border-white/5">
-                  <button className="px-5 py-2.5 rounded-xl bg-supplyx-blue text-white text-[10px] font-black uppercase tracking-widest shadow-lg">{t.spend}</button>
-                  <button className="px-5 py-2.5 rounded-xl text-zinc-500 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors">{t.logistics}</button>
+                  <button 
+                    onClick={() => onNavigate?.('Relatórios')}
+                    className="px-5 py-2.5 rounded-xl bg-supplyx-blue text-white text-[10px] font-black uppercase tracking-widest shadow-lg transition-transform active:scale-95"
+                  >
+                    {t.spend}
+                  </button>
+                  <button 
+                    onClick={() => onNavigate?.('Logística')}
+                    className="px-5 py-2.5 rounded-xl text-zinc-500 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
+                  >
+                    {t.logistics}
+                  </button>
                </div>
             </div>
             
@@ -224,7 +235,7 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <TransactionList isDarkMode={isDarkMode} userType={userType} language={language} />
+            <TransactionList isDarkMode={isDarkMode} userType={userType} language={language} onNavigate={onNavigate} />
             
             <div className="space-y-6">
               <div className={`p-8 rounded-[32px] border ${isDarkMode ? 'bg-zinc-900/80 border-white/5' : 'bg-white border-zinc-100 shadow-sm'} backdrop-blur-md`}>
@@ -237,9 +248,12 @@ export default function DashboardView({ onActivateIA, onCategoryClick, isDarkMod
                 </div>
               </div>
 
-              <div className={`p-6 rounded-[24px] border flex items-center justify-between group transition-all cursor-pointer ${
-                isDarkMode ? 'bg-zinc-900 border-white/5 hover:border-supplyx-blue/30' : 'bg-white border-zinc-100 shadow-sm'
-              }`}>
+              <div 
+                onClick={() => onNavigate?.('Logística')}
+                className={`p-6 rounded-[24px] border flex items-center justify-between group transition-all cursor-pointer active:scale-[0.99] ${
+                  isDarkMode ? 'bg-zinc-900 border-white/5 hover:border-supplyx-blue/30' : 'bg-white border-zinc-100 shadow-sm'
+                }`}
+              >
                 <div className="flex items-center gap-5">
                   <div className="w-12 h-12 rounded-xl bg-supplyx-blue/10 flex items-center justify-center text-supplyx-blue group-hover:bg-supplyx-blue group-hover:text-white transition-all">
                     <Truck className="w-6 h-6" />

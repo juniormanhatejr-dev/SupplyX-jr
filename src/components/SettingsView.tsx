@@ -45,9 +45,14 @@ export default function SettingsView({
     city: '',
     photoURL: '',
     coverURL: '',
+    fleetSize: '',
+    specialization: ''
   });
 
-  const cities = ['Maputo', 'Matola', 'Beira', 'Nampula', 'Tete', 'Pemba'];
+  const provinces = [
+    'Maputo Cidade', 'Maputo Província', 'Gaza', 'Inhambane', 'Sofala', 
+    'Manica', 'Tete', 'Zambézia', 'Nampula', 'Niassa', 'Cabo Delgado'
+  ];
 
   useEffect(() => {
     if (profile) {
@@ -61,6 +66,8 @@ export default function SettingsView({
         city: profile.city || '',
         photoURL: profile.photoURL || '',
         coverURL: profile.coverURL || '',
+        fleetSize: profile.fleetSize || '',
+        specialization: profile.specialization || '',
       });
     }
   }, [profile]);
@@ -161,11 +168,13 @@ export default function SettingsView({
         userName: 'Nome do Responsável / Usuário',
         taxId: 'NUIT / Identificação Fiscal',
         contactPhone: 'Telefone de Contacto',
-        city: 'Cidade Principal',
+        city: 'Província / Cidade Principal',
         address: 'Localização / Endereço',
-        photoUrl: 'URL da Foto de Perfil',
-        coverUrl: 'URL da Imagem de Capa',
-        bio: 'Bio / Descrição da Empresa'
+        photoUrl: (profile?.type === 'supplier' || profile?.type === 'logistics') ? 'Logo da Empresa (Logotipo)' : 'Foto de Perfil',
+        coverUrl: 'Imagem de Capa / Banners Corporativos',
+        bio: 'Bio / Sobre a Empresa',
+        fleetSize: 'Tamanho da Frota',
+        specialization: 'Especialização Logística'
       }
     },
     EN: {
@@ -191,12 +200,16 @@ export default function SettingsView({
       systemLanguageDesc: 'Set the primary language for navigation and communications.',
       labels: {
         companyName: 'Company Name / Entity',
+        userName: 'Responsible Name',
+        taxId: 'NUIT / Tax ID',
         contactPhone: 'Contact Phone',
-        city: 'Main City',
+        city: 'Province / City',
         address: 'Operation Address',
-        photoUrl: 'Profile Photo URL',
-        coverUrl: 'Cover Image URL',
-        bio: 'Bio / Company Description'
+        photoUrl: (profile?.type === 'supplier' || profile?.type === 'logistics') ? 'Company Logo' : 'Profile Photo',
+        coverUrl: 'Cover Image / Banners',
+        bio: 'Bio / Company Description',
+        fleetSize: 'Fleet Size',
+        specialization: 'Logistics Specialization'
       }
     }
   }[language];
@@ -356,7 +369,7 @@ export default function SettingsView({
                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                 className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
               >
-                {cities.map(city => (
+                {provinces.map(city => (
                   <option key={city} value={city}>{city}</option>
                 ))}
               </select>
@@ -372,6 +385,34 @@ export default function SettingsView({
               />
             </div>
           </div>
+
+          {profile?.type === 'logistics' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.labels.fleetSize}</label>
+                <select 
+                  value={formData.fleetSize}
+                  onChange={(e) => setFormData({ ...formData, fleetSize: e.target.value })}
+                  className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all appearance-none ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
+                >
+                  <option value="1-5">1-5 Veículos</option>
+                  <option value="6-20">6-20 Veículos</option>
+                  <option value="21-50">21-50 Veículos</option>
+                  <option value="50+">50+</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.labels.specialization}</label>
+                <input 
+                  type="text"
+                  value={formData.specialization}
+                  onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
+                  className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
+                  placeholder="Ex: Carga Geral, Materiais"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">

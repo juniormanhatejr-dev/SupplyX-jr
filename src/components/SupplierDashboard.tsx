@@ -328,12 +328,13 @@ export default function SupplierDashboard({ isDarkMode, language, onNavigate }: 
             <h3 className={`font-black uppercase italic tracking-tighter mb-4 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.actionRequired}</h3>
             <div className="space-y-3">
               {[
-                { label: t.ordersToShip, count: 12, icon: Truck, color: 'text-brand', bg: 'bg-brand/10' },
-                { label: t.pendingQuotes, count: 5, icon: FileText, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-                { label: language === 'PT' ? 'Mensagens' : 'Messages', count: 3, icon: MoreVertical, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                { label: t.ordersToShip, count: 12, icon: Truck, color: 'text-brand', bg: 'bg-brand/10', tab: 'Pedidos / Cotações' },
+                { label: t.pendingQuotes, count: 5, icon: FileText, color: 'text-amber-500', bg: 'bg-amber-500/10', tab: 'Pedidos / Cotações' },
+                { label: language === 'PT' ? 'Mensagens' : 'Messages', count: 3, icon: MoreVertical, color: 'text-blue-500', bg: 'bg-blue-500/10', tab: 'Mensagens' },
               ].map((action, i) => (
                 <button 
                   key={i}
+                  onClick={() => onNavigate?.(action.tab)}
                   className={`w-full p-4 rounded-2xl border flex items-center justify-between group transition-all ${isDarkMode ? 'bg-zinc-950/50 border-zinc-800 hover:bg-zinc-900' : 'bg-zinc-50/50 border-zinc-100 hover:bg-zinc-100'}`}
                 >
                   <div className="flex items-center gap-3">
@@ -359,7 +360,7 @@ export default function SupplierDashboard({ isDarkMode, language, onNavigate }: 
           <div className="flex justify-between items-center mb-6">
             <h3 className={`font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.inventory}</h3>
             <button 
-              onClick={() => onNavigate?.('Produtos')}
+              onClick={() => onNavigate?.('Produtos / Materiais')}
               className="text-[10px] font-black uppercase text-brand hover:underline"
             >
               {t.manageAll}

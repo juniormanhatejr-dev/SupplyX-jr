@@ -32,7 +32,7 @@ interface SidebarProps {
   onNavItemClick: (label: string) => void;
   isDarkMode?: boolean;
   language?: 'PT' | 'EN';
-  userType?: 'buyer' | 'supplier';
+  userType?: 'buyer' | 'supplier' | 'logistics';
   onLogout?: () => void;
 }
 
@@ -74,8 +74,8 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
     { icon: LayoutDashboard, label: nav.dashboard, originalLabel: 'Dashboard' },
     { icon: User, label: nav.profile, originalLabel: 'Meu Perfil' },
     { icon: BarChart3, label: nav.seller, originalLabel: 'Seller Central', supplierOnly: true },
-    { icon: Package, label: nav.products, originalLabel: 'Produtos / Materiais' },
-    { icon: FileText, label: nav.quotes, originalLabel: 'Pedidos / Cotações' },
+    { icon: Package, label: nav.products, originalLabel: 'Produtos / Materiais', hideForLogistics: true },
+    { icon: FileText, label: nav.quotes, originalLabel: 'Pedidos / Cotações', hideForLogistics: true },
     { icon: Handshake, label: nav.suppliers, originalLabel: 'Fornecedores', buyerOnly: true },
     { icon: BarChart3, label: nav.reports, originalLabel: 'Relatórios' },
     { icon: MessageSquare, label: nav.messages, originalLabel: 'Mensagens' },
@@ -85,10 +85,9 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
   ];
 
   const filteredItems = allItems.filter(item => {
-    // Treat everything as buyer unless explicitly supplier
-    const currentType = userType === 'supplier' ? 'supplier' : 'buyer';
-    if (item.supplierOnly && currentType !== 'supplier') return false;
-    if (item.buyerOnly && currentType !== 'buyer') return false;
+    if (item.supplierOnly && userType !== 'supplier') return false;
+    if (item.buyerOnly && userType !== 'buyer' && userType !== 'logistics') return false;
+    if (item.hideForLogistics && userType === 'logistics') return false;
     return true;
   });
 

@@ -20,9 +20,12 @@ import SupplyXLogo from './components/SupplyXLogo';
 import { OptimizedImage } from './components/ui/OptimizedImage';
 import { useAuth } from './contexts/AuthContext';
 import { useCart } from './contexts/CartContext';
+import { NotificationProvider } from './contexts/NotificationContext';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { auth } from './lib/firebase';
 
 export default function App() {
+  const isOnline = useOnlineStatus();
   const { user, profile, loading, refreshProfile } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('Dashboard');
@@ -38,10 +41,35 @@ export default function App() {
   const [view, setView] = useState<'landing' | 'auth'>('landing');
   const { items } = useCart();
 
-  // If supplier, default to Seller Central
+  const [initialRecipientId, setInitialRecipientId] = useState<string | null>(null);
+  const [initialChatId, setInitialChatId] = useState<string | null>(null);
+  const [prevTab, setPrevTab] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleNavigate = (e: any) => {
+      if (e.detail?.userId) {
+        setInitialRecipientId(e.detail.userId);
+        setInitialChatId(null);
+      } else if (e.detail?.chatId) {
+        setInitialChatId(e.detail.chatId);
+        setInitialRecipientId(null);
+      }
+      setActiveTab('Mensagens');
+    };
+    window.addEventListener('navigate-to-messages', handleNavigate);
+    return () => window.removeEventListener('navigate-to-messages', handleNavigate);
+  }, []);
+
+  // If supplier or logistics, default to their specific dashboards
   useEffect(() => {
     if (profile?.type === 'supplier' && activeTab === 'Dashboard') {
       setActiveTab('Seller Central');
+    } else if (profile?.type === 'logistics' && activeTab === 'Dashboard') {
+      setActiveTab('Logística');
+    }
+
+    if (activeTab !== 'Mensagens') {
+      setInitialRecipientId(null);
     }
   }, [profile, activeTab]);
 
@@ -136,6 +164,23 @@ export default function App() {
     );
   }
 
+  const handleNavigateWithPayload = (tab: string, payload?: any) => {
+    if (tab === 'Mensagens' && payload?.userId) {
+      setInitialRecipientId(payload.userId);
+    }
+    if (tab === 'Pedidos / Cotações' && payload?.showForm) {
+      setShowQuoteFormDirectly(true);
+    }
+    if (tab === 'Ajustes' && payload?.edit) {
+      setShouldEditProfile(true);
+    }
+    
+    if (tab !== activeTab) {
+      setPrevTab(activeTab);
+    }
+    setActiveTab(tab);
+  };
+
   const renderContent = () => {
     const commonProps = { isDarkMode, language, userType: profile?.type };
     const tabName = (activeTab === 'Seller Central' && profile?.type !== 'supplier') ? 'Dashboard' : activeTab;
@@ -145,15 +190,12 @@ export default function App() {
         return <DashboardView 
           onActivateIA={handleNewRequest} 
           onCategoryClick={handleCategoryClick}
+          onNavigate={handleNavigateWithPayload}
           {...commonProps} 
         />;
       case 'Produtos / Materiais':
         return <ProductsView 
-          onNavigate={(tab) => {
-            if (tab === 'Pedidos / Cotações') setShowQuoteFormDirectly(true);
-            if (tab === 'Ajustes') setShouldEditProfile(true);
-            setActiveTab(tab);
-          }} 
+          onNavigate={handleNavigateWithPayload} 
           initialCategory={selectedCategory}
           supplierId={selectedSupplierForCatalog}
           onClearSupplierFilter={() => setSelectedSupplierForCatalog(null)}
@@ -163,10 +205,7 @@ export default function App() {
         return <OrdersView 
           startWithForm={showQuoteFormDirectly} 
           onFormClose={() => setShowQuoteFormDirectly(false)} 
-          onNavigate={(tab) => {
-            if (tab === 'Ajustes') setShouldEditProfile(true);
-            setActiveTab(tab);
-          }}
+          onNavigate={handleNavigateWithPayload}
           {...commonProps}
         />;
       case 'Fornecedores':
@@ -175,24 +214,28 @@ export default function App() {
             setSelectedProfileId(uid);
             setIsProfileModalOpen(true);
           }}
+          onNavigate={handleNavigateWithPayload}
           {...commonProps} 
         />;
       case 'Logística':
         return <LogisticsView {...commonProps} />;
       case 'Seller Central':
-        return <SupplierDashboard onNavigate={(tab) => {
-          if (tab === 'Ajustes') setShouldEditProfile(true);
-          setActiveTab(tab);
-        }} {...commonProps} />;
+        return <SupplierDashboard onNavigate={handleNavigateWithPayload} {...commonProps} />;
       case 'Notificações':
         return <NotificationsView {...commonProps} />;
       case 'Relatórios':
         return <ReportsView {...commonProps} />;
       case 'Mensagens':
-        return <ChatView onNavigate={(tab) => {
-          if (tab === 'Ajustes') setShouldEditProfile(true);
-          setActiveTab(tab);
-        }} {...commonProps} />;
+        return <ChatView 
+          initialRecipientId={initialRecipientId}
+          initialChatId={initialChatId}
+          onNavigate={handleNavigateWithPayload}
+          onBack={prevTab ? () => {
+            setActiveTab(prevTab);
+            setPrevTab(null);
+          } : undefined}
+          {...commonProps} 
+        />;
       case 'Ajustes':
         return <SettingsView 
           initialIsEditing={shouldEditProfile}
@@ -208,161 +251,171 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 relative overflow-hidden ${isDarkMode ? 'dark bg-supplyx-deep' : 'bg-zinc-50'}`}>
-      {/* Background Ambience */}
-      <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-supplyx-blue/5 blur-[120px] rounded-full animate-pulse-slow" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-supplyx-blue/5 blur-[120px] rounded-full animate-pulse-slow transition-opacity" />
-      </div>
+    <NotificationProvider isDarkMode={isDarkMode} language={language}>
+      <div className={`min-h-screen transition-colors duration-500 relative overflow-hidden ${isDarkMode ? 'dark bg-supplyx-deep' : 'bg-zinc-50'}`}>
+        {/* Background Ambience */}
+        <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-0">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-supplyx-blue/5 blur-[120px] rounded-full animate-pulse-slow" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-supplyx-blue/5 blur-[120px] rounded-full animate-pulse-slow transition-opacity" />
+        </div>
 
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
-        activeItem={activeTab}
-        onNavItemClick={(label) => {
-          if (label === 'Meu Perfil') {
-            setSelectedProfileId(auth.currentUser?.uid || null);
-            setIsProfileModalOpen(true);
-            return;
-          }
-          if (label === 'Ajustes') {
-            setShouldEditProfile(false);
-          }
-          if (label === 'Produtos / Materiais') {
-            setSelectedCategory('Tudo');
-            setSelectedSupplierForCatalog(null);
-          }
-          setActiveTab(label);
-        }}
-        isDarkMode={isDarkMode}
-        language={language}
-        userType={profile?.type}
-        onLogout={handleLogout}
-      />
-      
-      <main className="lg:ml-64 transition-all pb-12 pt-28 relative z-10">
-        <header className={`fixed top-4 left-4 right-4 lg:left-[calc(16rem+1rem)] lg:right-4 z-40 rounded-[32px] border transition-all duration-500 glass-dark ${
-          isDarkMode ? ' border-white/5 shadow-3xl' : 'bg-white/80 border-zinc-100 shadow-sm shadow-zinc-200/20'
-        }`}>
-          <div className="w-full h-20 flex items-center justify-between px-6 sm:px-10">
-            <div className="flex items-center gap-6">
-              <button 
-                onClick={() => setIsSidebarOpen(true)}
-                className={`lg:hidden w-12 h-12 flex items-center justify-center rounded-2xl border transition-all active:scale-95 shadow-xl ${
-                  isDarkMode ? 'bg-supplyx-dark border-white/5 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
-                }`}
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-              
-              <div className="flex items-center gap-3">
-                <div className="hidden sm:flex items-center">
-                  <p className={`text-[11px] font-black italic uppercase tracking-[0.3em] ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-400'}`}>
-                    {t.tabs[activeTab === 'Seller Central' && profile?.type !== 'supplier' ? 'Dashboard' : activeTab as keyof typeof t.tabs]}
-                  </p>
+        {/* Connection Mode Indicator */}
+        {!isOnline && (
+          <div className="fixed top-0 left-0 right-0 z-[100] h-10 bg-amber-500 flex items-center justify-center gap-2 text-white text-[10px] font-black uppercase tracking-[0.2em] animate-in slide-in-from-top duration-500">
+            <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+            {language === 'PT' ? 'MODO OFFLINE • Dados Limitados' : 'OFFLINE MODE • Limited Data'}
+          </div>
+        )}
+
+        <Sidebar 
+          isOpen={isSidebarOpen} 
+          onClose={() => setIsSidebarOpen(false)} 
+          activeItem={activeTab}
+          onNavItemClick={(label) => {
+            if (label === 'Meu Perfil') {
+              setSelectedProfileId(auth.currentUser?.uid || null);
+              setIsProfileModalOpen(true);
+              return;
+            }
+            if (label === 'Ajustes') {
+              setShouldEditProfile(false);
+            }
+            if (label === 'Produtos / Materiais') {
+              setSelectedCategory('Tudo');
+              setSelectedSupplierForCatalog(null);
+            }
+            setActiveTab(label);
+          }}
+          isDarkMode={isDarkMode}
+          language={language}
+          userType={profile?.type}
+          onLogout={handleLogout}
+        />
+        
+        <main className="lg:ml-64 transition-all pb-12 pt-28 relative z-10">
+          <header className={`fixed top-4 left-4 right-4 lg:left-[calc(16rem+1rem)] lg:right-4 z-40 rounded-[32px] border transition-all duration-500 glass-dark ${
+            isDarkMode ? ' border-white/5 shadow-3xl' : 'bg-white/80 border-zinc-100 shadow-sm shadow-zinc-200/20'
+          }`}>
+            <div className="w-full h-20 flex items-center justify-between px-6 sm:px-10">
+              <div className="flex items-center gap-6">
+                <button 
+                  onClick={() => setIsSidebarOpen(true)}
+                  className={`lg:hidden w-12 h-12 flex items-center justify-center rounded-2xl border transition-all active:scale-95 shadow-xl ${
+                    isDarkMode ? 'bg-supplyx-dark border-white/5 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
+                  }`}
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+                
+                <div className="flex items-center gap-3">
+                  <div className="hidden sm:flex items-center">
+                    <p className={`text-[11px] font-black italic uppercase tracking-[0.3em] ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-400'}`}>
+                      {t.tabs[activeTab === 'Seller Central' && profile?.type !== 'supplier' ? 'Dashboard' : activeTab as keyof typeof t.tabs]}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 sm:gap-6">
+                <div className="flex items-center gap-1.5 sm:gap-2 bg-white/5 p-1 rounded-[18px] border border-white/5">
+                  <button 
+                    onClick={() => setLanguage(language === 'PT' ? 'EN' : 'PT')}
+                    className={`flex items-center gap-2 px-4 h-8 rounded-[14px] text-[10px] font-black transition-all ${
+                      isDarkMode ? 'text-zinc-400 hover:text-white hover:bg-white/5' : 'text-zinc-500 hover:text-zinc-900'
+                    }`}
+                  >
+                    <Globe className="w-3.5 h-3.5 text-supplyx-blue" />
+                    <span className="hidden xs:inline tracking-widest">{language}</span>
+                  </button>
+                  <button 
+                    onClick={() => setIsDarkMode(!isDarkMode)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-[14px] transition-all ${
+                      isDarkMode ? 'text-amber-400 hover:bg-white/5' : 'text-zinc-400 hover:bg-zinc-200'
+                    }`}
+                  >
+                    {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 sm:gap-4">
+                  <NotificationCenter 
+                    isDarkMode={isDarkMode} 
+                    language={language} 
+                    userType={profile?.type}
+                    onViewAll={() => setActiveTab('Notificações')}
+                  />
+                  
+                  {profile?.type === 'buyer' && (
+                    <button 
+                      onClick={() => setIsCartOpen(true)}
+                      className={`w-12 h-12 flex items-center justify-center rounded-2xl border transition-all relative group shadow-xl ${
+                        isDarkMode ? 'bg-supplyx-dark border-white/5 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
+                      }`}
+                    >
+                      <ShoppingCart className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                      {items.length > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-supplyx-blue text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-supplyx-deep">
+                          {items.length}
+                        </span>
+                      )}
+                    </button>
+                  )}
+
+                  <button 
+                    onClick={() => {
+                      setSelectedProfileId(auth.currentUser?.uid || null);
+                      setIsProfileModalOpen(true);
+                    }}
+                    className={`w-12 h-12 flex items-center justify-center rounded-2xl border transition-all overflow-hidden relative group shadow-xl ${
+                      isDarkMode ? 'bg-supplyx-dark border-white/5' : 'bg-white border-zinc-200'
+                    }`}
+                  >
+                    {profile?.photoURL ? (
+                      <OptimizedImage 
+                        src={profile.photoURL} 
+                        alt={profile.name} 
+                        className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-supplyx-blue/10 text-supplyx-blue font-black italic text-xs">
+                        {profile?.name?.charAt(0)}
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-supplyx-blue/0 group-hover:bg-supplyx-blue/10 transition-colors" />
+                  </button>
                 </div>
               </div>
             </div>
+          </header>
 
-            <div className="flex items-center gap-3 sm:gap-6">
-              <div className="flex items-center gap-1.5 sm:gap-2 bg-white/5 p-1 rounded-[18px] border border-white/5">
-                <button 
-                  onClick={() => setLanguage(language === 'PT' ? 'EN' : 'PT')}
-                  className={`flex items-center gap-2 px-4 h-8 rounded-[14px] text-[10px] font-black transition-all ${
-                    isDarkMode ? 'text-zinc-400 hover:text-white hover:bg-white/5' : 'text-zinc-500 hover:text-zinc-900'
-                  }`}
-                >
-                  <Globe className="w-3.5 h-3.5 text-supplyx-blue" />
-                  <span className="hidden xs:inline tracking-widest">{language}</span>
-                </button>
-                <button 
-                  onClick={() => setIsDarkMode(!isDarkMode)}
-                  className={`w-8 h-8 flex items-center justify-center rounded-[14px] transition-all ${
-                    isDarkMode ? 'text-amber-400 hover:bg-white/5' : 'text-zinc-400 hover:bg-zinc-200'
-                  }`}
-                >
-                  {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2 sm:gap-4">
-                <NotificationCenter 
-                  isDarkMode={isDarkMode} 
-                  language={language} 
-                  userType={profile?.type}
-                  onViewAll={() => setActiveTab('Notificações')}
-                />
-                
-                {profile?.type === 'buyer' && (
-                  <button 
-                    onClick={() => setIsCartOpen(true)}
-                    className={`w-12 h-12 flex items-center justify-center rounded-2xl border transition-all relative group shadow-xl ${
-                      isDarkMode ? 'bg-supplyx-dark border-white/5 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
-                    }`}
-                  >
-                    <ShoppingCart className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                    {items.length > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-supplyx-blue text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-supplyx-deep">
-                        {items.length}
-                      </span>
-                    )}
-                  </button>
-                )}
-
-                <button 
-                  onClick={() => {
-                    setSelectedProfileId(auth.currentUser?.uid || null);
-                    setIsProfileModalOpen(true);
-                  }}
-                  className={`w-12 h-12 flex items-center justify-center rounded-2xl border transition-all overflow-hidden relative group shadow-xl ${
-                    isDarkMode ? 'bg-supplyx-dark border-white/5' : 'bg-white border-zinc-200'
-                  }`}
-                >
-                  {profile?.photoURL ? (
-                    <OptimizedImage 
-                      src={profile.photoURL} 
-                      alt={profile.name} 
-                      className="w-full h-full object-cover transition-transform group-hover:scale-110"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-supplyx-blue/10 text-supplyx-blue font-black italic text-xs">
-                      {profile?.name?.charAt(0)}
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-supplyx-blue/0 group-hover:bg-supplyx-blue/10 transition-colors" />
-                </button>
-              </div>
-            </div>
+          <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-8">
+            {renderContent()}
           </div>
-        </header>
 
-        <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-8">
-          {renderContent()}
-        </div>
+          <CartModal 
+            isOpen={isCartOpen}
+            onClose={() => setIsCartOpen(false)}
+            isDarkMode={isDarkMode}
+            language={language}
+          />
 
-        <CartModal 
-          isOpen={isCartOpen}
-          onClose={() => setIsCartOpen(false)}
-          isDarkMode={isDarkMode}
-          language={language}
-        />
-
-        <ProfileModal 
-          userId={selectedProfileId || ''}
-          isOpen={isProfileModalOpen}
-          onClose={() => setIsProfileModalOpen(false)}
-          onEdit={() => {
-            setShouldEditProfile(true);
-            setActiveTab('Ajustes');
-          }}
-          onViewCatalog={(uid) => {
-            setSelectedSupplierForCatalog(uid);
-            setActiveTab('Produtos / Materiais');
-          }}
-          isDarkMode={isDarkMode}
-          language={language}
-        />
-      </main>
-    </div>
+          <ProfileModal 
+            userId={selectedProfileId || ''}
+            isOpen={isProfileModalOpen}
+            onClose={() => setIsProfileModalOpen(false)}
+            onEdit={() => {
+              setShouldEditProfile(true);
+              setActiveTab('Ajustes');
+            }}
+            onViewCatalog={(uid) => {
+              setSelectedSupplierForCatalog(uid);
+              setActiveTab('Produtos / Materiais');
+            }}
+            isDarkMode={isDarkMode}
+            language={language}
+          />
+        </main>
+      </div>
+    </NotificationProvider>
   );
 }

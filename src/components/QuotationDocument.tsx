@@ -143,8 +143,11 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
             marginTop: '8px',
             fontWeight: 500
           }}>
+            Manhate Link África, Lda<br />
+            Nuit: 400123456 | Maputo, Moçambique<br />
             SupplyX Platform Business Document<br />
-            Digital Validation Certified
+            Digital Validation Certified & Secured<br />
+            www.supplyx.co.mz
           </div>
         </div>
       </div>
@@ -432,7 +435,9 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
         alignItems: 'center'
       }}>
         <div style={{ fontSize: '9px', color: COLORS.textMuted, fontWeight: 700 }}>
-          {data.supplier.address} | Tel: {data.supplier.phone} | Email: {data.supplier.email}
+          {data.supplier.address} | Tel: {data.supplier.phone} | Email: {data.supplier.email}<br />
+          <span style={{ fontSize: '8px', opacity: 0.8 }}>Gestão Documental & Intermediação: Manhate Link África, Lda - Registada em Moçambique sob Nuit 400123456</span><br />
+          <span style={{ fontSize: '7px', opacity: 0.6 }}>Este documento é gerado automaticamente pela plataforma SupplyX e possui validade jurídica para efeitos de cotação em território Moçambicano.</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <span style={{ fontSize: '9px', fontWeight: 900, italic: true }}>Powered by</span>

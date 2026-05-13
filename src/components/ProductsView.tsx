@@ -109,7 +109,7 @@ const personalization = [
 ];
 
 interface ProductsViewProps {
-  onNavigate: (tab: string) => void;
+  onNavigate: (tab: string, payload?: any) => void;
   isDarkMode?: boolean;
   language?: 'PT' | 'EN';
   initialCategory?: string;
@@ -163,7 +163,7 @@ export default function ProductsView({
   }, [supplierId]);
 
   const startChat = async (product: Product) => {
-    if (!auth.currentUser || userType === 'supplier') return;
+    if (!auth.currentUser) return;
 
     try {
       setIsLoading(true);
@@ -181,7 +181,7 @@ export default function ProductsView({
       });
 
       if (existingRoom) {
-        onNavigate('Mensagens');
+        onNavigate('Mensagens', { userId: product.supplierId });
         return;
       }
 
@@ -196,7 +196,7 @@ export default function ProductsView({
         }
       });
 
-      onNavigate('Mensagens');
+      onNavigate('Mensagens', { userId: product.supplierId });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'chats');
     } finally {
@@ -272,7 +272,7 @@ export default function ProductsView({
       category: 'Categoria',
       stock: 'Stock Disponível',
       price: 'Preço Normal (MT)',
-      imageUrl: 'URL da Imagem',
+      imageUrl: 'Imagem do Produto',
       imagePreview: 'Preview da Imagem',
       putOnSale: 'Colocar em Promoção',
       saleBadgeDesc: 'Aparece na aba de ofertas',
@@ -339,7 +339,7 @@ export default function ProductsView({
       category: 'Category',
       stock: 'Stock Available',
       price: 'Normal Price (MT)',
-      imageUrl: 'Image URL',
+      imageUrl: 'Product Image',
       imagePreview: 'Image Preview',
       putOnSale: 'Put on Sale',
       saleBadgeDesc: 'Shows in the offers tab',
@@ -396,8 +396,9 @@ export default function ProductsView({
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const prods = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
-      })) as Product[];
+        ...doc.data(),
+        fromCache: snapshot.metadata.fromCache
+      })) as (Product & { fromCache: boolean })[];
       setProducts(prods);
     }, (err) => {
       handleFirestoreError(err, OperationType.LIST, 'products');
@@ -641,12 +642,12 @@ export default function ProductsView({
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {displayProducts.length > 0 ? displayProducts.map((item) => (
+          {displayProducts.length > 0 ? displayProducts.map((item, index) => (
             <motion.div
               key={item.id} 
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.3, delay: index * 0.05 }}
               onClick={() => {
                 if (userType === 'buyer') {
                   setSelectedProductDetail(item);
@@ -666,6 +667,7 @@ export default function ProductsView({
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                   referrerPolicy="no-referrer"
                   containerClassName="w-full h-full"
+                  isPriority={index < 4}
                 />
                 {userType === 'supplier' && (
                   <div className="absolute top-2 right-2 bg-zinc-900/80 p-2 rounded-lg backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity">
@@ -682,6 +684,12 @@ export default function ProductsView({
                   >
                     <MessageSquare className="w-4 h-4 text-white" />
                   </button>
+                )}
+                {(item as any).fromCache && (
+                  <div className="absolute top-2 right-2 bg-amber-500/80 text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded backdrop-blur-md flex items-center gap-1">
+                    <Clock className="w-2 h-2" />
+                    {language === 'PT' ? 'Offline' : 'Offline'}
+                  </div>
                 )}
                 {item.onSale && (
                   <div className="absolute top-2 left-2 bg-red-600 text-white text-[8px] font-black uppercase px-2 py-1 rounded-lg flex items-center gap-1">

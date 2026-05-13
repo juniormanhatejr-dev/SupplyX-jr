@@ -10,9 +10,13 @@ import {
   Image as ImageIcon,
   Loader2,
   Check,
-  CheckCheck
+  CheckCheck,
+  UserPlus,
+  Clock,
+  ArrowLeft
 } from 'lucide-react';
 import ProfileModal from './ProfileModal';
+import { OptimizedImage } from './ui/OptimizedImage';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { 
   collection, 
@@ -24,13 +28,15 @@ import {
   updateDoc, 
   doc, 
   serverTimestamp,
-  limit
+  limit,
+  getDocs
 } from 'firebase/firestore';
 
 interface ChatRoom {
   id: string;
   participants: string[];
   lastMessage: string;
+  lastMessageSenderId?: string;
   updatedAt: any;
   participantNames: Record<string, string>;
 }
@@ -39,6 +45,9 @@ interface Message {
   id: string;
   senderId: string;
   text: string;
+  fileUrl?: string;
+  fileType?: string;
+  fileName?: string;
   createdAt: any;
 }
 
@@ -47,14 +56,94 @@ interface ChatViewProps {
   language?: 'PT' | 'EN';
   userType?: 'buyer' | 'supplier';
   onNavigate?: (tab: string) => void;
+  onBack?: () => void;
+  initialRecipientId?: string | null;
+  initialChatId?: string | null;
 }
 
-export default function ChatView({ isDarkMode, language = 'PT', userType, onNavigate }: ChatViewProps) {
+export default function ChatView({ isDarkMode, language = 'PT', userType, onNavigate, onBack, initialRecipientId, initialChatId }: ChatViewProps) {
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null);
+
+  // Automatically select room if initialRecipientId is provided
+  useEffect(() => {
+    if (initialRecipientId && rooms.length > 0) {
+      const room = rooms.find(r => r.participants.includes(initialRecipientId));
+      if (room) {
+        setActiveRoom(room);
+      }
+    }
+  }, [initialRecipientId, rooms]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    if (searchTerm.length >= 1) {
+      const delayDebounceFn = setTimeout(async () => {
+        setIsSearching(true);
+        try {
+          const usersRef = collection(db, 'users');
+          // Simple search for names starting with the term
+          // To be more helpful with case-sensitivity on the first letter
+          const term = searchTerm;
+          const capitalizedTerm = term.charAt(0).toUpperCase() + term.slice(1);
+          
+          const q = query(
+            usersRef,
+            where('name', '>=', capitalizedTerm),
+            where('name', '<=', capitalizedTerm + '\uf8ff'),
+            limit(15)
+          );
+          const snapshot = await getDocs(q);
+          setSearchResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (err) {
+          console.error('Error searching users:', err);
+        } finally {
+          setIsSearching(false);
+        }
+      }, 300);
+
+      return () => clearTimeout(delayDebounceFn);
+    } else {
+      setSearchResults([]);
+    }
+  }, [searchTerm]);
+
+  const startNewChat = async (user: any) => {
+    if (!auth.currentUser) return;
+    
+    // Check if room already exists in state
+    const existing = rooms.find(r => r.participants.includes(user.uid));
+    if (existing) {
+      setActiveRoom(existing);
+      setSearchTerm('');
+      return;
+    }
+
+    try {
+      const chatData = {
+        participants: [auth.currentUser.uid, user.uid],
+        participantNames: {
+          [auth.currentUser.uid]: auth.currentUser.displayName || 'Me',
+          [user.uid]: user.name
+        },
+        lastMessage: 'Nova conversa iniciada',
+        lastMessageSenderId: auth.currentUser.uid,
+        updatedAt: serverTimestamp()
+      };
+      const docRef = await addDoc(collection(db, 'chats'), chatData);
+      // Room will be added by onSnapshot listener
+      setSearchTerm('');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'chats');
+    }
+  };
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -99,8 +188,9 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const roomList = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
-      })) as ChatRoom[];
+        ...doc.data(),
+        fromCache: snapshot.metadata.fromCache
+      })) as (ChatRoom & { fromCache: boolean })[];
       
       // Sort manually to avoid missing index / permission mask issues
       roomList.sort((a, b) => {
@@ -110,12 +200,20 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
       });
 
       setRooms(roomList);
+
+      // Handle initialChatId from notifications
+      if (initialChatId && !activeRoom) {
+        const targetRoom = roomList.find(r => r.id === initialChatId);
+        if (targetRoom) {
+          setActiveRoom(targetRoom);
+        }
+      }
     }, (err) => {
       handleFirestoreError(err, OperationType.LIST, 'chats');
     });
 
     return () => unsubscribe();
-  }, [auth.currentUser]);
+  }, [auth.currentUser, initialChatId]);
 
   useEffect(() => {
     if (!activeRoom) return;
@@ -129,8 +227,9 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgList = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
-      })) as Message[];
+        ...doc.data(),
+        fromCache: snapshot.metadata.fromCache
+      })) as (Message & { fromCache: boolean })[];
       setMessages(msgList);
       setTimeout(scrollToBottom, 100);
     }, (err) => {
@@ -156,10 +255,46 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
 
       await updateDoc(doc(db, 'chats', activeRoom.id), {
         lastMessage: text,
+        lastMessageSenderId: auth.currentUser.uid,
         updatedAt: serverTimestamp()
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `chats/${activeRoom.id}/messages`);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeRoom || !auth.currentUser) return;
+
+    setIsUploading(true);
+    try {
+      const { uploadFile } = await import('../lib/firebase');
+      const path = `chats/${activeRoom.id}/${Date.now()}_${file.name}`;
+      const url = await uploadFile(path, file);
+
+      const isImage = file.type.startsWith('image/');
+      
+      await addDoc(collection(db, `chats/${activeRoom.id}/messages`), {
+        senderId: auth.currentUser.uid,
+        text: isImage ? `[Imagem: ${file.name}]` : `[Arquivo: ${file.name}]`,
+        fileUrl: url,
+        fileType: file.type,
+        fileName: file.name,
+        createdAt: serverTimestamp()
+      });
+
+      await updateDoc(doc(db, 'chats', activeRoom.id), {
+        lastMessage: isImage ? '📷 Imagem' : '📎 Arquivo',
+        lastMessageSenderId: auth.currentUser.uid,
+        updatedAt: serverTimestamp()
+      });
+    } catch (err) {
+      console.error('Error uploading file:', err);
+      alert(language === 'PT' ? 'Erro ao carregar arquivo' : 'Error uploading file');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -181,14 +316,64 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
       {/* Sidebar - Rooms List */}
       <div className={`w-full md:w-80 flex-shrink-0 flex flex-col border-r ${isDarkMode ? 'border-zinc-800' : 'border-zinc-100'} ${activeRoom ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-6 border-b border-zinc-800/10">
-          <h2 className="text-xl font-black italic uppercase tracking-tighter mb-4">{t.title}</h2>
+          <div className="flex items-center gap-3 mb-4">
+            {onBack && (
+              <button 
+                onClick={onBack}
+                className={`p-2 -ml-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-zinc-900 text-zinc-400 hover:text-white' : 'hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900'}`}
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
+            <h2 className="text-xl font-black italic uppercase tracking-tighter">{t.title}</h2>
+          </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
             <input 
               type="text"
               placeholder={t.search}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-xs font-bold outline-none border transition-all ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
             />
+
+            {/* Global User Search Results */}
+            {searchTerm && (
+              <div className={`absolute top-full left-0 right-0 z-50 mt-2 p-1 rounded-2xl border shadow-2xl overflow-hidden ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100'}`}>
+                {isSearching ? (
+                  <div className="p-4 flex items-center justify-center gap-2 text-zinc-500">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-[10px] font-black uppercase">{language === 'PT' ? 'Buscando...' : 'Searching...'}</span>
+                  </div>
+                ) : searchResults.length > 0 ? (
+                  <>
+                    <div className={`px-3 py-2 text-[8px] font-black uppercase tracking-widest ${isDarkMode ? 'text-zinc-500 bg-zinc-950/50' : 'text-zinc-400 bg-zinc-50'}`}>
+                      {language === 'PT' ? 'Novas Conversas' : 'New Conversations'}
+                    </div>
+                    {searchResults.map((user) => (
+                      <button
+                        key={user.uid}
+                        onClick={() => startNewChat(user)}
+                        className={`w-full p-3 flex items-center gap-3 transition-colors text-left rounded-xl ${isDarkMode ? 'hover:bg-zinc-800' : 'hover:bg-zinc-50'}`}
+                      >
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs ${isDarkMode ? 'bg-zinc-800 text-brand' : 'bg-brand/10 text-brand'}`}>
+                          {user.name?.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-bold truncate ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{user.name}</p>
+                          <p className="text-[9px] text-zinc-500 uppercase font-black tracking-tight">{user.type} • {user.city}</p>
+                        </div>
+                        <UserPlus className="w-3.5 h-3.5 text-zinc-400" />
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  <div className="p-4 text-center text-zinc-500 text-[10px] font-bold uppercase">
+                    {language === 'PT' ? 'Nenhum usuário encontrado' : 'No users found'}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -227,22 +412,36 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
           <>
             {/* Chat Header */}
             <div className={`p-4 md:px-8 border-b flex items-center justify-between ${isDarkMode ? 'border-zinc-800' : 'border-zinc-100'}`}>
-              <div 
-                className="flex items-center gap-3 cursor-pointer group"
-                onClick={() => {
-                  setViewingProfileId(getOtherParticipantId(activeRoom));
-                  setIsProfileModalOpen(true);
-                }}
-              >
-                <button onClick={(e) => { e.stopPropagation(); setActiveRoom(null); }} className="md:hidden p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                  <User className="w-5 h-5" />
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    if (window.innerWidth < 768) {
+                      setActiveRoom(null); 
+                    } else if (onBack) {
+                      onBack();
+                    } else {
+                      setActiveRoom(null);
+                    }
+                  }} 
+                  className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  <ArrowLeft className="w-5 h-5" />
                 </button>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs transition-transform group-hover:scale-105 ${isDarkMode ? 'bg-zinc-800 text-brand' : 'bg-brand/10 text-brand'}`}>
-                  {getOtherParticipantName(activeRoom).charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <h3 className="text-sm font-black group-hover:text-brand transition-colors">{getOtherParticipantName(activeRoom)}</h3>
-                  <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">{t.online}</p>
+                <div 
+                  className="flex items-center gap-3 cursor-pointer group"
+                  onClick={() => {
+                    setViewingProfileId(getOtherParticipantId(activeRoom));
+                    setIsProfileModalOpen(true);
+                  }}
+                >
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs transition-transform group-hover:scale-105 ${isDarkMode ? 'bg-zinc-800 text-brand' : 'bg-brand/10 text-brand'}`}>
+                    {getOtherParticipantName(activeRoom).charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black group-hover:text-brand transition-colors">{getOtherParticipantName(activeRoom)}</h3>
+                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">{t.online}</p>
+                  </div>
                 </div>
               </div>
               <button className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800">
@@ -267,13 +466,44 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                           ? 'bg-brand text-white rounded-tr-none' 
                           : (isDarkMode ? 'bg-zinc-900 text-white rounded-tl-none' : 'bg-zinc-100 text-zinc-900 rounded-tl-none')
                       }`}>
-                        {msg.text}
+                        {msg.fileUrl ? (
+                          <div className="space-y-2">
+                            {msg.fileType?.startsWith('image/') ? (
+                              <OptimizedImage 
+                                src={msg.fileUrl} 
+                                alt={msg.fileName} 
+                                className="max-w-full rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => window.open(msg.fileUrl, '_blank')}
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <a 
+                                href={msg.fileUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 underline"
+                              >
+                                <Paperclip className="w-4 h-4" />
+                                {msg.fileName || 'Arquivo'}
+                              </a>
+                            )}
+                            {msg.text && !msg.text.startsWith('[') && <p>{msg.text}</p>}
+                          </div>
+                        ) : (
+                          msg.text
+                        )}
                       </div>
                       <div className={`flex items-center gap-1.5 px-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
                         <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
                           {msg.createdAt?.toDate ? new Date(msg.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                         </span>
-                        {isMine && <CheckCheck className="w-3 h-3 text-brand" />}
+                        {isMine && (
+                          msg.createdAt ? (
+                            <CheckCheck className="w-3 h-3 text-brand" />
+                          ) : (
+                            <Clock className={`w-3 h-3 ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`} />
+                          )
+                        )}
                       </div>
                     </div>
                   </motion.div>
@@ -285,9 +515,21 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
             {/* Input Area */}
             <div className={`p-4 md:px-8 border-t ${isDarkMode ? 'border-zinc-800' : 'border-zinc-100'}`}>
               <form onSubmit={handleSendMessage} className="flex items-center gap-2 md:gap-4">
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  onChange={handleFileUpload}
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                />
                 <div className="flex items-center gap-2">
-                  <button type="button" className="p-2.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors">
-                    <Paperclip className="w-5 h-5" />
+                  <button 
+                    type="button" 
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="p-2.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors disabled:opacity-50"
+                  >
+                    {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
                   </button>
                 </div>
                 <div className="flex-1 relative">

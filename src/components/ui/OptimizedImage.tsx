@@ -5,6 +5,7 @@ import { ImageIcon } from 'lucide-react';
 interface OptimizedImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   fallback?: React.ReactNode;
   containerClassName?: string;
+  isPriority?: boolean;
 }
 
 export const OptimizedImage: React.FC<OptimizedImageProps> = ({ 
@@ -13,6 +14,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   className, 
   containerClassName = '',
   fallback,
+  isPriority = false,
   ...props 
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -45,10 +47,11 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
       <img
         src={src}
         alt={alt}
-        className={`${className} transition-opacity duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`${className} transition-all duration-700 ${isLoaded ? 'opacity-100 blur-0 scale-100' : 'opacity-0 blur-xl scale-105'}`}
         onLoad={() => setIsLoaded(true)}
         onError={() => setHasError(true)}
-        loading="lazy"
+        loading={isPriority ? "eager" : "lazy"}
+        fetchPriority={isPriority ? "high" : "low"}
         {...props}
       />
     </div>

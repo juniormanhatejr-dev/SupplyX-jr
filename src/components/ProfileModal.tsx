@@ -27,12 +27,14 @@ interface UserProfile {
   address: string;
   phone: string;
   email: string;
-  type: 'buyer' | 'supplier';
+  type: 'buyer' | 'supplier' | 'logistics';
   sector: string;
   bio?: string;
   photoURL?: string;
   coverURL?: string;
   city?: string;
+  fleetSize?: string;
+  specialization?: string;
   createdAt: any;
 }
 
@@ -56,9 +58,13 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
       loading: 'Carregando Perfil...',
       verifiedSupplier: 'Fornecedor Verificado',
       verifiedBuyer: 'Comprador Verificado',
+      verifiedLogistics: 'Logística Verificada',
       about: 'Sobre',
       contact: 'Contacto',
       company: 'Empresa',
+      fleetSize: 'Frota',
+      specialization: 'Especialização',
+      companyLogo: 'Logo da Empresa',
       editData: 'Editar Dados',
       closeProfile: 'Fechar Perfil',
       viewCatalog: 'Ver Catálogo',
@@ -72,9 +78,13 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
       loading: 'Loading Profile...',
       verifiedSupplier: 'Verified Supplier',
       verifiedBuyer: 'Verified Buyer',
+      verifiedLogistics: 'Verified Logistics',
       about: 'About',
       contact: 'Contact',
       company: 'Company',
+      fleetSize: 'Fleet Size',
+      specialization: 'Specialization',
+      companyLogo: 'Company Logo',
       editData: 'Edit Profile',
       closeProfile: 'Close Profile',
       viewCatalog: 'View Catalog',
@@ -140,6 +150,7 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
                   containerClassName="w-full h-full"
+                  isPriority={true}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/60 to-transparent" />
                 
@@ -152,6 +163,7 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
                         containerClassName="w-full h-full"
+                        isPriority={true}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-brand/10 text-brand">
@@ -179,8 +191,14 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
                         <ShieldCheck className="w-6 h-6 text-brand" />
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                         <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest ${profile.type === 'supplier' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'}`}>
-                          {profile.type === 'supplier' ? t.verifiedSupplier : t.verifiedBuyer}
+                         <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest ${
+                          profile.type === 'supplier' ? 'bg-emerald-500/10 text-emerald-500' : 
+                          profile.type === 'logistics' ? 'bg-purple-500/10 text-purple-500' : 
+                          'bg-blue-500/10 text-blue-500'
+                        }`}>
+                          {profile.type === 'supplier' ? t.verifiedSupplier : 
+                           profile.type === 'logistics' ? t.verifiedLogistics :
+                           t.verifiedBuyer}
                         </span>
                         {profile.userName && (
                           <span className={`text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>
@@ -233,19 +251,44 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
                     <div className="space-y-4">
                       <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.company}</h4>
                       
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
-                          <Mail className="w-3.5 h-3.5" />
-                        </div>
-                        <p className={`text-xs font-bold leading-tight truncate ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{profile.email}</p>
-                      </div>
+                      {profile.type === 'logistics' ? (
+                        <>
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
+                              <Briefcase className="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                                <p className="text-[8px] font-black text-zinc-500 uppercase">{t.specialization}</p>
+                                <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{profile.specialization}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
+                              <Database className="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                                <p className="text-[8px] font-black text-zinc-500 uppercase">{t.fleetSize}</p>
+                                <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{profile.fleetSize} Veículos</p>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
+                              <Mail className="w-3.5 h-3.5" />
+                            </div>
+                            <p className={`text-xs font-bold leading-tight truncate ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{profile.email}</p>
+                          </div>
 
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
-                          <Building2 className="w-3.5 h-3.5" />
-                        </div>
-                        <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>NUIT: {profile.nuit}</p>
-                      </div>
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
+                              <Building2 className="w-3.5 h-3.5" />
+                            </div>
+                            <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>NUIT: {profile.nuit}</p>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 

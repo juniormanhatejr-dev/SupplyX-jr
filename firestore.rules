@@ -33,16 +33,19 @@ service cloud.firestore {
       return (!('name' in data) || (data.name is string && data.name.size() <= 200)) &&
              (!('userName' in data) || (data.userName is string && data.userName.size() <= 200)) &&
              (!('email' in data) || (data.email is string && data.email.size() <= 100)) &&
-             (!('type' in data) || (data.type in ['buyer', 'supplier'])) &&
+             (!('type' in data) || (data.type in ['buyer', 'supplier', 'logistics'])) &&
              (!('uid' in data) || (data.uid == request.auth.uid)) &&
              (!('bio' in data) || (data.bio is string && data.bio.size() <= 1000)) &&
              (!('phone' in data) || (data.phone is string && data.phone.size() <= 50)) &&
              (!('address' in data) || (data.address is string && data.address.size() <= 500)) &&
-             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 3000000)) &&
-             (!('coverURL' in data) || (data.coverURL is string && data.coverURL.size() <= 3000000)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 3000)) &&
+             (!('coverURL' in data) || (data.coverURL is string && data.coverURL.size() <= 3000)) &&
              (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
              (!('nuit' in data) || (data.nuit is string && data.nuit.size() <= 50)) &&
              (!('sector' in data) || (data.sector is string && data.sector.size() <= 100)) &&
+             (!('fleetSize' in data) || (data.fleetSize == null || (data.fleetSize is string && data.fleetSize.size() <= 50))) &&
+             (!('specialization' in data) || (data.specialization == null || (data.specialization is string && data.specialization.size() <= 200))) &&
+             (!('catalogItems' in data) || (data.catalogItems is list)) &&
              (!('createdAt' in data) || (data.createdAt is timestamp || data.createdAt == request.time)) &&
              (!('updatedAt' in data) || (data.updatedAt is timestamp || data.updatedAt == request.time));
     }
@@ -56,6 +59,19 @@ service cloud.firestore {
              (!('image' in data) || (data.image is string && data.image.size() <= 3000000)) &&
              (!('createdAt' in data) || (data.createdAt is timestamp)) &&
              (!('updatedAt' in data) || (data.updatedAt is timestamp));
+    }
+
+    function isChatParticipant(participants) {
+      return isSignedIn() && participants.hasAny([request.auth.uid]);
+    }
+
+    function isValidChatMessage(data) {
+      return data.senderId == request.auth.uid &&
+             data.text is string && data.text.size() <= 5000 &&
+             (!('fileUrl' in data) || (data.fileUrl is string && data.fileUrl.size() <= 3000)) &&
+             (!('fileType' in data) || (data.fileType is string && data.fileType.size() <= 100)) &&
+             (!('fileName' in data) || (data.fileName is string && data.fileName.size() <= 500)) &&
+             (data.createdAt == request.time || data.createdAt is timestamp);
     }
 
     // --- Rules ---
@@ -74,7 +90,7 @@ service cloud.firestore {
         (!('updatedAt' in incoming()) || incoming().updatedAt == request.time) &&
         incoming().diff(existing()).affectedKeys().hasOnly([
           'name', 'userName', 'phone', 'address', 'bio', 'city', 'photoURL', 'coverURL', 
-          'sector', 'nuit', 'updatedAt', 'type', 'createdAt', 'email', 'uid'
+          'sector', 'nuit', 'updatedAt', 'type', 'createdAt', 'email', 'uid', 'fleetSize', 'specialization', 'catalogItems'
         ])
       );
     }
@@ -96,25 +112,32 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      function isParticipant() {
-        return isSignedIn() && existing().get('participants', []).hasAny([request.auth.uid]);
-      }
-
-      allow get, list: if isParticipant();
+      allow get, list: if isChatParticipant(resource.data.participants);
       allow create: if isSignedIn() && 
                       incoming().get('participants', []) is list &&
                       incoming().get('participants', []).size() == 2 &&
-                      incoming().get('participants', []).hasAny([request.auth.uid]);
+                      isChatParticipant(incoming().get('participants', []));
       
-      allow update: if isParticipant() && 
-                    incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'updatedAt']);
+      allow update: if isChatParticipant(resource.data.participants) && 
+                    incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastMessageSenderId', 'updatedAt']);
 
       match /messages/{messageId} {
-        allow read: if isSignedIn() && 
-          get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', []).hasAny([request.auth.uid]);
-        allow create: if isSignedIn() && incoming().senderId == request.auth.uid &&
-          get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', []).hasAny([request.auth.uid]);
+        allow read: if isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow create: if isSignedIn() && isValidChatMessage(incoming()) &&
+                      isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
       }
+    }
+
+    match /trucks/{truckId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && incoming().ownerId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /loads/{loadId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && incoming().carrierId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.carrierId == request.auth.uid;
     }
   }
 }

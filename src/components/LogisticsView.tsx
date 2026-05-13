@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Truck, 
@@ -21,20 +21,45 @@ import {
   Loader2,
   CheckCircle,
   CreditCard,
-  Download
+  Download,
+  X,
+  PlusCircle,
+  Map as MapIcon,
+  TrendingUp,
+  MoreVertical
 } from 'lucide-react';
+import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { 
+  collection, 
+  addDoc, 
+  query, 
+  where, 
+  onSnapshot, 
+  serverTimestamp, 
+  deleteDoc, 
+  doc, 
+  updateDoc 
+} from 'firebase/firestore';
 
 interface LogisticsViewProps {
   isDarkMode: boolean;
   language: 'PT' | 'EN';
+  userType?: string;
 }
 
-export default function LogisticsView({ isDarkMode, language }: LogisticsViewProps) {
+export default function LogisticsView({ isDarkMode, language, userType }: LogisticsViewProps) {
+  if (userType === 'logistics') {
+    return <LogisticsPartnerDashboard isDarkMode={isDarkMode} language={language} />;
+  }
+  return <LogisticsTrackingView isDarkMode={isDarkMode} language={language} userType={userType} />;
+}
+
+function LogisticsTrackingView({ isDarkMode, language, userType }: LogisticsViewProps) {
   const translations = useMemo(() => ({
     PT: {
-      title: 'Controle Logístico',
-      subtitle: 'Gestão de frotas e suprimentos',
-      btnHire: 'Contratar Transporte',
+      title: userType === 'logistics' ? 'Painel da Transportadora' : 'Controle Logístico',
+      subtitle: userType === 'logistics' ? 'Gestão operacional de frotas' : 'Gestão de frotas e suprimentos',
+      btnHire: userType === 'logistics' ? 'Nova Carga' : 'Contratar Transporte',
       activeVehicles: 'Veículos em Rota',
       completedDeliveries: 'Entregas Concluídas',
       pendingCritical: 'Incidentes Críticos',
@@ -77,9 +102,9 @@ export default function LogisticsView({ isDarkMode, language }: LogisticsViewPro
       }
     },
     EN: {
-      title: 'Logistics Control',
-      subtitle: 'Fleet & supply management',
-      btnHire: 'Hire Transport',
+      title: userType === 'logistics' ? 'Carrier Dashboard' : 'Logistics Control',
+      subtitle: userType === 'logistics' ? 'Operational fleet management' : 'Fleet & supply management',
+      btnHire: userType === 'logistics' ? 'New Cargo' : 'Hire Transport',
       activeVehicles: 'Vehicles in Route',
       completedDeliveries: 'Completed Deliveries',
       pendingCritical: 'Critical Incidents',
@@ -811,5 +836,475 @@ export default function LogisticsView({ isDarkMode, language }: LogisticsViewPro
         </div>
       </div>
     </motion.div>
+  );
+}
+
+interface TruckData {
+  id: string;
+  model: string;
+  plate: string;
+  type: string;
+  capacity: string;
+  status: 'available' | 'in_transit' | 'maintenance';
+}
+
+interface LoadData {
+  id: string;
+  origin: string;
+  destination: string;
+  material: string;
+  weight: string;
+  status: 'pending' | 'loading' | 'transit' | 'delivered';
+  truckId?: string;
+}
+
+function LogisticsPartnerDashboard({ isDarkMode, language }: { isDarkMode: boolean, language: 'PT' | 'EN' }) {
+  const [trucks, setTrucks] = useState<TruckData[]>([]);
+  const [loads, setLoads] = useState<LoadData[]>([]);
+  const [isAddTruckOpen, setIsAddTruckOpen] = useState(false);
+  const [isAddLoadOpen, setIsAddLoadOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const t = {
+    PT: {
+      title: 'Painel da Transportadora',
+      subtitle: 'Gestão operacional de frotas e cargas',
+      stats: {
+        fleet: 'Frota Ativa',
+        loads: 'Cargas Ativas',
+        delivered: 'Entregas Totais',
+        revenue: 'Receita Mensal'
+      },
+      trucks: 'Minha Frota',
+      loads_title: 'Gestão de Cargas',
+      addTruck: 'CADASTRAR CAMIÃO',
+      addLoad: 'CADASTRAR CARGA',
+      noTrucks: 'Nenhum camião cadastrado.',
+      noLoads: 'Nenhuma carga em andamento.',
+      status: {
+        available: 'Disponível',
+        in_transit: 'Em Rota',
+        maintenance: 'Manutenção',
+        pending: 'Pendente',
+        loading: 'Carregando',
+        transit: 'Em Trânsito',
+        delivered: 'Entregue'
+      }
+    },
+    EN: {
+      title: 'Carrier Dashboard',
+      subtitle: 'Operational fleet and cargo management',
+      stats: {
+        fleet: 'Active Fleet',
+        loads: 'Active Loads',
+        delivered: 'Total Deliveries',
+        revenue: 'Monthly Revenue'
+      },
+      trucks: 'My Fleet',
+      loads_title: 'Cargo Management',
+      addTruck: 'REGISTER TRUCK',
+      addLoad: 'REGISTER LOAD',
+      noTrucks: 'No trucks registered.',
+      noLoads: 'No loads in progress.',
+      status: {
+        available: 'Available',
+        in_transit: 'In Route',
+        maintenance: 'Maintenance',
+        pending: 'Pending',
+        loading: 'Loading',
+        transit: 'In Transit',
+        delivered: 'Delivered'
+      }
+    }
+  }[language];
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    const trucksQuery = query(collection(db, 'trucks'), where('ownerId', '==', auth.currentUser.uid));
+    const unsubscribeTrucks = onSnapshot(trucksQuery, (snapshot) => {
+      const truckList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TruckData));
+      setTrucks(truckList);
+      setIsLoading(false);
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'trucks'));
+
+    const loadsQuery = query(collection(db, 'loads'), where('carrierId', '==', auth.currentUser.uid));
+    const unsubscribeLoads = onSnapshot(loadsQuery, (snapshot) => {
+      const loadList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LoadData));
+      setLoads(loadList);
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'loads'));
+
+    return () => {
+      unsubscribeTrucks();
+      unsubscribeLoads();
+    };
+  }, []);
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-8"
+    >
+      {/* Header */}
+      <div className={`p-10 rounded-[48px] border flex flex-col lg:flex-row justify-between items-center gap-8 ${
+        isDarkMode ? 'bg-zinc-900 border-white/5 shadow-3xl' : 'bg-white border-zinc-100 shadow-sm'
+      }`}>
+        <div className="text-center lg:text-left flex items-center gap-6">
+           <div className="w-16 h-16 rounded-[24px] bg-supplyx-blue/10 flex items-center justify-center text-supplyx-blue">
+             <MapIcon className="w-8 h-8" />
+           </div>
+           <div>
+             <h2 className={`text-3xl font-black italic tracking-tighter uppercase mb-2 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.title}</h2>
+             <p className="text-zinc-500 text-[11px] font-black uppercase tracking-[0.3em]">{t.subtitle}</p>
+           </div>
+        </div>
+        <div className="flex items-center gap-4">
+           <button 
+             onClick={() => setIsAddTruckOpen(true)}
+             className="bg-supplyx-blue hover:bg-blue-600 text-white px-8 py-5 rounded-[24px] text-xs font-black italic uppercase tracking-widest transition-all active:scale-95 shadow-3xl shadow-blue-500/20 flex items-center gap-3"
+           >
+             <Truck className="w-5 h-5" />
+             {t.addTruck}
+           </button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {[
+          { label: t.stats.fleet, val: trucks.length.toString(), icon: Truck, color: 'text-supplyx-blue', bg: 'bg-supplyx-blue/10' },
+          { label: t.stats.loads, val: loads.filter(l => l.status !== 'delivered').length.toString(), icon: Package, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+          { label: t.stats.delivered, val: loads.filter(l => l.status === 'delivered').length.toString(), icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+          { label: t.stats.revenue, val: 'MT 450K', icon: TrendingUp, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+        ].map((stat, i) => (
+          <div key={i} className={`p-6 rounded-3xl border flex items-center gap-4 ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${stat.bg}`}>
+              <stat.icon className={`w-6 h-6 ${stat.color}`} />
+            </div>
+            <div>
+              <p className={`text-xl font-black italic tracking-tighter leading-none ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{stat.val}</p>
+              <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mt-1">{stat.label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        {/* Trucks List */}
+        <div className={`p-8 rounded-[40px] border ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100 shadow-sm'}`}>
+          <div className="flex items-center justify-between mb-8">
+            <h3 className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.trucks}</h3>
+            <Truck className="w-5 h-5 text-supplyx-blue" />
+          </div>
+          
+          {trucks.length === 0 ? (
+            <div className="text-center py-12 border-2 border-dashed border-zinc-800 rounded-3xl">
+              <p className="text-zinc-500 text-xs font-black uppercase tracking-widest">{t.noTrucks}</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {trucks.map(truck => (
+                <div key={truck.id} className={`p-5 rounded-2xl border flex items-center justify-between ${isDarkMode ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-supplyx-blue/10 flex items-center justify-center text-supplyx-blue">
+                      <Truck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{truck.model}</p>
+                      <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{truck.plate} • {truck.capacity}</p>
+                    </div>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                    truck.status === 'available' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
+                    truck.status === 'in_transit' ? 'bg-supplyx-blue/10 text-supplyx-blue border border-supplyx-blue/20' :
+                    'bg-zinc-500/10 text-zinc-500 border border-zinc-500/20'
+                  }`}>
+                    {t.status[truck.status]}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Loads Management */}
+        <div className={`p-8 rounded-[40px] border ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100 shadow-sm'}`}>
+          <div className="flex items-center justify-between mb-8">
+            <h3 className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.loads_title}</h3>
+            <button 
+              onClick={() => setIsAddLoadOpen(true)}
+              className="text-supplyx-blue hover:text-white transition-colors"
+            >
+              <PlusCircle className="w-6 h-6" />
+            </button>
+          </div>
+
+          {loads.length === 0 ? (
+            <div className="text-center py-12 border-2 border-dashed border-zinc-800 rounded-3xl">
+              <p className="text-zinc-500 text-xs font-black uppercase tracking-widest">{t.noLoads}</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {loads.map(load => (
+                <div key={load.id} className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{load.material}</p>
+                      <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{load.origin} → {load.destination}</p>
+                    </div>
+                    <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                      load.status === 'delivered' ? 'bg-emerald-500/10 text-emerald-500' :
+                      load.status === 'transit' ? 'bg-supplyx-blue/10 text-supplyx-blue' : 'bg-amber-500/10 text-amber-500'
+                    }`}>
+                      {t.status[load.status]}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Peso: {load.weight}</p>
+                    <div className="flex gap-2">
+                       <select 
+                         className="bg-zinc-900 border border-white/10 rounded-lg px-3 py-1.5 text-[8px] font-black uppercase outline-none"
+                         value={load.status}
+                         onChange={async (e) => {
+                           try {
+                             await updateDoc(doc(db, 'loads', load.id), { status: e.target.value });
+                           } catch (err) {
+                             handleFirestoreError(err, OperationType.UPDATE, `loads/${load.id}`);
+                           }
+                         }}
+                       >
+                         <option value="pending">{t.status.pending}</option>
+                         <option value="loading">{t.status.loading}</option>
+                         <option value="transit">{t.status.transit}</option>
+                         <option value="delivered">{t.status.delivered}</option>
+                       </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modals */}
+      {isAddTruckOpen && (
+        <AddTruckModal 
+          isDarkMode={isDarkMode} 
+          language={language} 
+          onClose={() => setIsAddTruckOpen(false)} 
+        />
+      )}
+      {isAddLoadOpen && (
+        <AddLoadModal 
+          isDarkMode={isDarkMode} 
+          language={language} 
+          onClose={() => setIsAddLoadOpen(false)} 
+        />
+      )}
+    </motion.div>
+  );
+}
+
+function AddTruckModal({ isDarkMode, language, onClose }: { isDarkMode: boolean, language: 'PT' | 'EN', onClose: () => void }) {
+  const [formData, setFormData] = useState({
+    model: '',
+    plate: '',
+    type: 'Camião Simples',
+    capacity: '10 Ton'
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auth.currentUser) return;
+    setIsSubmitting(true);
+    try {
+      await addDoc(collection(db, 'trucks'), {
+        ...formData,
+        ownerId: auth.currentUser.uid,
+        status: 'available',
+        createdAt: serverTimestamp()
+      });
+      onClose();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'trucks');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }} 
+        animate={{ scale: 1, opacity: 1 }} 
+        className={`w-full max-w-md p-8 rounded-[40px] border shadow-2xl relative z-10 ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100'}`}
+      >
+        <div className="flex justify-between items-center mb-8">
+          <h3 className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+            {language === 'PT' ? 'Novo Veículo' : 'New Vehicle'}
+          </h3>
+          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl transition-colors"><X className="w-5 h-5 text-zinc-500" /></button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5 text-left">
+            <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Modelo</label>
+            <input 
+              required
+              value={formData.model}
+              onChange={e => setFormData({ ...formData, model: e.target.value })}
+              className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-100'}`}
+              placeholder="Ex: Mercedes-Benz Actros"
+            />
+          </div>
+          <div className="space-y-1.5 text-left">
+            <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Matrícula</label>
+            <input 
+              required
+              value={formData.plate}
+              onChange={e => setFormData({ ...formData, plate: e.target.value })}
+              className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-100'}`}
+              placeholder="Ex: AFM 123 MP"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5 text-left">
+              <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Tipo</label>
+              <select 
+                value={formData.type}
+                onChange={e => setFormData({ ...formData, type: e.target.value })}
+                className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100'}`}
+              >
+                <option>Camião Simples</option>
+                <option>Carreta</option>
+                <option>VUC</option>
+                <option>Toco</option>
+              </select>
+            </div>
+            <div className="space-y-1.5 text-left">
+              <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Capacidade</label>
+              <input 
+                value={formData.capacity}
+                onChange={e => setFormData({ ...formData, capacity: e.target.value })}
+                className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100'}`}
+                placeholder="Ex: 24 Ton"
+              />
+            </div>
+          </div>
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="w-full py-5 bg-supplyx-blue text-white rounded-2xl font-black text-sm uppercase italic tracking-tighter shadow-xl shadow-blue-500/20 active:scale-95 transition-all mt-4 flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+            {language === 'PT' ? 'CADASTRAR VEÍCULO' : 'REGISTER TRUCK'}
+          </button>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
+function AddLoadModal({ isDarkMode, language, onClose }: { isDarkMode: boolean, language: 'PT' | 'EN', onClose: () => void }) {
+  const [formData, setFormData] = useState({
+    origin: '',
+    destination: '',
+    material: '',
+    weight: '10 Ton'
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auth.currentUser) return;
+    setIsSubmitting(true);
+    try {
+      await addDoc(collection(db, 'loads'), {
+        ...formData,
+        carrierId: auth.currentUser.uid,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      onClose();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'loads');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }} 
+        animate={{ scale: 1, opacity: 1 }} 
+        className={`w-full max-w-md p-8 rounded-[40px] border shadow-2xl relative z-10 ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100'}`}
+      >
+        <div className="flex justify-between items-center mb-8">
+          <h3 className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+            {language === 'PT' ? 'Nova Carga' : 'New Load'}
+          </h3>
+          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl transition-colors"><X className="w-5 h-5 text-zinc-500" /></button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5 text-left">
+            <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Material</label>
+            <input 
+              required
+              value={formData.material}
+              onChange={e => setFormData({ ...formData, material: e.target.value })}
+              className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-100'}`}
+              placeholder="Ex: 500 Sacas de Cimento"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5 text-left">
+              <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Origem</label>
+              <input 
+                required
+                value={formData.origin}
+                onChange={e => setFormData({ ...formData, origin: e.target.value })}
+                className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100'}`}
+                placeholder="Ex: Porto Maputo"
+              />
+            </div>
+            <div className="space-y-1.5 text-left">
+              <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Destino</label>
+              <input 
+                required
+                value={formData.destination}
+                onChange={e => setFormData({ ...formData, destination: e.target.value })}
+                className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100'}`}
+                placeholder="Ex: Obra Central"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5 text-left">
+            <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Peso</label>
+            <input 
+              value={formData.weight}
+              onChange={e => setFormData({ ...formData, weight: e.target.value })}
+              className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100'}`}
+              placeholder="Ex: 25 Ton"
+            />
+          </div>
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="w-full py-5 bg-supplyx-blue text-white rounded-2xl font-black text-sm uppercase italic tracking-tighter shadow-xl shadow-blue-500/20 active:scale-95 transition-all mt-4 flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Package className="w-5 h-5" />}
+            {language === 'PT' ? 'CADASTRAR CARGA' : 'REGISTER LOAD'}
+          </button>
+        </form>
+      </motion.div>
+    </div>
   );
 }

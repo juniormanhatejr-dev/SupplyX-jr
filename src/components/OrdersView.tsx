@@ -54,7 +54,7 @@ const getOrders = (t: any) => [
 interface OrdersViewProps {
   startWithForm?: boolean;
   onFormClose?: () => void;
-  onNavigate?: (tab: string) => void;
+  onNavigate?: (tab: string, payload?: any) => void;
   isDarkMode?: boolean;
   language?: 'PT' | 'EN';
   userType?: 'buyer' | 'supplier';
@@ -196,7 +196,8 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const prods = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...(doc.data() as any)
+        ...(doc.data() as any),
+        fromCache: snapshot.metadata.fromCache
       }));
       
       // Inject demo products for CONSTRUCENTER BEIRA (Supplier S1) to match the reference image exactly
@@ -227,7 +228,8 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       const fetched = snapshot.docs.map(doc => ({
         id: doc.id,
         uid: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        fromCache: snapshot.metadata.fromCache
       }));
       setDbSuppliers(fetched);
     }, (error) => {
@@ -268,10 +270,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       });
 
       if (existingRoom) {
-        // Find the way to navigate to messages
-        // Since onNavigate isn't passed, we might need to handle this differently or just use context if available
-        // For now, let's assume this view might need an onNavigate prop too or we just show a toast
-        alert(t.chatExists);
+        onNavigate?.('Mensagens', { userId: otherId });
         return;
       }
 
@@ -286,7 +285,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         }
       });
 
-      alert(t.chatStarted);
+      onNavigate?.('Mensagens', { userId: otherId });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'chats');
     } finally {

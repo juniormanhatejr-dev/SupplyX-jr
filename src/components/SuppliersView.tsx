@@ -1,9 +1,12 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { Handshake, Search, Star, MapPin, ExternalLink, MoreVertical, ArrowLeft, Phone, Mail, Globe, ShieldCheck, Clock, Award, Loader2 } from 'lucide-react';
+import { Handshake, Search, Star, MapPin, ExternalLink, MoreVertical, ArrowLeft, Phone, Mail, Globe, ShieldCheck, Clock, Award, Loader2, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
 import { OptimizedImage } from './ui/OptimizedImage';
-import { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { useState, useEffect, useMemo } from 'react';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, query, where, getDocs, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { rankSuppliers, PROVINCE_COORDINATES } from '../services/supplierRankingService';
+import { useAuth } from '../contexts/AuthContext';
+import { useCart } from '../contexts/CartContext';
 
 interface Supplier {
   id: string;
@@ -17,16 +20,20 @@ interface Supplier {
   rating?: number;
   city?: string;
   photoURL?: string;
+  catalogItems?: string[]; // Added this to the interface
 }
 
 interface SuppliersViewProps {
   isDarkMode: boolean;
   language: 'PT' | 'EN';
   onViewProfile?: (uid: string) => void;
+  onNavigate?: (tab: string, payload?: any) => void;
   userType?: 'buyer' | 'supplier';
 }
 
-export default function SuppliersView({ isDarkMode, language, onViewProfile, userType = 'buyer' }: SuppliersViewProps) {
+export default function SuppliersView({ isDarkMode, language, onViewProfile, onNavigate, userType = 'buyer' }: SuppliersViewProps) {
+  const { profile } = useAuth();
+  const { items: cartItems } = useCart();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -51,7 +58,39 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, use
     return () => unsubscribe();
   }, []);
 
-  const filteredSuppliers = suppliers.filter(s => 
+  const rankedSuppliers = useMemo(() => {
+    if (!profile) return suppliers;
+
+    const buyerLoc = PROVINCE_COORDINATES[profile.city || 'Maputo Cidade'] || PROVINCE_COORDINATES['Maputo Cidade'];
+    const requestedItems = cartItems.map(i => i.name);
+
+    if (requestedItems.length === 0) {
+      // If cart empty, just rank by distance
+      return suppliers.sort((a, b) => {
+        const distA = PROVINCE_COORDINATES[a.city || 'Maputo Cidade'] ? 1 : 0;
+        const distB = PROVINCE_COORDINATES[b.city || 'Maputo Cidade'] ? 1 : 0;
+        return distB - distA; // Just a dummy sort if no ranking
+      });
+    }
+
+    const suppliersForRanking = suppliers.map(s => ({
+      id: s.uid,
+      location: PROVINCE_COORDINATES[s.city || 'Maputo Cidade'] || PROVINCE_COORDINATES['Maputo Cidade'],
+      catalogItems: s.catalogItems || [s.sector] // Fallback to sector if no catalog items
+    }));
+
+    const rankings = rankSuppliers(buyerLoc, requestedItems, suppliersForRanking);
+    
+    return suppliers.map(s => {
+      const r = rankings.find(rank => rank.supplierId === s.uid);
+      return {
+        ...s,
+        ranking: r
+      };
+    }).sort((a: any, b: any) => (b.ranking?.score || 0) - (a.ranking?.score || 0));
+  }, [suppliers, profile, cartItems]);
+
+  const filteredSuppliers = rankedSuppliers.filter(s => 
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.sector?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.city?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -72,7 +111,9 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, use
       leadTimeDesc: '3-5 dias úteis para entrega na região metropolitana.',
       creditScore: 'Score de Crédito',
       creditScoreDesc: 'AAA+ - Excelente histórico de pagamentos e solidez.',
-      noSuppliers: 'Nenhum fornecedor encontrado.'
+      noSuppliers: 'Nenhum fornecedor encontrado.',
+      bestMatch: 'Melhor Match',
+      bestMatchDesc: 'Fornecedor com alta eficiência, proximidade e diversidade de stock.'
     },
     EN: {
       strategicPartners: 'Strategic Partners',
@@ -88,25 +129,18 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, use
       leadTimeDesc: '3-5 business days for metro region delivery.',
       creditScore: 'Credit Score',
       creditScoreDesc: 'AAA+ - Excellent payment history and solidity.',
-      noSuppliers: 'No suppliers found.'
+      noSuppliers: 'No suppliers found.',
+      bestMatch: 'Best Match',
+      bestMatchDesc: 'Supplier with high efficiency, proximity, and stock diversity.'
     }
   }[language];
 
+  // Remove the restriction block here
+  /*
   if (userType === 'supplier') {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <Handshake className="w-16 h-16 text-zinc-500 mb-6 opacity-20" />
-        <h3 className="text-xl font-black italic uppercase tracking-tighter text-zinc-500">
-          {language === 'PT' ? 'Acesso Restrito' : 'Restricted Access'}
-        </h3>
-        <p className="text-sm text-zinc-500 max-w-md mt-2 font-medium">
-          {language === 'PT' 
-            ? 'Para garantir uma concorrência justa, fornecedores não podem visualizar outros perfis de fornecedores na rede SupplyX.' 
-            : 'To ensure fair competition, suppliers are not allowed to view other supplier profiles on the SupplyX network.'}
-        </p>
-      </div>
-    );
+    ...
   }
+  */
 
   if (selectedSupplier) {
     return (
@@ -201,10 +235,13 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, use
           <div className={`p-6 rounded-3xl border ${isDarkMode ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100'}`}>
             <Clock className="w-8 h-8 text-brand mb-4" />
             <h4 className={`font-black uppercase italic tracking-tighter mb-2 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-              {t.leadTime}
+              {t.leadTime} & Stock
             </h4>
-            <p className="text-xs text-zinc-500 font-bold leading-relaxed">
+            <p className="text-xs text-zinc-500 font-bold leading-relaxed mb-2">
               {t.leadTimeDesc}
+            </p>
+            <p className="text-[10px] text-brand font-black uppercase tracking-widest bg-brand/10 p-2 rounded-lg">
+              92% Cobertura de Stock Essencial
             </p>
           </div>
           <div className={`p-6 rounded-3xl border ${isDarkMode ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100'}`}>
@@ -284,21 +321,32 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, use
               </div>
               
               <h3 className={`text-lg font-black uppercase italic tracking-tighter mb-1 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{s.name}</h3>
-              <p className="text-[10px] font-black text-brand uppercase tracking-widest mb-4 leading-none">{s.sector}</p>
+              <div className="flex items-center gap-2 mb-4">
+                <p className="text-[10px] font-black text-brand uppercase tracking-widest leading-none">{s.sector}</p>
+                {((s as any).ranking?.productMatch >= 0.9 || (s as any).ranking?.score >= 0.8) && (
+                  <div className="px-2 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-md text-[8px] font-black uppercase tracking-widest flex items-center gap-1 border border-emerald-500/20">
+                    <Zap className="w-2.5 h-2.5 fill-emerald-500" />
+                    {t.bestMatch}
+                  </div>
+                )}
+              </div>
               
               <div className="space-y-3 mb-8">
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-center gap-2 text-sm text-[11px] font-bold">
                   <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-lg text-[10px] font-black">
                     <Star className="w-3 h-3 fill-amber-500" />
                     {s.rating || 4.5}
                   </div>
-                  <span className={`text-[11px] font-bold ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                    {t.loyal}
-                  </span>
+                  {(s as any).ranking && (
+                    <div className="flex items-center gap-1 px-2 py-0.5 bg-brand/10 text-brand rounded-lg text-[10px] font-black">
+                      <Zap className="w-3 h-3" />
+                      {Math.round((s as any).ranking.productMatch * 100)}% Match
+                    </div>
+                  )}
                 </div>
                 <div className={`flex items-center gap-2 text-[11px] font-bold ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
                   <MapPin className="w-4 h-4 text-brand/60" />
-                  {s.city || 'Maputo'}
+                  {s.city || 'Maputo'} {(s as any).ranking && `• ${Math.round((s as any).ranking.distanceKm)}km`}
                 </div>
               </div>
 
@@ -317,10 +365,49 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, use
                 >
                   {t.fullProfile}
                 </button>
-                <button className={`p-3 rounded-2xl transition-all border ${
+                <button 
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (!auth.currentUser) return;
+                    
+                    try {
+                      // Logic to start chat similar to ProductsView
+                      const roomsRef = collection(db, 'chats');
+                      const q = query(
+                        roomsRef,
+                        where('participants', 'array-contains', auth.currentUser.uid)
+                      );
+                
+                      const snapshot = await getDocs(q);
+                      const existingRoom = snapshot.docs.find(doc => {
+                        const participants = doc.data().participants as string[];
+                        return participants.includes(s.uid);
+                      });
+                
+                      if (existingRoom) {
+                        onNavigate?.('Mensagens', { userId: s.uid });
+                        return;
+                      }
+                
+                      // Create new room
+                      await addDoc(collection(db, 'chats'), {
+                        participants: [auth.currentUser.uid, s.uid],
+                        lastMessage: 'Início da conversa',
+                        updatedAt: serverTimestamp(),
+                        participantNames: {
+                          [auth.currentUser.uid]: auth.currentUser.displayName || 'User',
+                          [s.uid]: s.name
+                        }
+                      });
+                      onNavigate?.('Mensagens', { userId: s.uid });
+                    } catch (err) {
+                      handleFirestoreError(err, OperationType.WRITE, 'chats');
+                    }
+                  }}
+                  className={`p-3 rounded-2xl transition-all border ${
                   isDarkMode ? 'border-zinc-800 bg-brand/5 text-brand hover:bg-brand hover:text-white' : 'border-zinc-100 bg-brand/5 text-brand hover:bg-brand hover:text-white'
                 }`}>
-                  <ExternalLink className="w-4 h-4" />
+                  <Mail className="w-4 h-4" />
                 </button>
               </div>
             </motion.div>

@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { Handshake, Search, Star, MapPin, ExternalLink, MoreVertical, ArrowLeft, Phone, Mail, Globe, ShieldCheck, Clock, Award, Loader2, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
 import { OptimizedImage } from './ui/OptimizedImage';
+import UserPresenceIndicator from './UserPresenceIndicator';
 import { useState, useEffect, useMemo } from 'react';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, where, getDocs, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -186,6 +187,10 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
                   <Star className="w-3 h-3 fill-amber-500" />
                   {selectedSupplier.rating || 4.5}
                 </div>
+                <UserPresenceIndicator 
+                  userId={selectedSupplier.uid} 
+                  language={language}
+                />
               </div>
 
               <p className={`text-sm leading-relaxed max-w-2xl mb-8 ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
@@ -300,20 +305,31 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
               } backdrop-blur-md`}
             >
               <div className="flex justify-between items-start mb-6">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all group-hover:scale-110 overflow-hidden ${
-                  isDarkMode ? 'bg-zinc-800 border border-white/5' : 'bg-zinc-50 border border-zinc-100'
-                }`}>
-                  {s.photoURL ? (
-                    <OptimizedImage 
-                      src={s.photoURL} 
-                      alt={s.name} 
-                      className="w-full h-full object-cover" 
-                      referrerPolicy="no-referrer" 
-                      containerClassName="w-full h-full"
+                <div className="relative group/avatar">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all group-hover/avatar:scale-110 overflow-hidden ${
+                    isDarkMode ? 'bg-zinc-800 border border-white/5' : 'bg-zinc-50 border border-zinc-100'
+                  }`}>
+                    {s.photoURL ? (
+                      <OptimizedImage 
+                        src={s.photoURL} 
+                        alt={s.name} 
+                        className="w-full h-full object-cover" 
+                        referrerPolicy="no-referrer" 
+                        containerClassName="w-full h-full"
+                      />
+                    ) : (
+                      <Handshake className="w-7 h-7 text-brand" />
+                    )}
+                  </div>
+                  {/* Floating Status Badge on Card Avatar */}
+                  <div className="absolute -bottom-1 -right-1 ring-4 ring-zinc-900 rounded-full bg-zinc-900 overflow-hidden">
+                    <UserPresenceIndicator 
+                      userId={s.uid} 
+                      showLastSeen={false} 
+                      className="hidden" 
+                      onlineClassName="block"
                     />
-                  ) : (
-                    <Handshake className="w-7 h-7 text-brand" />
-                  )}
+                  </div>
                 </div>
                 <button className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'text-zinc-500 hover:text-white' : 'text-zinc-300 hover:text-zinc-600'}`}>
                   <MoreVertical className="w-5 h-5" />

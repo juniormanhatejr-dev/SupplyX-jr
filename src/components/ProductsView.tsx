@@ -23,7 +23,8 @@ import {
   Loader2,
   AlertCircle,
   MessageSquare,
-  Brain
+  Brain,
+  Camera
 } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType, uploadFile } from '../lib/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, getDoc } from 'firebase/firestore';
@@ -854,25 +855,41 @@ export default function ProductsView({
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.imageUrl}</label>
-                    <div className="flex gap-2">
-                      <input 
-                        type="text"
-                        value={editingProduct?.image || ''}
-                        onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
-                        className={`flex-1 p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
-                        placeholder="https://..."
-                      />
-                      <label className={`shrink-0 flex items-center justify-center w-14 h-14 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:bg-brand/5 hover:border-brand/50 ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-500' : 'bg-zinc-50 border-zinc-100 text-zinc-400'}`}>
+                    <div className="flex gap-4">
+                      <div className="flex-1 space-y-2">
+                        <input 
+                          type="text"
+                          value={editingProduct?.image || ''}
+                          onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
+                          className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
+                          placeholder="https://..."
+                        />
+                        <p className="text-[9px] font-bold text-zinc-400 uppercase ml-1 italic">{language === 'PT' ? '* Carregamento automático ao selecionar arquivo' : '* Auto-uploads on file selection'}</p>
+                      </div>
+                      <label className={`shrink-0 flex flex-col items-center justify-center w-24 h-24 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:bg-brand/5 hover:border-brand/50 relative group ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-500' : 'bg-zinc-50 border-zinc-100 text-zinc-400'}`}>
                         <input 
                           type="file" 
                           accept="image/*" 
                           className="hidden" 
                           onChange={handleProductImageUpload} 
+                          disabled={isUploading}
                         />
                         {isUploading ? (
-                          <Loader2 className="w-5 h-5 animate-spin text-brand" />
+                          <div className="flex flex-col items-center gap-1">
+                            <Loader2 className="w-6 h-6 animate-spin text-brand" />
+                            <span className="text-[8px] font-black uppercase text-brand">Up...</span>
+                          </div>
                         ) : (
-                          <Plus className="w-5 h-5" />
+                          <>
+                            <Camera className="w-6 h-6 group-hover:scale-110 transition-transform mb-1" />
+                            <span className="text-[8px] font-black uppercase">{language === 'PT' ? 'Carregar' : 'Upload'}</span>
+                          </>
+                        )}
+                        {/* Status Overlay */}
+                        {editingProduct?.image && !isUploading && (
+                          <div className="absolute -top-1 -right-1 bg-emerald-500 text-white p-1 rounded-full border-2 border-white dark:border-zinc-900">
+                             <CheckCircle2 className="w-3 h-3" />
+                          </div>
                         )}
                       </label>
                     </div>
@@ -945,19 +962,25 @@ export default function ProductsView({
                 <button 
                   onClick={async () => {
                     if (!editingProduct?.name || !auth.currentUser) return;
-                    setIsLoading(true);
+                    const now = serverTimestamp();
                     try {
-                      const data = {
-                        ...editingProduct,
-                        supplierId: auth.currentUser.uid,
-                        updatedAt: serverTimestamp(),
-                        createdAt: editingProduct.id ? (editingProduct.createdAt || serverTimestamp()) : serverTimestamp()
-                      };
-                      
                       if (editingProduct.id) {
-                        const { id, ...rest } = data;
-                        await updateDoc(doc(db, 'products', id), rest);
+                        // For updates, we MUST NOT change createdAt to serverTimestamp()
+                        // because the rules enforce incoming().createdAt == existing().createdAt
+                        const { id, createdAt, ...rest } = editingProduct;
+                        await updateDoc(doc(db, 'products', id as string), {
+                          ...rest,
+                          supplierId: auth.currentUser.uid,
+                          updatedAt: now
+                          // We omit createdAt so it remains unchanged in the document
+                        });
                       } else {
+                        const data = {
+                          ...editingProduct,
+                          supplierId: auth.currentUser.uid,
+                          createdAt: now,
+                          updatedAt: now
+                        };
                         await addDoc(collection(db, 'products'), data);
                       }
                       setIsEditorOpen(false);

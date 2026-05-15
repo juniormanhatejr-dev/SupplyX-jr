@@ -1,22 +1,33 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
+    
+    // Global Deny
     match /{allPaths=**} {
-      // Allow read access to all users (public files)
-      allow read: if true;
-      
-      // Allow write access only to authenticated users
-      // You can further restrict this to specific paths
-      allow write: if request.auth != null;
+      allow read, write: if false;
     }
-    
-    // Example of path-specific rules
+
+    // Helper functions
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+
+    // User Public Assets (Avatars, Covers)
     match /users/{userId}/{allPaths=**} {
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if true;
+      allow write: if isOwner(userId) && request.resource.size < 5 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
     }
-    
+
+    // Product Images
     match /products/{userId}/{allPaths=**} {
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if true;
+      allow write: if isOwner(userId) && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+    }
+
+    // Chat Files
+    match /chats/{chatId}/{allPaths=**} {
+      allow read: if isSignedIn(); 
+      allow write: if isSignedIn() && request.resource.size < 20 * 1024 * 1024;
     }
   }
 }

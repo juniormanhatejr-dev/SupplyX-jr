@@ -2,21 +2,27 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getDatabase } from 'firebase/database';
 import imageCompression from 'browser-image-compression';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
-// Enable offline persistence
+// Initialize Realtime Database for Professional Presence System
+export const rtdb = getDatabase(app);
+
+// Enable offline persistence with better error logging
 if (typeof window !== 'undefined') {
-  enableIndexedDbPersistence(db).catch((err) => {
+  enableIndexedDbPersistence(db).then(() => {
+    console.log('Firestore persistence enabled');
+  }).catch((err) => {
     if (err.code === 'failed-precondition') {
-      // Multiple tabs open, persistence can only be enabled in one tab at a time.
       console.warn('Firestore persistence failed: Multiple tabs open');
     } else if (err.code === 'unimplemented') {
-      // The current browser does not support all of the features required to enable persistence
       console.warn('Firestore persistence failed: Browser not supported');
+    } else {
+      console.error('Firestore persistence error:', err);
     }
   });
 }
@@ -24,21 +30,30 @@ if (typeof window !== 'undefined') {
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
+// Professional connection test with timeout (Bypassed during startup to avoid permission noise)
+/*
 async function testConnection() {
+  const timeoutPromise = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('Connection timeout')), 5000)
+  );
+
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-    console.log('Firebase connection test: Success');
+    await Promise.race([
+      getDocFromServer(doc(db, 'test', 'connection')),
+      timeoutPromise
+    ]);
+    console.log('Firebase connectivity verified');
   } catch (error) {
-    if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration or internet connection.");
-    }
+    console.warn('Initial connection test bypassed or failed:', error instanceof Error ? error.message : 'Unknown error');
   }
 }
 testConnection();
+*/
 
-console.log('Firebase initialized with bucket:', firebaseConfig.storageBucket);
+console.log('SupplyX Firebase Engine initialized');
 
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
 
@@ -60,7 +75,7 @@ export interface FirestoreErrorInfo {
     email?: string | null;
     emailVerified?: boolean | null;
     isAnonymous?: boolean | null;
-    tenantId?: string | null;
+    authenticated: boolean;
     providerInfo?: {
       providerId?: string | null;
       email?: string | null;
@@ -68,24 +83,45 @@ export interface FirestoreErrorInfo {
   }
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+/**
+ * Professional Firestore error handler as per system mandates
+ */
+export function handleFirestoreError(error: any, operationType: OperationType, path: string | null) {
+  const errMessage = error?.message || String(error);
+  
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMessage,
+    operationType,
+    path,
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
+      userId: auth.currentUser?.uid || null,
+      email: auth.currentUser?.email || null,
+      emailVerified: auth.currentUser?.emailVerified || null,
+      isAnonymous: auth.currentUser?.isAnonymous || false,
+      authenticated: !!auth.currentUser,
       providerInfo: auth.currentUser?.providerData?.map(provider => ({
         providerId: provider.providerId,
         email: provider.email,
       })) || []
-    },
-    operationType,
-    path
+    }
+  };
+
+  // AUDIT LOG: Detailed system status for debugging
+  console.group(`%c[FIREBASE AUDIT] ${operationType.toUpperCase()} ALERT`, 'background: #fee2e2; color: #991b1b; font-weight: bold; padding: 4px; border-radius: 4px;');
+  console.error('Path:', path);
+  console.error('Operation:', operationType);
+  console.error('Authenticated:', !!auth.currentUser);
+  console.error('User UID:', auth.currentUser?.uid || 'Not Logged In');
+  console.error('Original Error:', error);
+  console.table(errInfo.authInfo);
+  console.groupEnd();
+  
+  // Format specific user-friendly messages
+  let userMessage = 'Erro de permissão no banco de dados.';
+  if (errMessage.includes('insufficient permissions') || errMessage.includes('PERMISSION_DENIED')) {
+    userMessage = `Acesso Negado: Você não tem permissão para ${operationType} em ${path}. Verifique se você está autenticado corretamente.`;
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+
   throw new Error(JSON.stringify(errInfo));
 }
 

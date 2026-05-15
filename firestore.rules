@@ -1,143 +1,152 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default deny
+    // ---------------------------------------------------------
+    // GLOBAL HELPERS
+    // ---------------------------------------------------------
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    // ---------------------------------------------------------
+    // VALIDATION BLUEPRINTS
+    // ---------------------------------------------------------
+    
+    function isValidUser(data) {
+      return (!('email' in data) || (data.email is string && data.email.size() <= 256)) &&
+             (!('name' in data) || (data.name is string && data.name.size() <= 128)) &&
+             (!('type' in data) || (data.type in ['buyer', 'supplier', 'logistics'])) &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 40)) &&
+             (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
+             (!('sector' in data) || (data.sector is string && data.sector.size() <= 100));
+    }
+
+    function isValidChat(data) {
+      return data.keys().hasAll(['participants', 'createdAt', 'updatedAt']) &&
+             data.participants is list && data.participants.size() >= 2 &&
+             request.auth.uid in data.participants &&
+             data.createdAt == request.time &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['senderId', 'participants', 'text', 'createdAt']) &&
+             data.senderId == request.auth.uid &&
+             request.auth.uid in data.participants &&
+             data.text is string && data.text.size() <= 5000 &&
+             data.createdAt == request.time;
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'price', 'supplierId', 'createdAt']) &&
+             data.supplierId == request.auth.uid &&
+             data.price is number && data.price >= 0 &&
+             data.name is string && data.name.size() <= 200 &&
+             data.createdAt == request.time;
+    }
+
+    function isValidTruck(data) {
+      return data.keys().hasAll(['model', 'plate', 'ownerId', 'status']) &&
+             data.ownerId == request.auth.uid &&
+             data.model is string && data.model.size() <= 100 &&
+             data.plate is string && data.plate.size() <= 20 &&
+             data.status in ['available', 'in_transit', 'maintenance'];
+    }
+
+    function isValidLoad(data) {
+      return data.keys().hasAll(['origin', 'destination', 'material', 'carrierId', 'status']) &&
+             data.carrierId == request.auth.uid &&
+             data.origin is string && data.origin.size() <= 200 &&
+             data.destination is string && data.destination.size() <= 200 &&
+             data.status is string;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'title', 'message', 'createdAt', 'read']) &&
+             data.userId == request.auth.uid &&
+             data.title is string && data.title.size() <= 200 &&
+             data.createdAt == request.time &&
+             data.read is bool;
+    }
+
+    // ---------------------------------------------------------
+    // MATCH BLOCKS
+    // ---------------------------------------------------------
+    
+    // Default Deny
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // --- Helpers ---
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    // --- Entities Validation ---
-
-    function isValidUser(data) {
-      return (!('name' in data) || (data.name is string && data.name.size() <= 200)) &&
-             (!('userName' in data) || (data.userName is string && data.userName.size() <= 200)) &&
-             (!('email' in data) || (data.email is string && data.email.size() <= 100)) &&
-             (!('type' in data) || (data.type in ['buyer', 'supplier', 'logistics'])) &&
-             (!('uid' in data) || (data.uid == request.auth.uid)) &&
-             (!('bio' in data) || (data.bio is string && data.bio.size() <= 1000)) &&
-             (!('phone' in data) || (data.phone is string && data.phone.size() <= 50)) &&
-             (!('address' in data) || (data.address is string && data.address.size() <= 500)) &&
-             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 3000)) &&
-             (!('coverURL' in data) || (data.coverURL is string && data.coverURL.size() <= 3000)) &&
-             (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
-             (!('nuit' in data) || (data.nuit is string && data.nuit.size() <= 50)) &&
-             (!('sector' in data) || (data.sector is string && data.sector.size() <= 100)) &&
-             (!('fleetSize' in data) || (data.fleetSize == null || (data.fleetSize is string && data.fleetSize.size() <= 50))) &&
-             (!('specialization' in data) || (data.specialization == null || (data.specialization is string && data.specialization.size() <= 200))) &&
-             (!('catalogItems' in data) || (data.catalogItems is list)) &&
-             (!('createdAt' in data) || (data.createdAt is timestamp || data.createdAt == request.time)) &&
-             (!('updatedAt' in data) || (data.updatedAt is timestamp || data.updatedAt == request.time));
-    }
-
-    function isValidProduct(data) {
-      return data.keys().hasAll(['supplierId', 'name', 'category', 'price']) &&
-             data.supplierId == request.auth.uid &&
-             data.name is string && data.name.size() <= 200 &&
-             data.price is number && data.price >= 0 &&
-             (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
-             (!('image' in data) || (data.image is string && data.image.size() <= 3000000)) &&
-             (!('createdAt' in data) || (data.createdAt is timestamp)) &&
-             (!('updatedAt' in data) || (data.updatedAt is timestamp));
-    }
-
-    function isChatParticipant(participants) {
-      return isSignedIn() && participants.hasAny([request.auth.uid]);
-    }
-
-    function isValidChatMessage(data) {
-      return data.senderId == request.auth.uid &&
-             data.text is string && data.text.size() <= 5000 &&
-             (!('fileUrl' in data) || (data.fileUrl is string && data.fileUrl.size() <= 3000)) &&
-             (!('fileType' in data) || (data.fileType is string && data.fileType.size() <= 100)) &&
-             (!('fileName' in data) || (data.fileName is string && data.fileName.size() <= 500)) &&
-             (data.createdAt == request.time || data.createdAt is timestamp);
-    }
-
-    // --- Rules ---
-
     match /users/{userId} {
-      // Profiles are publicly readable for authenticated users
-      allow read: if request.auth != null;
-      
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
       allow create: if isOwner(userId) && 
-                    incoming().keys().hasAll(['name', 'email', 'type']) &&
-                    isValidUser(incoming()) && 
-                    (!('createdAt' in incoming()) || incoming().createdAt == request.time);
-      
+                       incoming().keys().hasAll(['uid', 'email', 'name', 'type']) &&
+                       isValidUser(incoming());
       allow update: if isOwner(userId) && isValidUser(incoming()) && (
-        // Action: Update Profile
-        (!('updatedAt' in incoming()) || incoming().updatedAt == request.time) &&
+        // Action: Profile Update or Presence Update
         incoming().diff(existing()).affectedKeys().hasOnly([
-          'name', 'userName', 'phone', 'address', 'bio', 'city', 'photoURL', 'coverURL', 
-          'sector', 'nuit', 'updatedAt', 'type', 'createdAt', 'email', 'uid', 'fleetSize', 'specialization', 'catalogItems'
+          'name', 'phone', 'address', 'city', 'bio', 'sector', 'photoURL', 'coverURL', 
+          'updatedAt', 'status', 'lastActive', 'fleetSize', 'specialization', 'userName', 'nuit'
         ])
       );
     }
 
-    match /products/{productId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidProduct(incoming()) && isValidId(productId);
-      allow update: if isSignedIn() && existing().supplierId == request.auth.uid && isValidProduct(incoming());
-      allow delete: if isSignedIn() && existing().supplierId == request.auth.uid;
-    }
-
-    match /orders/{orderId} {
-      allow read: if isSignedIn() && (existing().buyerId == request.auth.uid || existing().supplierId == request.auth.uid);
-      allow create: if isSignedIn() && incoming().buyerId == request.auth.uid;
-      // Partial updates for status changes
-      allow update: if isSignedIn() && 
-                    (existing().buyerId == request.auth.uid || existing().supplierId == request.auth.uid) &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
-    }
-
     match /chats/{chatId} {
-      allow get, list: if isChatParticipant(resource.data.participants);
-      allow create: if isSignedIn() && 
-                      incoming().get('participants', []) is list &&
-                      incoming().get('participants', []).size() == 2 &&
-                      isChatParticipant(incoming().get('participants', []));
-      
-      allow update: if isChatParticipant(resource.data.participants) && 
-                    incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastMessageSenderId', 'updatedAt']);
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow get: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() && isValidChat(incoming());
+      allow update: if isSignedIn() && request.auth.uid in existing().participants && (
+        // Action: Last Message Sync
+        incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastMessageSenderId', 'updatedAt', 'participantNames'])
+      );
 
       match /messages/{messageId} {
-        allow read: if isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
-        allow create: if isSignedIn() && isValidChatMessage(incoming()) &&
-                      isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
+        allow get: if isSignedIn() && request.auth.uid in resource.data.participants;
+        allow create: if isSignedIn() && isValidMessage(incoming());
       }
     }
 
+    match /products/{productId} {
+      allow read: if true; // Marketplace is public
+      allow create: if isSignedIn() && isValidProduct(incoming());
+      allow update: if isSignedIn() && existing().supplierId == request.auth.uid && isValidProduct(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'price', 'unit', 'category', 'image', 'stock', 'updatedAt', 'minOrder', 'supplierName'])
+      );
+      allow delete: if isSignedIn() && existing().supplierId == request.auth.uid;
+    }
+
     match /trucks/{truckId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && incoming().ownerId == request.auth.uid;
-      allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidTruck(incoming());
+      allow update: if isSignedIn() && existing().ownerId == request.auth.uid && isValidTruck(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['model', 'plate', 'type', 'capacity', 'status'])
+      );
+      allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
     }
 
     match /loads/{loadId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && incoming().carrierId == request.auth.uid;
-      allow update, delete: if isSignedIn() && resource.data.carrierId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.carrierId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.carrierId == request.auth.uid;
+      allow create: if isSignedIn() && isValidLoad(incoming());
+      allow update: if isSignedIn() && existing().carrierId == request.auth.uid && isValidLoad(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'truckId', 'updatedAt'])
+      );
+    }
+
+    match /notifications/{notificationId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidNotification(incoming());
+      allow update: if isSignedIn() && existing().userId == request.auth.uid && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['read'])
+      );
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
     }
   }
 }

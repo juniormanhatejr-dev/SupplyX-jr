@@ -13,6 +13,8 @@ import {
   User
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useNotifications } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard' },
@@ -37,6 +39,8 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, isDarkMode, language, userType, onLogout }: SidebarProps) {
+  const { unreadCount } = useNotifications();
+  const { profile } = useAuth();
   const translations = {
     PT: {
       dashboard: 'Dashboard',
@@ -127,10 +131,29 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
                   ? 'bg-supplyx-blue text-white shadow-2xl shadow-blue-500/20' 
                   : isDarkMode ? 'text-zinc-500 hover:bg-white/5 hover:text-white' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}`}
             >
-              <item.icon className={`w-5 h-5 transition-transform group-hover:scale-110 ${isActive ? 'text-white' : 'text-supplyx-blue'}`} />
+              {item.originalLabel === 'Meu Perfil' && profile?.photoURL ? (
+                <div className={`w-5 h-5 rounded-lg overflow-hidden border transition-transform group-hover:scale-110 ${isActive ? 'border-white/50' : 'border-supplyx-blue/30'}`}>
+                  <img 
+                    src={profile.photoURL} 
+                    alt="Profile" 
+                    className="w-full h-full object-cover" 
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              ) : (
+                <item.icon className={`w-5 h-5 transition-transform group-hover:scale-110 ${isActive ? 'text-white' : 'text-supplyx-blue'}`} />
+              )}
               {item.label}
               {isActive && (
                 <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              )}
+              {item.originalLabel === 'Mensagens' && unreadCount > 0 && (
+                <div className="absolute right-4 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[8px] font-black animate-bounce shadow-lg shadow-red-500/20">
+                  {unreadCount}
+                </div>
+              )}
+              {item.originalLabel === 'Notificações' && unreadCount > 0 && (
+                <div className="absolute right-4 w-2 h-2 rounded-full bg-red-500 animate-pulse border border-white" />
               )}
             </button>
           );

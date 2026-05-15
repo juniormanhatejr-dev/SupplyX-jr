@@ -1,8 +1,8 @@
 {
   "entities": {
-    "UserProfile": {
+    "User": {
       "title": "User Profile",
-      "description": "Stores profile information for buyers and suppliers.",
+      "description": "Represents a user in the SupplyX platform (Buyer, Supplier, or Logistics).",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
@@ -14,149 +14,143 @@
         "email": { "type": "string" },
         "type": { "type": "string", "enum": ["buyer", "supplier", "logistics"] },
         "sector": { "type": "string" },
-        "fleetSize": { "type": "string" },
-        "specialization": { "type": "string" },
-        "phone": { "type": "string" },
-        "address": { "type": "string" },
+        "city": { "type": "string" },
         "bio": { "type": "string" },
         "photoURL": { "type": "string" },
         "coverURL": { "type": "string" },
-        "city": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "status": { "type": "string" },
+        "lastActive": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "fleetSize": { "type": "string" },
+        "specialization": { "type": "string" }
       },
       "required": ["uid", "name", "email", "type"]
     },
-    "Order": {
-      "title": "Order",
-      "description": "Construction material order records.",
-      "type": "object",
-      "properties": {
-        "buyerId": { "type": "string" },
-        "supplierId": { "type": "string" },
-        "items": { 
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "material": { "type": "string" },
-              "quantity": { "type": "string" },
-              "unit": { "type": "string" },
-              "price": { "type": "number" }
-            }
-          }
-        },
-        "total": { "type": "number" },
-        "status": { "type": "string", "enum": ["pending", "processing", "shipped", "delivered", "canceled"] },
-        "createdAt": { "type": "string", "format": "date-time" }
-      }
-    },
-    "Product": {
-      "title": "Product",
-      "description": "Stock items and materials listed by suppliers.",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "supplierId": { "type": "string" },
-        "name": { "type": "string" },
-        "description": { "type": "string" },
-        "category": { "type": "string" },
-        "price": { "type": "number" },
-        "onSale": { "type": "boolean" },
-        "salePrice": { "type": "number" },
-        "stock": { "type": "number" },
-        "image": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["id", "supplierId", "name", "category", "price"]
-    },
-    "ChatRoom": {
+    "Chat": {
       "title": "Chat Room",
-      "description": "B2B conversation between buyer and supplier.",
+      "description": "Conversation between two or more participants.",
       "type": "object",
       "properties": {
         "participants": { "type": "array", "items": { "type": "string" } },
         "lastMessage": { "type": "string" },
         "lastMessageSenderId": { "type": "string" },
-        "updatedAt": { "type": "string", "format": "date-time" },
-        "participantNames": { "type": "object" }
-      }
+        "participantNames": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["participants", "createdAt"]
     },
-    "ChatMessage": {
+    "Message": {
       "title": "Chat Message",
-      "description": "Individual message in a chat room.",
+      "description": "Individual message within a chat room.",
       "type": "object",
       "properties": {
         "senderId": { "type": "string" },
+        "participants": { "type": "array", "items": { "type": "string" } },
         "text": { "type": "string" },
         "fileUrl": { "type": "string" },
         "fileType": { "type": "string" },
         "fileName": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
-      }
+      },
+      "required": ["senderId", "participants", "text", "createdAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Product offered by a supplier.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "unit": { "type": "string" },
+        "category": { "type": "string" },
+        "image": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "minOrder": { "type": "number" },
+        "stock": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "price", "supplierId", "createdAt"]
     },
     "Truck": {
       "title": "Truck",
-      "description": "Logistics vehicle details.",
+      "description": "Vehicle registered by a logistics partner.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "ownerId": { "type": "string" },
         "model": { "type": "string" },
         "plate": { "type": "string" },
         "type": { "type": "string" },
         "capacity": { "type": "string" },
         "status": { "type": "string", "enum": ["available", "in_transit", "maintenance"] },
+        "ownerId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "ownerId", "model", "plate", "type", "capacity", "status"]
+      "required": ["model", "plate", "ownerId"]
     },
     "Load": {
       "title": "Load",
-      "description": "Cargo shipment handled by a logistics provider.",
+      "description": "Cargo assigned to a logistics partner.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
         "origin": { "type": "string" },
         "destination": { "type": "string" },
         "material": { "type": "string" },
         "weight": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "loading", "transit", "delivered"] },
-        "truckId": { "type": "string" },
+        "status": { "type": "string" },
         "carrierId": { "type": "string" },
-        "updatedAt": { "type": "string", "format": "date-time" },
+        "truckId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["origin", "destination", "material", "carrierId"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System or user notification.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "read": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "origin", "destination", "material", "status", "carrierId"]
+      "required": ["userId", "title", "message", "createdAt"]
     }
   },
   "firestore": {
-    "/users/{userId}": {
-      "schema": "UserProfile",
-      "description": "User profile collection indexed by Firebase Auth UID."
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Profiles of registered users."
     },
-    "/orders/{orderId}": {
-      "schema": "Order",
-      "description": "Global orders collection."
+    "chats/{chatId}": {
+      "schema": "Chat",
+      "description": "Main chat room document."
     },
-    "/products/{productId}": {
+    "chats/{chatId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messages belonging to a specific chat room."
+    },
+    "products/{productId}": {
       "schema": "Product",
-      "description": "Material and product inventory."
+      "description": "Products available in the marketplace."
     },
-    "/chats/{chatId}": {
-      "schema": "ChatRoom",
-      "description": "B2B Conversations."
-    },
-    "/chats/{chatId}/messages/{messageId}": {
-      "schema": "ChatMessage",
-      "description": "Conversation messages."
-    },
-    "/trucks/{truckId}": {
+    "trucks/{truckId}": {
       "schema": "Truck",
-      "description": "Logistics fleet vehicles."
+      "description": "List of trucks available for logistics."
     },
-    "/loads/{loadId}": {
+    "loads/{loadId}": {
       "schema": "Load",
-      "description": "Active cargo shipments."
+      "description": "Active and past loads."
+    },
+    "notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications."
     }
   }
 }

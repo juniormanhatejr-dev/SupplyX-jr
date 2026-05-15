@@ -151,22 +151,23 @@ function LogisticsTrackingView({ isDarkMode, language, userType }: LogisticsView
   const t = translations[language || 'PT'];
 
   const initialShipments = useMemo(() => [
-    { id: 'LOG-001', material: language === 'PT' ? '200 Sacas de Cimento' : '200 Bags of Cement', status: t.statuses.transit, ETA: '14:30', origin: 'Votorantim PR', destination: 'Obra Alvorada', progress: 65, carrier: 'TransNacala' },
-    { id: 'LOG-002', material: language === 'PT' ? 'Vergalhão CA-50' : 'CA-50 Rebar', status: t.statuses.loading, ETA: language === 'PT' ? 'Amanhã' : 'Tomorrow', origin: 'Gerdau SP', destination: 'Obra Central', progress: 15, carrier: 'Logística Maputo' },
-    { id: 'LOG-003', material: language === 'PT' ? 'Areia e Brita' : 'Sand and Gravel', status: t.statuses.finished, ETA: language === 'PT' ? 'Entregue' : 'Delivered', origin: 'Mineradora Vale', destination: 'Obra Alvorada', progress: 100, carrier: 'Correios Moz' },
+    { id: 'LOG-001', material: language === 'PT' ? '200 Sacas de Cimento' : '200 Bags of Cement', status: t.statuses.transit, ETA: '14:30', origin: 'Porto de Maputo', destination: 'Obra Alvorada', progress: 65, carrier: 'Transportes Lalgy' },
+    { id: 'LOG-002', material: language === 'PT' ? 'Vergalhão CA-50' : 'CA-50 Rebar', status: t.statuses.loading, ETA: language === 'PT' ? 'Amanhã' : 'Tomorrow', origin: 'Matola Logística', destination: 'Obra Central', progress: 15, carrier: 'Entreposto Moz' },
+    { id: 'LOG-003', material: language === 'PT' ? 'Areia e Brita' : 'Sand and Gravel', status: t.statuses.finished, ETA: language === 'PT' ? 'Entregue' : 'Delivered', origin: 'Pedreira de Boane', destination: 'Moamba Park', progress: 100, carrier: 'J&J Transport' },
   ], [language, t]);
 
   const carriers = useMemo(() => [
-    { id: '1', name: 'TransNacala Logística', type: language === 'PT' ? 'Pesado' : 'Heavy', rating: 4.8, fleetSize: 45, coverage: language === 'PT' ? 'Nacional' : 'National', pricePerKm: 'MT 45,00', verified: true, basePrice: 12500 },
-    { id: '2', name: 'Logística Maputo', type: language === 'PT' ? 'Urbano' : 'Urban', rating: 4.9, fleetSize: 12, coverage: language === 'PT' ? 'Sul' : 'South', pricePerKm: 'MT 55,00', verified: true, basePrice: 8900 },
-    { id: '3', name: 'Beira Express', type: language === 'PT' ? 'Contêiner' : 'Container', rating: 4.5, fleetSize: 80, coverage: language === 'PT' ? 'Centro/Norte' : 'Central/North', pricePerKm: 'MT 42,00', verified: true, basePrice: 15750 },
+    { id: '1', name: 'Transportes Lalgy', type: language === 'PT' ? 'Pesado' : 'Heavy', rating: 4.8, fleetSize: 1500, coverage: language === 'PT' ? 'Nacional' : 'National', pricePerKm: 'MT 45,00', verified: true, basePrice: 12500 },
+    { id: '2', name: 'Entreposto Moz', type: language === 'PT' ? 'Logística' : 'Logistics', rating: 4.9, fleetSize: 120, coverage: language === 'PT' ? 'Sul/Centro' : 'South/Central', pricePerKm: 'MT 55,00', verified: true, basePrice: 8900 },
+    { id: '3', name: 'J&J Transport', type: language === 'PT' ? 'Portuário' : 'Port', rating: 4.5, fleetSize: 500, coverage: language === 'PT' ? 'Beira/Tete' : 'Beira/Tete', pricePerKm: 'MT 42,00', verified: true, basePrice: 15750 },
+    { id: '4', name: 'Zitamar Logística', type: language === 'PT' ? 'Urbano' : 'Urban', rating: 4.6, fleetSize: 45, coverage: language === 'PT' ? 'Maputo/Matola' : 'Maputo/Matola', pricePerKm: 'MT 60,00', verified: true, basePrice: 5500 },
   ], [language]);
 
   const truckTypes = useMemo(() => [
-    { id: 'vuc', name: 'VUC', capacity: '3t', icon: Truck, description: language === 'PT' ? 'Ideal para centros urbanos' : 'Ideal for urban centers' },
-    { id: 'toco', name: 'Toco', capacity: '6t', icon: Truck, description: language === 'PT' ? 'Cargas médias' : 'Medium loads' },
-    { id: 'truck', name: 'Truck', capacity: '12-14t', icon: Truck, description: language === 'PT' ? 'Cargas pesadas' : 'Heavy loads' },
-    { id: 'carreta', name: 'Carreta', capacity: '25-30t', icon: Truck, description: language === 'PT' ? 'Grandes volumes' : 'Large volumes' },
+    { id: 'vuc', name: 'VUC', capacity: '3t', icon: Truck, description: language === 'PT' ? 'Ideal para Matola e Maputo' : 'Ideal for Matola and Maputo' },
+    { id: 'toco', name: 'Toco', capacity: '6t', icon: Truck, description: language === 'PT' ? 'Cargas médias inter-provinciais' : 'Medium inter-provincial loads' },
+    { id: 'truck', name: 'Truck', capacity: '12-14t', icon: Truck, description: language === 'PT' ? 'Cargas pesadas nacionais' : 'National heavy loads' },
+    { id: 'carreta', name: 'Carreta', capacity: '25-30t', icon: Truck, description: language === 'PT' ? 'Corredor da Beira / Nacala' : 'Beira / Nacala Corridor' },
   ], [language]);
 
   const [allShipments, setAllShipments] = useState(initialShipments);
@@ -175,10 +176,10 @@ function LogisticsTrackingView({ isDarkMode, language, userType }: LogisticsView
   const [selectedShipment, setSelectedShipment] = useState<any>(initialShipments[0]);
 
   const timelineSteps = [
-    { label: language === 'PT' ? 'Saída do Depósito' : 'Warehouse Exit', status: 'completed', time: '08:00', location: 'Nacala Logistics Hub' },
-    { label: language === 'PT' ? 'Posto de Controle A1' : 'Checkpoint A1', status: 'completed', time: '10:30', location: 'BR-101 North' },
-    { label: language === 'PT' ? 'Em Trânsito' : 'In Transit', status: 'current', time: '12:45', location: 'Cruising at 80km/h' },
-    { label: language === 'PT' ? 'Entrega Estimada' : 'Estimated Delivery', status: 'pending', time: '14:30', location: 'Maputo Central' },
+    { label: language === 'PT' ? 'Saída do Depósito' : 'Warehouse Exit', status: 'completed', time: '08:00', location: 'Porto de Maputo' },
+    { label: language === 'PT' ? 'Posto de Controle A1' : 'Checkpoint A1', status: 'completed', time: '10:30', location: 'Estrada Circular' },
+    { label: language === 'PT' ? 'Em Trânsito' : 'In Transit', status: 'current', time: '12:45', location: 'Cruzando Boane' },
+    { label: language === 'PT' ? 'Entrega Estimada' : 'Estimated Delivery', status: 'pending', time: '14:30', location: 'Matola Hub' },
   ];
 
   const archiveCompleted = () => {
@@ -926,13 +927,19 @@ function LogisticsPartnerDashboard({ isDarkMode, language }: { isDarkMode: boole
       const truckList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TruckData));
       setTrucks(truckList);
       setIsLoading(false);
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'trucks'));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'trucks');
+      setIsLoading(false);
+    });
 
     const loadsQuery = query(collection(db, 'loads'), where('carrierId', '==', auth.currentUser.uid));
     const unsubscribeLoads = onSnapshot(loadsQuery, (snapshot) => {
       const loadList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LoadData));
       setLoads(loadList);
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'loads'));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'loads');
+      setIsLoading(false);
+    });
 
     return () => {
       unsubscribeTrucks();
@@ -1158,7 +1165,7 @@ function AddTruckModal({ isDarkMode, language, onClose }: { isDarkMode: boolean,
               value={formData.model}
               onChange={e => setFormData({ ...formData, model: e.target.value })}
               className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-100'}`}
-              placeholder="Ex: Mercedes-Benz Actros"
+              placeholder="Ex: Volvo FH / Scania R500"
             />
           </div>
           <div className="space-y-1.5 text-left">
@@ -1168,7 +1175,7 @@ function AddTruckModal({ isDarkMode, language, onClose }: { isDarkMode: boolean,
               value={formData.plate}
               onChange={e => setFormData({ ...formData, plate: e.target.value })}
               className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-100'}`}
-              placeholder="Ex: AFM 123 MP"
+              placeholder="Ex: ABC 123 MC"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">

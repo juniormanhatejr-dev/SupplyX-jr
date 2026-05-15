@@ -211,7 +211,7 @@ export default function SupplierDashboard({ isDarkMode, language, onNavigate }: 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: t.kpis.totalSales, value: 'MT 45.8K', trend: '+12.5%', icon: DollarSign, color: 'text-emerald-500' },
-          { label: t.kpis.unitsSold, value: '1,240', trend: '+8.2%', icon: ShoppingCart, color: 'text-brand' },
+          { label: t.kpis.unitsSold, value: '1,240', trend: '+8.2%', icon: Package, color: 'text-brand' },
           { label: t.kpis.pageViews, value: '8.4K', trend: '+24.1%', icon: Eye, color: 'text-blue-500' },
           { label: t.kpis.buyBox, value: '92%', trend: '-2.1%', icon: Award, color: 'text-amber-500' },
         ].map((kpi, i) => (

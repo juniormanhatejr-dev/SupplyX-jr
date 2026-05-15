@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import ProfileModal from './ProfileModal';
 import { OptimizedImage } from './ui/OptimizedImage';
+import UserPresenceIndicator from './UserPresenceIndicator';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { 
   collection, 
@@ -135,6 +136,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
         },
         lastMessage: 'Nova conversa iniciada',
         lastMessageSenderId: auth.currentUser.uid,
+        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
       const docRef = await addDoc(collection(db, 'chats'), chatData);
@@ -220,6 +222,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
 
     const q = query(
       collection(db, `chats/${activeRoom.id}/messages`),
+      where('participants', 'array-contains', auth.currentUser.uid),
       orderBy('createdAt', 'asc'),
       limit(100)
     );
@@ -249,6 +252,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     try {
       await addDoc(collection(db, `chats/${activeRoom.id}/messages`), {
         senderId: auth.currentUser.uid,
+        participants: activeRoom.participants, // Added for Rule Pillar 8 compliance
         text,
         createdAt: serverTimestamp()
       });
@@ -277,6 +281,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
       
       await addDoc(collection(db, `chats/${activeRoom.id}/messages`), {
         senderId: auth.currentUser.uid,
+        participants: activeRoom.participants, // Added for Rule Pillar 8 compliance
         text: isImage ? `[Imagem: ${file.name}]` : `[Arquivo: ${file.name}]`,
         fileUrl: url,
         fileType: file.type,
@@ -390,9 +395,17 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
               <div className="flex-1 text-left min-w-0">
                 <div className="flex justify-between items-center mb-0.5">
                   <span className="text-sm font-black truncate">{getOtherParticipantName(room)}</span>
-                  <span className="text-[10px] text-zinc-500">
-                    {room.updatedAt?.toDate ? new Date(room.updatedAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] text-zinc-500">
+                      {room.updatedAt?.toDate ? new Date(room.updatedAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </span>
+                    <UserPresenceIndicator 
+                      userId={getOtherParticipantId(room)} 
+                      language={language}
+                      showLastSeen={false}
+                      className="text-[10px] font-black uppercase tracking-tight"
+                    />
+                  </div>
                 </div>
                 <p className="text-xs text-zinc-500 truncate">{room.lastMessage || t.startChat}</p>
               </div>
@@ -440,7 +453,12 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                   </div>
                   <div>
                     <h3 className="text-sm font-black group-hover:text-brand transition-colors">{getOtherParticipantName(activeRoom)}</h3>
-                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">{t.online}</p>
+                    {activeRoom && (
+                      <UserPresenceIndicator 
+                        userId={getOtherParticipantId(activeRoom)} 
+                        language={language}
+                      />
+                    )}
                   </div>
                 </div>
               </div>

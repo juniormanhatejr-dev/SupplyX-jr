@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, Plus, Moon, Sun, Globe, Loader2, ShoppingCart, User } from 'lucide-react';
+import { Menu, Plus, Moon, Sun, Globe, Loader2, ShoppingCart, User, MessageSquare } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
 import ProductsView from './components/ProductsView';
@@ -23,10 +23,15 @@ import { useCart } from './contexts/CartContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { auth } from './lib/firebase';
+import { presenceService } from './services/presenceService';
+
+import { useNotifications } from './contexts/NotificationContext';
 
 export default function App() {
   const isOnline = useOnlineStatus();
   const { user, profile, loading, refreshProfile } = useAuth();
+  
+  const { unreadCount: totalUnreadMessages } = useNotifications();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [showQuoteFormDirectly, setShowQuoteFormDirectly] = useState(false);
@@ -251,8 +256,7 @@ export default function App() {
   };
 
   return (
-    <NotificationProvider isDarkMode={isDarkMode} language={language}>
-      <div className={`min-h-screen transition-colors duration-500 relative overflow-hidden ${isDarkMode ? 'dark bg-supplyx-deep' : 'bg-zinc-50'}`}>
+    <div className={`min-h-screen transition-colors duration-500 relative overflow-hidden ${isDarkMode ? 'dark bg-supplyx-deep' : 'bg-zinc-50'}`}>
         {/* Background Ambience */}
         <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-0">
           <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-supplyx-blue/5 blur-[120px] rounded-full animate-pulse-slow" />
@@ -338,6 +342,20 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-2 sm:gap-4">
+                  <button 
+                    onClick={() => setActiveTab('Mensagens')}
+                    className={`w-12 h-12 flex items-center justify-center rounded-2xl border transition-all relative group shadow-xl ${
+                      isDarkMode ? 'bg-supplyx-dark border-white/5 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
+                    }`}
+                  >
+                    <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    {totalUnreadMessages > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-black flex items-center justify-center rounded-full border-2 border-supplyx-deep animate-bounce shadow-lg shadow-red-500/20">
+                        {totalUnreadMessages}
+                      </span>
+                    )}
+                  </button>
+
                   <NotificationCenter 
                     isDarkMode={isDarkMode} 
                     language={language} 
@@ -345,29 +363,15 @@ export default function App() {
                     onViewAll={() => setActiveTab('Notificações')}
                   />
                   
-                  {profile?.type === 'buyer' && (
-                    <button 
-                      onClick={() => setIsCartOpen(true)}
-                      className={`w-12 h-12 flex items-center justify-center rounded-2xl border transition-all relative group shadow-xl ${
-                        isDarkMode ? 'bg-supplyx-dark border-white/5 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
-                      }`}
-                    >
-                      <ShoppingCart className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                      {items.length > 0 && (
-                        <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-supplyx-blue text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-supplyx-deep">
-                          {items.length}
-                        </span>
-                      )}
-                    </button>
-                  )}
-
                   <button 
                     onClick={() => {
                       setSelectedProfileId(auth.currentUser?.uid || null);
                       setIsProfileModalOpen(true);
                     }}
-                    className={`w-12 h-12 flex items-center justify-center rounded-2xl border transition-all overflow-hidden relative group shadow-xl ${
-                      isDarkMode ? 'bg-supplyx-dark border-white/5' : 'bg-white border-zinc-200'
+                    className={`w-11 h-11 flex items-center justify-center rounded-2xl border-2 transition-all overflow-hidden relative group shadow-2xl ${
+                      isDarkMode 
+                        ? 'bg-supplyx-dark border-white/10 hover:border-supplyx-blue/50 shadow-supplyx-blue/5' 
+                        : 'bg-white border-zinc-200 hover:border-supplyx-blue/30 shadow-zinc-200/50'
                     }`}
                   >
                     {profile?.photoURL ? (
@@ -375,13 +379,14 @@ export default function App() {
                         src={profile.photoURL} 
                         alt={profile.name} 
                         className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                        referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-supplyx-blue/10 text-supplyx-blue font-black italic text-xs">
-                        {profile?.name?.charAt(0)}
+                      <div className="w-full h-full flex items-center justify-center bg-supplyx-blue/10 text-supplyx-blue font-black italic text-base">
+                        {profile?.name?.charAt(0) || <User className="w-5 h-5" />}
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-supplyx-blue/0 group-hover:bg-supplyx-blue/10 transition-colors" />
+                    <div className="absolute inset-0 bg-supplyx-blue/0 group-hover:bg-supplyx-blue/5 transition-colors" />
                   </button>
                 </div>
               </div>
@@ -416,6 +421,5 @@ export default function App() {
           />
         </main>
       </div>
-    </NotificationProvider>
-  );
+    );
 }

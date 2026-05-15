@@ -7,15 +7,18 @@ import { MessageSquare, Bell, X } from 'lucide-react';
 interface NotificationContextType {
   permission: NotificationPermission;
   requestPermission: () => Promise<void>;
+  unreadCount: number;
+  totalNotifications: number;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkMode: boolean; language: 'PT' | 'EN' }> = ({ children, isDarkMode, language }) => {
+export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkMode?: boolean; language?: 'PT' | 'EN' }> = ({ children, isDarkMode = true, language = 'PT' }) => {
   const [permission, setPermission] = useState<NotificationPermission>(
     typeof window !== 'undefined' ? Notification.permission : 'default'
   );
   const [activeNotification, setActiveNotification] = useState<{ title: string; body: string; chatId: string } | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -41,6 +44,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
 
     let isInitialLoad = true;
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      let count = 0;
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.unreadCount && data.unreadCount[currentUserId] > 0) {
+          count += data.unreadCount[currentUserId];
+        }
+      });
+      setUnreadCount(count);
+
       if (isInitialLoad) {
         isInitialLoad = false;
         return;
@@ -64,6 +76,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
           }
         }
       });
+    }, (error) => {
+      console.error("Notification Sync Error:", error);
     });
 
     return () => unsubscribe();
@@ -87,7 +101,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
   };
 
   return (
-    <NotificationContext.Provider value={{ permission, requestPermission }}>
+    <NotificationContext.Provider value={{ permission, requestPermission, unreadCount, totalNotifications: unreadCount }}>
       {children}
       
       <AnimatePresence>

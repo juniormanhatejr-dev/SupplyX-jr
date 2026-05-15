@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Info } from 'lucide-react';
 import { useState } from 'react';
+import { useNotifications } from '../contexts/NotificationContext';
 
 interface Notification {
   id: string;
@@ -22,6 +23,7 @@ interface NotificationCenterProps {
 }
 
 export default function NotificationCenter({ isDarkMode, language, onViewAll, userType }: NotificationCenterProps) {
+  const { unreadCount: unreadMessages } = useNotifications();
   const getMockNotifications = (lang: 'PT' | 'EN'): Notification[] => [
     // Buyer
     {
@@ -86,6 +88,7 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
   const activeNotifications = getMockNotifications(language);
   const filtered = activeNotifications.filter(n => n.userType === 'both' || !n.userType || n.userType === userType);
   const [notifications, setNotifications] = useState(filtered);
+  const totalUnread = notifications.filter(n => !n.isRead).length + unreadMessages;
 
   const t = {
     PT: {
@@ -127,10 +130,10 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
           isDarkMode ? 'bg-supplyx-dark border-white/5 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
         }`}
       >
-        <Bell className={`w-5 h-5 transition-colors ${unreadCount > 0 ? 'text-supplyx-blue animate-pulse-slow' : ''}`} />
-        {unreadCount > 0 && (
+        <Bell className={`w-5 h-5 transition-colors ${totalUnread > 0 ? 'text-supplyx-blue animate-pulse-slow' : ''}`} />
+        {totalUnread > 0 && (
           <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-supplyx-blue text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-supplyx-deep">
-            {unreadCount}
+            {totalUnread}
           </span>
         )}
       </button>

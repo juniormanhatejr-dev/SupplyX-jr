@@ -322,8 +322,21 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   };
 
   const [rows, setRows] = useState([
-    { id: Date.now(), material: '', quantity: '', unit: 'Unid.', date: new Date().toISOString().split('T')[0] }
+    { id: Date.now(), code: 'MAT-101', material: '', quantity: '1', unit: 'Unid.', price: '0', discCmr: '0', discFnc: '0', vat: '16', vatIncluded: true, subtotal: '0', date: new Date().toISOString().split('T')[0] }
   ]);
+
+  const updateSubtotal = (row: any) => {
+    const qty = parseFloat(row.quantity) || 0;
+    const price = parseFloat(row.price) || 0;
+    const dCmr = parseFloat(row.discCmr) || 0;
+    const dFnc = parseFloat(row.discFnc) || 0;
+    const vat = parseFloat(row.vat) || 16;
+    
+    const base = qty * price;
+    const discounted = base * (1 - dCmr/100) * (1 - dFnc/100);
+    const final = row.vatIncluded ? discounted : discounted * (1 + vat/100);
+    return final.toFixed(2);
+  };
 
   const exportToExcel = () => {
     // Ensure we have data
@@ -453,7 +466,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     }
   };
 
-  const updateRow = (id: number, field: string, value: string) => {
+  const updateRow = (id: number, field: string, value: any) => {
     setRows(rows.map(r => r.id === id ? { ...r, [field]: value } : r));
   };
 
@@ -972,23 +985,58 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           <AnimatePresence mode="wait">
             {step === 1 && (
               <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex-grow flex flex-col">
+                {/* Quotation Header Info */}
+                <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-6 rounded-2xl border-2 border-dashed ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-gray-50 border-gray-100'}`}>
+                   <div>
+                      <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1">{language === 'PT' ? 'Requisição #' : 'Requisition #'}</p>
+                      <p className={`text-sm font-black italic ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>RQ-{Math.floor(Date.now()/100000)}</p>
+                   </div>
+                   <div>
+                      <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1">{language === 'PT' ? 'Data de Emissão' : 'Issue Date'}</p>
+                      <p className={`text-sm font-black italic ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{new Date().toLocaleDateString()}</p>
+                   </div>
+                   <div>
+                      <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1">{language === 'PT' ? 'Cliente / NUIT' : 'Client / NUIT'}</p>
+                      <p className={`text-sm font-black italic ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{profile?.name?.substring(0, 15)}... / {profile?.nuit || '---'}</p>
+                   </div>
+                   <div>
+                      <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1">{language === 'PT' ? 'Status Planilha' : 'Sheet Status'}</p>
+                      <span className="px-2 py-0.5 bg-brand/10 text-brand text-[10px] font-black uppercase rounded-lg italic">Draft / Edição</span>
+                   </div>
+                </div>
+
                 <div className="flex flex-col lg:flex-row gap-8 mb-8">
                   <div className={`flex-grow overflow-x-auto border rounded-[32px] ${isDarkMode ? 'border-zinc-800 bg-zinc-950 shadow-3xl' : 'border-zinc-100 bg-white shadow-xl shadow-zinc-200/50'} relative`}>
-                    <table className="w-full text-left border-collapse min-w-[800px] table-fixed">
+                    <table className="w-full text-left border-collapse min-w-[1200px] table-fixed">
                       <thead className={`${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-100'} border-b sticky top-0 z-20`}>
                         <tr>
-                          <th className="px-6 py-6 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] w-20 text-center">#</th>
-                          <th className="px-6 py-6 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] w-auto">{t.headers.material}</th>
-                          <th className="px-6 py-6 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] w-32 text-center">{t.headers.qty}</th>
-                          <th className="px-6 py-6 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] w-48">{t.headers.need}</th>
-                          <th className="px-6 pr-8 w-16 text-center"></th>
+                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-12 text-center">#</th>
+                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-24">{language === 'PT' ? 'Código' : 'Code'}</th>
+                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-64">{t.headers.material}</th>
+                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-20 text-center">{t.headers.qty}</th>
+                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-24 text-center">{language === 'PT' ? 'Unid.' : 'Unit'}</th>
+                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-28 text-right">{language === 'PT' ? 'Preço Unit.' : 'Unit Price'}</th>
+                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-20 text-center">Desc Cmr</th>
+                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-20 text-center">Desc Fnc</th>
+                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-20 text-center">IVA %</th>
+                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-20 text-center">Inc?</th>
+                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-32 text-right">Sub Total</th>
+                          <th className="px-4 pr-6 w-12"></th>
                         </tr>
                       </thead>
                       <tbody className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-zinc-50'}`}>
                         {rows.map((row, index) => (
                           <tr key={row.id} className={`${isDarkMode ? 'hover:bg-supplyx-blue/5' : 'hover:bg-zinc-50/50'} group transition-colors duration-300`}>
-                            <td className="px-6 py-6 font-mono text-[11px] font-bold text-zinc-500 text-center">{index + 1}</td>
-                            <td className="px-6 py-6">
+                            <td className="px-4 py-4 font-mono text-[10px] font-bold text-zinc-500 text-center">{index + 1}</td>
+                            <td className="px-4 py-4">
+                               <input 
+                                 type="text" 
+                                 value={row.code}
+                                 onChange={(e) => updateRow(row.id, 'code', e.target.value)}
+                                 className={`w-full bg-transparent border-none text-[11px] font-black uppercase italic outline-none ${isDarkMode ? 'text-zinc-600' : 'text-zinc-400'}`}
+                               />
+                            </td>
+                            <td className="px-4 py-4">
                               <MaterialComboBox 
                                 value={row.material} 
                                 onChange={(val) => updateRow(row.id, 'material', val)}
@@ -997,26 +1045,69 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                 language={language}
                               />
                             </td>
-                            <td className="px-6 py-6">
-                               <div className="flex justify-center">
-                                  <input 
-                                    type="text" 
-                                    value={row.quantity} 
-                                    onChange={(e) => updateRow(row.id, 'quantity', e.target.value)}
-                                    className={`w-full bg-transparent border-none text-center text-sm font-black italic outline-none transition-all ${isDarkMode ? 'text-supplyx-blue placeholder-zinc-800' : 'text-zinc-900 placeholder-zinc-300'}`}
-                                    placeholder="0.00"
-                                  />
-                               </div>
+                            <td className="px-4 py-4">
+                               <input 
+                                 type="text" 
+                                 value={row.quantity} 
+                                 onChange={(e) => updateRow(row.id, 'quantity', e.target.value)}
+                                 className={`w-full bg-transparent border-none text-center text-[13px] font-black italic outline-none transition-all ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-900'}`}
+                               />
                             </td>
-                            <td className="px-6 py-6">
-                              <input 
-                                type="date" value={row.date} onChange={(e) => updateRow(row.id, 'date', e.target.value)}
-                                className={`w-full bg-transparent border-none text-[10px] font-black uppercase tracking-widest outline-none transition-colors ${isDarkMode ? 'text-zinc-500 focus:text-brand' : 'text-zinc-400 focus:text-brand'}`}
-                              />
+                            <td className="px-4 py-4">
+                               <select 
+                                 value={row.unit}
+                                 onChange={(e) => updateRow(row.id, 'unit', e.target.value)}
+                                 className={`w-full bg-transparent border-none text-center text-[10px] font-black uppercase italic outline-none ${isDarkMode ? 'text-zinc-500' : 'text-zinc-500'}`}
+                               >
+                                 <option value="Unid.">UN</option>
+                                 <option value="Kg">KG</option>
+                                 <option value="Barra">BR</option>
+                                 <option value="M2">M2</option>
+                                 <option value="M3">M3</option>
+                                 <option value="Saco">SAC</option>
+                               </select>
                             </td>
-                            <td className="px-6 pr-8 py-6 text-center">
-                              <button onClick={() => removeRow(row.id)} className="text-zinc-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-2 rounded-xl hover:bg-red-500/10">
-                                <Plus className="w-4 h-4 rotate-45" />
+                            <td className="px-4 py-4">
+                               <input 
+                                 type="number" 
+                                 value={row.price} 
+                                 onChange={(e) => updateRow(row.id, 'price', e.target.value)}
+                                 className={`w-full bg-transparent border-none text-right text-[13px] font-black italic outline-none ${isDarkMode ? 'text-zinc-300' : 'text-zinc-900'}`}
+                               />
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                               <input 
+                                 type="number" 
+                                 value={row.discCmr} 
+                                 onChange={(e) => updateRow(row.id, 'discCmr', e.target.value)}
+                                 className="w-full bg-transparent border-none text-center text-[11px] font-bold outline-none text-red-500"
+                               />
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                               <input 
+                                 type="number" 
+                                 value={row.discFnc} 
+                                 onChange={(e) => updateRow(row.id, 'discFnc', e.target.value)}
+                                 className="w-full bg-transparent border-none text-center text-[11px] font-bold outline-none text-blue-500"
+                               />
+                            </td>
+                            <td className="px-4 py-4 text-center text-[11px] font-bold text-zinc-500">
+                               {row.vat}%
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                               <input 
+                                 type="checkbox" 
+                                 checked={row.vatIncluded} 
+                                 onChange={(e) => updateRow(row.id, 'vatIncluded', e.target.checked)}
+                                 className="w-4 h-4 rounded border-zinc-300"
+                               />
+                            </td>
+                            <td className="px-4 py-4 text-right text-[13px] font-black text-brand italic">
+                               MT {updateSubtotal(row)}
+                            </td>
+                            <td className="px-4 pr-6 py-4 text-center">
+                              <button onClick={() => removeRow(row.id)} className="text-zinc_300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1">
+                                <X className="w-3 h-3" />
                               </button>
                             </td>
                           </tr>

@@ -182,63 +182,43 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
 
     try {
       if (mode === 'register') {
-        // Basic validation
-        const isBuyer = type === 'buyer';
-        const isNameValid = formData.name.trim().length > 0;
-        const isUserNameValid = isBuyer || formData.userName.trim().length > 0;
-        const isNuitValid = formData.nuit.trim().length > 0;
-
-        if (!isNameValid || !isUserNameValid || !isNuitValid) {
-          setError(language === 'PT' ? 'Por favor, preencha todos os campos obrigatórios (Nome, NUIT).' : 'Please fill in all required fields (Name, Tax ID).');
-          setIsLoading(false);
-          return;
-        }
-
-        if (formData.password.length < 6) {
-          setError(language === 'PT' ? 'A senha deve ter pelo menos 6 caracteres.' : 'Password must be at least 6 characters.');
-          setIsLoading(false);
-          return;
-        }
-
         const userCredential = await createUserWithEmailAndPassword(auth, formData.email.trim(), formData.password);
         const user = userCredential.user;
 
         await updateProfile(user, { displayName: formData.name });
 
-        // Save to Firestore
-        try {
-          await createProfileDoc(user.uid, {
-            name: formData.name,
-            userName: type === 'buyer' ? formData.name : formData.userName,
-            nuit: formData.nuit,
-            address: formData.address,
-            phone: formData.phone,
-            email: formData.email.trim(),
-            type: type,
-            sector: formData.sector,
-            city: formData.city,
-            fleetSize: type === 'logistics' ? formData.fleetSize : null,
-            specialization: type === 'logistics' ? formData.specialization : null,
-          });
-        } catch (err) {
-          // If Firestore fails, we still let them in but they might need to fix it later
-          // or we handle it via AuthContext or login recovery
-          console.error('Firestore creation failed during registration:', err);
-        }
+        // Garantir que temos o UID antes de prosseguir
+        if (!user.uid) throw new Error("Firebase Auth UID not found after creation.");
+
+        // Escrita no Firestore
+        await createProfileDoc(user.uid, {
+          name: formData.name,
+          userName: type === 'buyer' ? formData.name : formData.userName,
+          nuit: formData.nuit,
+          address: formData.address,
+          phone: formData.phone,
+          email: formData.email.trim(),
+          type: type,
+          sector: formData.sector,
+          city: formData.city,
+          fleetSize: type === 'logistics' ? formData.fleetSize : null,
+          specialization: type === 'logistics' ? formData.specialization : null,
+        });
       } else {
         const userCredential = await signInWithEmailAndPassword(auth, formData.email.trim(), formData.password);
         const user = userCredential.user;
 
-        // Check if profile exists, if not create a minimal one (Recovery)
+        // Recuperação de perfil se não existir
         const docRef = doc(db, 'users', user.uid);
         const docSnap = await getDoc(docRef);
         if (!docSnap.exists()) {
+          console.log("Profile not found on login, creating minimal recovery profile...");
           await createProfileDoc(user.uid, {
             name: user.displayName || 'User',
             userName: user.displayName || 'User',
             email: user.email || '',
-            type: 'buyer', // Default to buyer on recovery
-          }, false);
+            type: 'buyer',
+          }, true); // Fix: Must be isNew=true to include createdAt for the rule
         }
       }
 
@@ -357,7 +337,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
             className={`flex-1 py-3 flex flex-col items-center gap-1.5 rounded-[24px] transition-all relative ${type === 'buyer' ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-white/5 opacity-40 grayscale'}`}
           >
             <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${type === 'buyer' ? 'bg-supplyx-blue text-white' : 'bg-zinc-700/50'}`}>
-              <ShoppingCart className="w-3.5 h-3.5" />
+              <User className="w-3.5 h-3.5" />
             </div>
             <div className="text-center">
               <p className="text-[9px] font-black uppercase tracking-tight text-white">{t.buyerTitle}</p>

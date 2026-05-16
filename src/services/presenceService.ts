@@ -24,13 +24,18 @@ export const presenceService = {
     // 1. Initial ONLINE marker in Firestore (Only once at startup)
     const markOnlineFirestore = async () => {
       try {
-        console.log(`[Presence] Marking user ${userId} as ONLINE in Firestore`);
+        console.log(`[Presence DEBUG] Attempting Firestore markOnline for: ${userId}`);
+        if (!auth.currentUser || auth.currentUser.uid !== userId) {
+          throw new Error(`Auth mismatch: current=${auth.currentUser?.uid}, target=${userId}`);
+        }
         await setDoc(userProfileDocRef, {
-          status: 'online'
-          // We NO LONGER update lastSeen here to keep it "fixed" until they go offline
+          status: 'online',
+          lastSeen: firestoreTimestamp(),
+          updatedAt: firestoreTimestamp()
         }, { merge: true });
-      } catch (e) {
-        console.debug("Firestore presence setDoc fail:", e);
+        console.log(`[Presence SUCCESS] User ${userId} is now ONLINE in Firestore`);
+      } catch (e: any) {
+        console.error(`[Presence FAILURE] Firestore setDoc failed for ${userId}:`, e?.message || e);
       }
     };
 
@@ -39,7 +44,8 @@ export const presenceService = {
         console.log(`[Presence] Marking user ${userId} as OFFLINE in Firestore`);
         await setDoc(userProfileDocRef, {
           status: 'offline',
-          lastSeen: firestoreTimestamp() // This is the REAL last seen time
+          lastSeen: firestoreTimestamp(),
+          updatedAt: firestoreTimestamp()
         }, { merge: true });
       } catch (e) {
         // Ignore
@@ -49,27 +55,57 @@ export const presenceService = {
     markOnlineFirestore();
 
     // 2. RTDB Lifecycle Monitoring (The main presence authoritative source)
-    const unsubscribe = onValue(connectedRef, (snap) => {
-      if (snap.val() === false) return;
+    console.log(`[Presence DEBUG] Mounting RTDB listeners for: /status/${userId}`);
+    
+    const setupRTDB = async () => {
+      if (!auth.currentUser) return;
 
-      // When connected, set up onDisconnect to flip status to offline with a SERVER FIXED TIMESTAMP
-      onDisconnect(userStatusDatabaseRef)
-        .set({
-          state: 'offline',
-          lastChanged: serverTimestamp(),
-        })
-        .then(() => {
-          // Set live status to online
-          set(userStatusDatabaseRef, {
-            state: 'online',
+      const unsubscribe = onValue(connectedRef, (snap) => {
+        const isConnected = snap.val();
+        if (isConnected === false) return;
+
+        onDisconnect(userStatusDatabaseRef)
+          .set({
+            state: 'offline',
             lastChanged: serverTimestamp(),
+          })
+          .then(() => {
+            return set(userStatusDatabaseRef, {
+              state: 'online',
+              lastChanged: serverTimestamp(),
+            });
+          })
+          .catch((err) => {
+            if (err.message.includes("PERMISSION_DENIED")) {
+              console.warn("[Presence] RTDB Access Denied. Falling back to Firestore-only presence.");
+              // If we get permission denied, we stop trying RTDB to avoid spamming errors
+              unsubscribe();
+            }
           });
-        });
+      });
+
+      return unsubscribe;
+    };
+
+    // 3. Firestore Heartbeat (Fallback for RTDB)
+    const heartbeatInterval = setInterval(() => {
+      if (auth.currentUser && auth.currentUser.uid === userId) {
+        setDoc(userProfileDocRef, {
+          status: 'online',
+          lastActive: firestoreTimestamp(),
+          updatedAt: firestoreTimestamp()
+        }, { merge: true }).catch(() => {});
+      }
+    }, 60000); // Every minute
+
+    let rtdbUnsuscribe: (() => void) | null = null;
+    setupRTDB().then(unsub => {
+      if (unsub) rtdbUnsuscribe = unsub;
     });
 
     return () => {
-      unsubscribe();
-      // Manual cleanup when hook unmounts (e.g. app closing/tab switching)
+      if (rtdbUnsuscribe) rtdbUnsuscribe();
+      clearInterval(heartbeatInterval);
       markOfflineFirestore();
     };
   },
@@ -93,7 +129,8 @@ export const presenceService = {
     try {
       await setDoc(userProfileDocRef, {
         status: 'offline',
-        lastSeen: firestoreTimestamp()
+        lastSeen: firestoreTimestamp(),
+        updatedAt: firestoreTimestamp()
       }, { merge: true });
     } catch(err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);

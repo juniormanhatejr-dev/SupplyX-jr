@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Info } from 'lucide-react';
+import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Info, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
 
@@ -23,103 +23,67 @@ interface NotificationCenterProps {
 }
 
 export default function NotificationCenter({ isDarkMode, language, onViewAll, userType }: NotificationCenterProps) {
-  const { unreadCount: unreadMessages } = useNotifications();
-  const getMockNotifications = (lang: 'PT' | 'EN'): Notification[] => [
-    // Buyer
-    {
-      id: '1',
-      type: 'promotion',
-      titlePT: 'Promoção: Cimento CP-II',
-      titleEN: 'Promo: Cement CP-II',
-      descPT: 'Desconto de 15% para pedidos acima de 500 sacos na Maputo Sul.',
-      descEN: '15% discount for orders over 500 bags in Maputo South.',
-      time: lang === 'PT' ? '2h atrás' : '2h ago',
-      isRead: false,
-      userType: 'buyer'
-    },
-    {
-      id: '2',
-      type: 'supplier',
-      titlePT: 'Novo Fornecedor Próximo',
-      titleEN: 'New Nearby Supplier',
-      descPT: 'Ferragens Matola iniciou operações a 5km da sua localização.',
-      descEN: 'Matola Hardware started operations 5km from your location.',
-      time: lang === 'PT' ? '5h atrás' : '5h ago',
-      isRead: false,
-      userType: 'buyer'
-    },
-    // Supplier
-    {
-      id: 's1',
-      type: 'rfq',
-      titlePT: 'Nova Cotação Solicitada',
-      titleEN: 'New RFQ Requested',
-      descPT: 'Cotação solicitada para 1000 tijolos cerâmicos.',
-      descEN: 'Quote requested for 1000 ceramic bricks.',
-      time: lang === 'PT' ? '30m atrás' : '30m ago',
-      isRead: false,
-      userType: 'supplier'
-    },
-    {
-      id: 's2',
-      type: 'stock',
-      titlePT: 'Alerta de Stock Baixo',
-      titleEN: 'Low Stock Alert',
-      descPT: 'Stock de Vergalhão de 12mm abaixo do limite.',
-      descEN: '12mm Rebar stock below the limit.',
-      time: lang === 'PT' ? '3h atrás' : '3h ago',
-      isRead: false,
-      userType: 'supplier'
-    },
-    {
-      id: 's3',
-      type: 'order',
-      titlePT: 'Novo Pedido Recebido',
-      titleEN: 'New Order Received',
-      descPT: 'Você recebeu um novo pedido de "Acabamentos Elite".',
-      descEN: 'You received a new order from "Elite Finishes".',
-      time: lang === 'PT' ? '6h atrás' : '6h ago',
-      isRead: true,
-      userType: 'supplier'
-    }
-  ];
-
+  const { unreadNotifications, notifications, markNotificationAsRead } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
-  const activeNotifications = getMockNotifications(language);
-  const filtered = activeNotifications.filter(n => n.userType === 'both' || !n.userType || n.userType === userType);
-  const [notifications, setNotifications] = useState(filtered);
-  const totalUnread = notifications.filter(n => !n.isRead).length + unreadMessages;
+  
+  const totalUnread = unreadNotifications;
 
   const t = {
     PT: {
       title: 'Notificações',
       markRead: 'Lidas',
       empty: 'Sem novas atualizações',
-      viewAll: 'Ver Todas as Notificações'
+      viewAll: 'Ver Todas as Notificações',
+      justNow: 'Agora',
+      ago: 'atrás'
     },
     EN: {
       title: 'Notifications',
       markRead: 'Read',
       empty: 'No new updates',
-      viewAll: 'View All Notifications'
+      viewAll: 'View All Notifications',
+      justNow: 'Just now',
+      ago: 'ago'
     }
   }[language];
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, isRead: true })));
+  const formatTime = (createdAt: any) => {
+    if (!createdAt) return t.justNow;
+    const date = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
+    const diff = (Date.now() - date.getTime()) / 1000;
+    
+    if (diff < 60) return t.justNow;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ${t.ago}`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ${t.ago}`;
+    return date.toLocaleDateString(language === 'PT' ? 'pt-PT' : 'en-US');
   };
 
-  const removeNotification = (id: string) => {
-    setNotifications(notifications.filter(n => n.id !== id));
+  const markAllAsRead = async () => {
+    for (const n of notifications) {
+      if (!n.read) await markNotificationAsRead(n.id);
+    }
   };
 
   const toggleOpen = () => {
-    if (!isOpen) {
-      markAllAsRead();
-    }
     setIsOpen(!isOpen);
+  };
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'promotion': return <Tag className="w-5 h-5" />;
+      case 'quote_request': return <FileText className="w-5 h-5" />;
+      case 'order': return <Clock className="w-5 h-5" />;
+      default: return <Info className="w-5 h-5" />;
+    }
+  };
+
+  const getColorClass = (type: string) => {
+    switch (type) {
+      case 'promotion': return 'bg-amber-500/10 text-amber-500';
+      case 'quote_request': return 'bg-supplyx-blue/10 text-supplyx-blue';
+      case 'order': return 'bg-violet-500/10 text-violet-500';
+      default: return 'bg-blue-500/10 text-blue-500';
+    }
   };
 
   return (
@@ -130,7 +94,7 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
           isDarkMode ? 'bg-supplyx-dark border-white/5 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
         }`}
       >
-        <Bell className={`w-5 h-5 transition-colors ${totalUnread > 0 ? 'text-supplyx-blue animate-pulse-slow' : ''}`} />
+        <Bell className={`w-5 h-5 transition-colors ${totalUnread > 0 ? 'text-supplyx-blue' : ''}`} />
         {totalUnread > 0 && (
           <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-supplyx-blue text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-supplyx-deep">
             {totalUnread}
@@ -154,7 +118,7 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                 <h3 className={`font-black uppercase italic tracking-[0.2em] text-[11px] ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-900'}`}>
                   {t.title}
                 </h3>
-                {unreadCount > 0 && (
+                {totalUnread > 0 && (
                   <button 
                     onClick={markAllAsRead}
                     className="text-[10px] font-black uppercase text-zinc-400 hover:text-white transition-colors"
@@ -175,44 +139,29 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                     </p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-white/5">
+                  <div className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-zinc-100'}`}>
                     {notifications.map((n) => (
                       <div 
                         key={n.id} 
-                        className={`p-6 flex gap-6 transition-all relative group ${
-                          !n.isRead ? (isDarkMode ? 'bg-supplyx-blue/5' : 'bg-supplyx-blue/5') : ''
+                        onClick={() => !n.read && markNotificationAsRead(n.id)}
+                        className={`p-6 flex gap-6 transition-all relative group cursor-pointer ${
+                          !n.read ? (isDarkMode ? 'bg-supplyx-blue/5' : 'bg-supplyx-blue/5') : ''
                         } ${isDarkMode ? 'hover:bg-white/[0.02]' : 'hover:bg-zinc-50'}`}
                       >
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${
-                          n.type === 'promotion' ? 'bg-amber-500/10 text-amber-500' : 
-                          n.type === 'supplier' ? 'bg-emerald-500/10 text-emerald-500' :
-                          n.type === 'rfq' ? 'bg-supplyx-blue/10 text-supplyx-blue' :
-                          n.type === 'stock' ? 'bg-rose-500/10 text-rose-500' :
-                          n.type === 'order' ? 'bg-violet-500/10 text-violet-500' : 'bg-blue-500/10 text-blue-500'
-                        }`}>
-                          {n.type === 'promotion' ? <Tag className="w-5 h-5" /> : 
-                           n.type === 'supplier' ? <MapPin className="w-5 h-5" /> : 
-                           n.type === 'rfq' ? <Info className="w-5 h-5" /> :
-                           n.type === 'stock' ? <CheckCircle2 className="w-5 h-5" /> :
-                           n.type === 'order' ? <Clock className="w-5 h-5" /> : <Info className="w-5 h-5" />}
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${getColorClass(n.type)}`}>
+                          {getIcon(n.type)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className={`text-[12px] font-black uppercase italic leading-tight mb-1 ${isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>
-                            {language === 'PT' ? n.titlePT : n.titleEN}
+                            {n.title}
                           </p>
                           <p className={`text-[11px] font-medium leading-relaxed mb-3 line-clamp-2 ${isDarkMode ? 'text-zinc-500' : 'text-zinc-500'}`}>
-                            {language === 'PT' ? n.descPT : n.descEN}
+                            {n.message}
                           </p>
                           <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest flex items-center gap-2">
-                             <Clock className="w-3 h-3" /> {n.time}
+                             <Clock className="w-3 h-3" /> {formatTime(n.createdAt)}
                           </span>
                         </div>
-                        <button 
-                          onClick={() => removeNotification(n.id)}
-                          className="opacity-0 group-hover:opacity-100 w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-rose-500 hover:bg-rose-500/10 transition-all active:scale-95"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
                       </div>
                     ))}
                   </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, User, Bell, Shield, CreditCard, HelpCircle, Moon, Sun, Monitor, Loader2, CheckCircle2, Eye, ArrowLeft, Upload, FileImage, Image as ImageIcon } from 'lucide-react';
+import { Settings, User, Bell, Shield, CreditCard, HelpCircle, Moon, Sun, Monitor, Loader2, CheckCircle2, Eye, ArrowLeft, Upload, FileImage, Image as ImageIcon, X } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType, uploadFile } from '../lib/firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
@@ -41,12 +41,15 @@ export default function SettingsView({
     nuit: '',
     phone: '',
     address: '',
+    license: '',
     bio: '',
     city: '',
     photoURL: '',
     coverURL: '',
     fleetSize: '',
-    specialization: ''
+    specialization: '',
+    bankAccounts: [] as { bankName: string; accountNumber: string; nib: string }[],
+    mobileWallets: [] as { provider: string; number: string; name: string }[]
   });
 
   const provinces = [
@@ -62,12 +65,15 @@ export default function SettingsView({
         nuit: profile.nuit || '',
         phone: profile.phone || '',
         address: profile.address || '',
+        license: (profile as any).license || '',
         bio: profile.bio || '',
         city: profile.city || '',
         photoURL: profile.photoURL || '',
         coverURL: profile.coverURL || '',
         fleetSize: profile.fleetSize || '',
         specialization: profile.specialization || '',
+        bankAccounts: profile.bankAccounts || [],
+        mobileWallets: profile.mobileWallets || [],
       });
     }
   }, [profile]);
@@ -166,15 +172,20 @@ export default function SettingsView({
       labels: {
         companyName: 'Nome da Empresa / Entidade',
         userName: 'Nome do Responsável / Usuário',
-        taxId: 'NUIT / Identificação Fiscal',
-        contactPhone: 'Telefone de Contacto',
+        taxId: 'NUIT (Número de Identificação Tributária)',
+        license: 'Número de Alvará / Licença Corporativa',
+        contactPhone: 'Telefone de Contacto Principal',
         city: 'Província / Cidade Principal',
-        address: 'Localização / Endereço',
+        address: 'Endereço Físico Detalhado (Sede)',
         photoUrl: (profile?.type === 'supplier' || profile?.type === 'logistics') ? 'Logo da Empresa (Logotipo)' : 'Foto de Perfil',
-        coverUrl: 'Imagem de Capa / Banners Corporativos',
-        bio: 'Bio / Sobre a Empresa',
+        coverURL: 'Imagem de Capa / Banners Corporativos',
+        bio: 'Bio / Sobre a Empresa (Termos & Condições)',
         fleetSize: 'Tamanho da Frota',
-        specialization: 'Especialização Logística'
+        specialization: 'Especialização Logística',
+        banking: 'Dados Bancários para Pagamento',
+        wallets: 'Carteiras Móveis (M-Pesa/e-Mola/mKesh)',
+        addAccount: 'Adicionar Conta',
+        addWallet: 'Adicionar Carteira'
       }
     },
     EN: {
@@ -201,15 +212,20 @@ export default function SettingsView({
       labels: {
         companyName: 'Company Name / Entity',
         userName: 'Responsible Name',
-        taxId: 'NUIT / Tax ID',
-        contactPhone: 'Contact Phone',
+        taxId: 'NUIT / Tax ID Number',
+        license: 'Business License / Permit Number',
+        contactPhone: 'Primary Contact Phone',
         city: 'Province / City',
-        address: 'Operation Address',
+        address: 'Detailed Physical Address (HQ)',
         photoUrl: (profile?.type === 'supplier' || profile?.type === 'logistics') ? 'Company Logo' : 'Profile Photo',
         coverUrl: 'Cover Image / Banners',
-        bio: 'Bio / Company Description',
+        bio: 'Bio / Company Description (Terms & Conditions)',
         fleetSize: 'Fleet Size',
-        specialization: 'Logistics Specialization'
+        specialization: 'Logistics Specialization',
+        banking: 'Banking Details for Payment',
+        wallets: 'Mobile Wallets',
+        addAccount: 'Add Account',
+        addWallet: 'Add Wallet'
       }
     }
   }[language];
@@ -350,6 +366,19 @@ export default function SettingsView({
               />
             </div>
             <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.labels.license}</label>
+              <input 
+                type="text"
+                value={formData.license}
+                onChange={(e) => setFormData({ ...formData, license: e.target.value })}
+                className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
+                placeholder="Ex: Alvará L-001/2026"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1.5">
               <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.labels.contactPhone}</label>
               <input 
                 type="text"
@@ -359,9 +388,6 @@ export default function SettingsView({
                 placeholder="+258 84 000 0000"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.labels.city}</label>
               <select 
@@ -374,16 +400,16 @@ export default function SettingsView({
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.labels.address}</label>
-              <input 
-                type="text"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
-                placeholder="Ex: Av. Eduardo Mondlane, Maputo"
-              />
-            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.labels.address}</label>
+            <textarea 
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all h-24 ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
+              placeholder="Ex: Av. Eduardo Mondlane, Prédio 123, R/C, Maputo"
+            />
           </div>
 
           {profile?.type === 'logistics' && (
@@ -494,6 +520,138 @@ export default function SettingsView({
               placeholder="Descreva brevemente suas atividades e especialidades..."
             />
           </div>
+
+          {(profile?.type === 'supplier' || profile?.type === 'logistics') && (
+            <>
+              <div className="space-y-4 pt-4 border-t border-zinc-500/10">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-black text-brand uppercase tracking-widest ml-1">{t.labels.banking}</label>
+                  <button 
+                    type="button"
+                    onClick={() => setFormData({ 
+                      ...formData, 
+                      bankAccounts: [...formData.bankAccounts, { bankName: '', accountNumber: '', nib: '' }] 
+                    })}
+                    className="text-[10px] font-black text-brand hover:brightness-110 uppercase"
+                  >
+                    + {t.labels.addAccount}
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {formData.bankAccounts.map((acc, index) => (
+                    <div key={index} className={`p-4 rounded-2xl border-2 flex flex-col md:flex-row gap-3 relative group ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-100'}`}>
+                      <input 
+                        placeholder={language === 'PT' ? 'Banco' : 'Bank'}
+                        value={acc.bankName}
+                        onChange={(e) => {
+                          const newAccs = [...formData.bankAccounts];
+                          newAccs[index].bankName = e.target.value;
+                          setFormData({ ...formData, bankAccounts: newAccs });
+                        }}
+                        className="bg-transparent text-xs font-bold outline-none flex-1"
+                      />
+                      <input 
+                        placeholder={language === 'PT' ? 'Conta' : 'Account'}
+                        value={acc.accountNumber}
+                        onChange={(e) => {
+                          const newAccs = [...formData.bankAccounts];
+                          newAccs[index].accountNumber = e.target.value;
+                          setFormData({ ...formData, bankAccounts: newAccs });
+                        }}
+                        className="bg-transparent text-xs font-bold outline-none flex-1"
+                      />
+                      <input 
+                        placeholder="NIB"
+                        value={acc.nib}
+                        onChange={(e) => {
+                          const newAccs = [...formData.bankAccounts];
+                          newAccs[index].nib = e.target.value;
+                          setFormData({ ...formData, bankAccounts: newAccs });
+                        }}
+                        className="bg-transparent text-xs font-bold outline-none flex-1"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setFormData({ 
+                          ...formData, 
+                          bankAccounts: formData.bankAccounts.filter((_, i) => i !== index) 
+                        })}
+                        className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4 pt-4 border-t border-zinc-500/10">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-black text-brand uppercase tracking-widest ml-1">{t.labels.wallets}</label>
+                  <button 
+                    type="button"
+                    onClick={() => setFormData({ 
+                      ...formData, 
+                      mobileWallets: [...formData.mobileWallets, { provider: '', number: '', name: '' }] 
+                    })}
+                    className="text-[10px] font-black text-brand hover:brightness-110 uppercase"
+                  >
+                    + {t.labels.addWallet}
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {formData.mobileWallets.map((wallet, index) => (
+                    <div key={index} className={`p-4 rounded-2xl border-2 flex flex-col md:flex-row gap-3 relative group ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-100'}`}>
+                      <select 
+                        value={wallet.provider}
+                        onChange={(e) => {
+                          const newWallets = [...formData.mobileWallets];
+                          newWallets[index].provider = e.target.value;
+                          setFormData({ ...formData, mobileWallets: newWallets });
+                        }}
+                        className="bg-transparent text-xs font-bold outline-none flex-1 h-full"
+                      >
+                        <option value="">{language === 'PT' ? 'Provedor' : 'Provider'}</option>
+                        <option value="M-Pesa">M-Pesa</option>
+                        <option value="e-Mola">e-Mola</option>
+                        <option value="mKesh">mKesh</option>
+                      </select>
+                      <input 
+                        placeholder={language === 'PT' ? 'Número' : 'Number'}
+                        value={wallet.number}
+                        onChange={(e) => {
+                          const newWallets = [...formData.mobileWallets];
+                          newWallets[index].number = e.target.value;
+                          setFormData({ ...formData, mobileWallets: newWallets });
+                        }}
+                        className="bg-transparent text-xs font-bold outline-none flex-1"
+                      />
+                      <input 
+                        placeholder={language === 'PT' ? 'Titular' : 'Holder'}
+                        value={wallet.name}
+                        onChange={(e) => {
+                          const newWallets = [...formData.mobileWallets];
+                          newWallets[index].name = e.target.value;
+                          setFormData({ ...formData, mobileWallets: newWallets });
+                        }}
+                        className="bg-transparent text-xs font-bold outline-none flex-1"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setFormData({ 
+                          ...formData, 
+                          mobileWallets: formData.mobileWallets.filter((_, i) => i !== index) 
+                        })}
+                        className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           <button 
             type="submit"

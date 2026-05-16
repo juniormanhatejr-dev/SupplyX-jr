@@ -63,21 +63,12 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
     if (!profile) return suppliers;
 
     const buyerLoc = PROVINCE_COORDINATES[profile.city || 'Maputo Cidade'] || PROVINCE_COORDINATES['Maputo Cidade'];
-    const requestedItems = cartItems.map(i => i.name);
-
-    if (requestedItems.length === 0) {
-      // If cart empty, just rank by distance
-      return suppliers.sort((a, b) => {
-        const distA = PROVINCE_COORDINATES[a.city || 'Maputo Cidade'] ? 1 : 0;
-        const distB = PROVINCE_COORDINATES[b.city || 'Maputo Cidade'] ? 1 : 0;
-        return distB - distA; // Just a dummy sort if no ranking
-      });
-    }
+    const requestedItems = cartItems.map(i => ({ material: i.name, quantity: i.quantity }));
 
     const suppliersForRanking = suppliers.map(s => ({
       id: s.uid,
       location: PROVINCE_COORDINATES[s.city || 'Maputo Cidade'] || PROVINCE_COORDINATES['Maputo Cidade'],
-      catalogItems: s.catalogItems || [s.sector] // Fallback to sector if no catalog items
+      catalog: (s as any).catalog || [] // Use actual catalog if available
     }));
 
     const rankings = rankSuppliers(buyerLoc, requestedItems, suppliersForRanking);
@@ -114,7 +105,9 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
       creditScoreDesc: 'AAA+ - Excelente histórico de pagamentos e solidez.',
       noSuppliers: 'Nenhum fornecedor encontrado.',
       bestMatch: 'Melhor Match',
-      bestMatchDesc: 'Fornecedor com alta eficiência, proximidade e diversidade de stock.'
+      bestMatchDesc: 'Fornecedor com alta eficiência, proximidade e diversidade de stock.',
+      banking: 'Dados Bancários',
+      wallets: 'Carteiras Móveis'
     },
     EN: {
       strategicPartners: 'Strategic Partners',
@@ -132,7 +125,9 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
       creditScoreDesc: 'AAA+ - Excellent payment history and solidity.',
       noSuppliers: 'No suppliers found.',
       bestMatch: 'Best Match',
-      bestMatchDesc: 'Supplier with high efficiency, proximity, and stock diversity.'
+      bestMatchDesc: 'Supplier with high efficiency, proximity, and stock diversity.',
+      banking: 'Banking Details',
+      wallets: 'Mobile Wallets'
     }
   }[language];
 
@@ -197,12 +192,19 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
                 {selectedSupplier.bio || t.fallbackBio}
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                 <div className="space-y-1">
                   <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest flex items-center gap-2">
                     <MapPin className="w-3 h-3" /> {t.location}
                   </p>
                   <p className={`text-sm font-black italic uppercase tracking-tight ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{selectedSupplier.city || 'Maputo'}, {selectedSupplier.address || (language === 'PT' ? 'Moçambique' : 'Mozambique')}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest flex items-center gap-2">
+                    <ShieldCheck className="w-3 h-3" /> {language === 'PT' ? 'Identificação:' : 'ID:'}
+                  </p>
+                  <p className={`text-sm font-black italic uppercase tracking-tight ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{selectedSupplier.nuit ? `NUIT: ${selectedSupplier.nuit}` : 'NUIT Pendente'}</p>
+                  {(selectedSupplier as any).license && <p className="text-[9px] font-bold text-zinc-500 tracking-tight uppercase leading-none">Alvará: {(selectedSupplier as any).license}</p>}
                 </div>
                 <div className="space-y-1">
                   <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest flex items-center gap-2">
@@ -223,6 +225,37 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
                   <p className={`text-sm font-black italic uppercase tracking-tight ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>www.{selectedSupplier.name.toLowerCase().replace(/\s/g, '')}.co.mz</p>
                 </div>
               </div>
+
+              {((selectedSupplier as any).bankAccounts?.length > 0 || (selectedSupplier as any).mobileWallets?.length > 0) && (
+                <div className="mt-8 pt-8 border-t border-zinc-500/10 grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {(selectedSupplier as any).bankAccounts?.length > 0 && (
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-black text-brand uppercase tracking-widest">{t.banking || (language === 'PT' ? 'DADOS BANCÁRIOS' : 'BANKING DETAILS')}</h4>
+                      <div className="space-y-3">
+                        {(selectedSupplier as any).bankAccounts.map((acc: any, i: number) => (
+                          <div key={i} className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-100'}`}>
+                            <p className={`text-[11px] font-black uppercase italic ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{acc.bankName}</p>
+                            <p className="text-[10px] font-bold text-zinc-500 uppercase mt-1">Conta: {acc.accountNumber} {acc.nib ? `| NIB: ${acc.nib}` : ''}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(selectedSupplier as any).mobileWallets?.length > 0 && (
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-black text-brand uppercase tracking-widest">{t.wallets || (language === 'PT' ? 'CARTEIRAS MÓVEIS' : 'MOBILE WALLETS')}</h4>
+                      <div className="space-y-3">
+                        {(selectedSupplier as any).mobileWallets.map((wallet: any, i: number) => (
+                          <div key={i} className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-100'}`}>
+                            <p className={`text-[11px] font-black uppercase italic ${isDarkMode ? 'text-zinc-200' : 'text-zinc-900'}`}>{wallet.provider}</p>
+                            <p className="text-[10px] font-bold text-zinc-500 uppercase mt-1">{wallet.number} | {wallet.name}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

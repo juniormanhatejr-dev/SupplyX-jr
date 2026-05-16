@@ -114,6 +114,7 @@
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
+        "senderId": { "type": "string" },
         "title": { "type": "string" },
         "message": { "type": "string" },
         "type": { "type": "string" },

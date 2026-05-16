@@ -35,6 +35,7 @@ import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import ProfileModal from './ProfileModal';
 import QuotationDocument from './QuotationDocument';
+import { notificationService } from '../services/notificationService';
 
 const availableSuppliers = [
   { id: 'S1', name: 'CONSTRUCENTER BEIRA', quality: 'A+', segment: 'Geral' },
@@ -66,6 +67,7 @@ interface SupplierResponse {
   price: number;
   timeToDeliver: string;
   confidence: number;
+  itemPrices: { material: string; price: number }[];
 }
 
 interface MaterialComboBoxProps {
@@ -242,6 +244,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     ...availableSuppliers,
     ...dbSuppliers.filter(dbs => !availableSuppliers.some(as => as.id === dbs.id))
   ].map(s => ({
+    ...s,
     id: s.id,
     name: s.name || s.companyName || 'Supplier',
     quality: s.quality || 'N/A',
@@ -494,6 +497,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       // Calculate real total based on products if they exist
       let calculatedTotal = 0;
       let itemsFound = 0;
+      const itemPrices: { material: string; price: number }[] = [];
 
       rows.forEach(row => {
         // Try to find matching product for this supplier
@@ -504,19 +508,17 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         );
 
         if (match) {
-          calculatedTotal += (match.price || 0) * parseFloat(row.quantity || '0');
+          const price = match.price || 0;
+          calculatedTotal += price * parseFloat(row.quantity || '0');
+          itemPrices.push({ material: row.material, price });
           itemsFound++;
+        } else {
+          // Estimate price if no match
+          const estPrice = (Math.random() * 2000 + 1000);
+          calculatedTotal += estPrice * parseFloat(row.quantity || '0');
+          itemPrices.push({ material: row.material, price: estPrice });
         }
       });
-
-      // If no items found at all for this supplier, provide an estimated response
-      // This ensures new suppliers always appear in results
-      if (itemsFound === 0) {
-         // Different base factor for real vs demo suppliers to keep it varied
-         const baseFactor = sid.startsWith('S') ? 4500 : 6500;
-         calculatedTotal = (Math.random() * 3000 + baseFactor) * rows.length;
-         if (calculatedTotal === 0) calculatedTotal = 12000; // Absolute fallback
-      }
 
       return {
         supplierId: sid,
@@ -525,11 +527,30 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         timeToDeliver: itemsFound > 0 
           ? (language === 'PT' ? '2 dias' : '2 days') 
           : (language === 'PT' ? '4-5 dias (Sob consulta)' : '4-5 days (Pending quote)'),
-        confidence: itemsFound > 0 ? 98 : 65
+        confidence: itemsFound > 0 ? 98 : 65,
+        itemPrices
       };
     });
 
     const sorted = [...responses].sort((a, b) => a.price - b.price);
+
+    // Notify selected suppliers
+    responses.forEach(async (res) => {
+      await notificationService.sendNotification({
+        userId: res.supplierId,
+        senderId: user?.uid,
+        title: language === 'PT' ? 'Novo Pedido de Cotação' : 'New Quote Request',
+        message: language === 'PT' 
+          ? `Você recebeu uma nova solicitação de cotação de ${profile?.name || 'um cliente'}.` 
+          : `You received a new quote request from ${profile?.name || 'a client'}.`,
+        type: 'quote_request',
+        metadata: {
+          requestId: `RQ-${Math.floor(Date.now()/100000)}`,
+          buyerId: user?.uid,
+          itemsCount: rows.length
+        }
+      });
+    });
 
     setTimeout(() => {
       setAiResponses(sorted);
@@ -901,24 +922,26 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
   const t = language === 'PT' ? translations.PT : translations.EN;
 
-  const currentSupplier = aiResponses[selectedResponseIndex];
+  const currentResponse = aiResponses[selectedResponseIndex];
+  const currentSupplier = mergedSuppliers.find(s => s.id === currentResponse?.supplierId);
   
   const quotationData = {
     quoteNumber: 'PR-QT-2035/2026',
     date: new Date().toLocaleDateString('pt-PT'),
     validityDays: 15,
     supplier: {
-      name: currentSupplier?.name || 'CONSTRUCENTER BEIRA',
+      name: currentSupplier?.name || 'FORNECEDOR',
       isVerified: true,
-      address: 'Maputo, Moçambique',
-      email: 'sales@' + (currentSupplier?.name?.toLowerCase().replace(/\s+/g, '') || 'supplier') + '.com',
-      phone: '+258 84 000 0000',
-      nuit: '400' + Math.floor(Math.random() * 1000000),
-      bankingDetails: {
-        bankName: 'Standard Bank',
-        accountNumber: '4005667788',
-        nib: '000300004005667788991'
-      }
+      address: currentSupplier?.address || 'Maputo, Moçambique',
+      email: currentSupplier?.email || 'sales@' + (currentSupplier?.name?.toLowerCase().replace(/\s+/g, '') || 'supplier') + '.com',
+      phone: currentSupplier?.phone || '+258 84 000 0000',
+      nuit: currentSupplier?.nuit || '400' + Math.floor(Math.random() * 1000000),
+      license: (currentSupplier as any)?.license || '',
+      logoURL: currentSupplier?.photoURL || '',
+      bankAccounts: currentSupplier?.bankAccounts || [],
+      mobileWallets: currentSupplier?.mobileWallets || [],
+      signatureURL: currentSupplier?.signatureURL,
+      stampURL: currentSupplier?.stampURL
     },
     client: {
       name: profile?.name || 'Cliente SupplyX',
@@ -928,17 +951,13 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       phone: profile?.phone || '+258 84 ...'
     },
     items: rows.map((row, i) => {
-      const match = allProducts.find(p => 
-        p.supplierId === (currentSupplier?.supplierId || 'S1') && 
-        (p.name.toLowerCase().includes(row.material.toLowerCase()) || 
-         row.material.toLowerCase().includes(p.name.toLowerCase()))
-      );
+      const itemPrice = currentResponse?.itemPrices.find(ip => ip.material === row.material)?.price || 0;
+      
       return {
-        code: `MAT-${100 + i}`,
         description: row.material,
         quantity: parseFloat(row.quantity || '0'),
         unit: row.unit,
-        unitPrice: match?.price || 0,
+        unitPrice: itemPrice,
         discount: 0,
         vatPer: 16
       };
@@ -1011,7 +1030,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                       <thead className={`${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-100'} border-b sticky top-0 z-20`}>
                         <tr>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-12 text-center">#</th>
-                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-24">{language === 'PT' ? 'Código' : 'Code'}</th>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-64">{t.headers.material}</th>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-20 text-center">{t.headers.qty}</th>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-24 text-center">{language === 'PT' ? 'Unid.' : 'Unit'}</th>
@@ -1028,14 +1046,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                         {rows.map((row, index) => (
                           <tr key={row.id} className={`${isDarkMode ? 'hover:bg-supplyx-blue/5' : 'hover:bg-zinc-50/50'} group transition-colors duration-300`}>
                             <td className="px-4 py-4 font-mono text-[10px] font-bold text-zinc-500 text-center">{index + 1}</td>
-                            <td className="px-4 py-4">
-                               <input 
-                                 type="text" 
-                                 value={row.code}
-                                 onChange={(e) => updateRow(row.id, 'code', e.target.value)}
-                                 className={`w-full bg-transparent border-none text-[11px] font-black uppercase italic outline-none ${isDarkMode ? 'text-zinc-600' : 'text-zinc-400'}`}
-                               />
-                            </td>
                             <td className="px-4 py-4">
                               <MaterialComboBox 
                                 value={row.material} 
@@ -1634,7 +1644,8 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                name: order.supplier,
                                price: parseFloat(order.total.replace('MT ', '').replace('.', '').replace(',', '.')) || 12450,
                                timeToDeliver: '2 dias',
-                               confidence: 95
+                               confidence: 95,
+                               itemPrices: ((order as any).items || []).map((it: any) => ({ material: it.description, price: it.unitPrice || 0 }))
                             };
                             setSelectedResponseIndex(0);
                             await downloadPDF(mockRes);

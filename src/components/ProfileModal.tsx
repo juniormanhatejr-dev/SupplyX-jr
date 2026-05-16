@@ -25,6 +25,7 @@ interface UserProfile {
   userName?: string;
   nuit: string;
   address: string;
+  license?: string;
   phone: string;
   email: string;
   type: 'buyer' | 'supplier' | 'logistics';
@@ -36,6 +37,10 @@ interface UserProfile {
   fleetSize?: string;
   specialization?: string;
   createdAt: any;
+  bankAccounts?: { bankName: string; accountNumber: string; nib: string }[];
+  mobileWallets?: { provider: string; number: string; name: string }[];
+  signatureURL?: string;
+  stampURL?: string;
 }
 
 interface ProfileModalProps {
@@ -69,8 +74,12 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
       closeProfile: 'Fechar Perfil',
       viewCatalog: 'Ver Catálogo',
       rating: 'Avaliação',
-      reviews: 'Avaliações',
+      ratings: 'Avaliações',
+      taxId: 'NUIT',
+      license: 'Alvará/Licença',
       notFound: 'Perfil não encontrado.',
+      banking: 'Dados Bancários',
+      wallets: 'Carteiras Móveis',
       defaultBio: (sector: string) => `Atuando no setor de ${sector} com excelência e compromisso. Especialistas em soluções para construção civil em Moçambique.`
     },
     EN: {
@@ -91,6 +100,8 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
       rating: 'Rating',
       reviews: 'Reviews',
       notFound: 'Profile not found.',
+      banking: 'Banking Details',
+      wallets: 'Mobile Wallets',
       defaultBio: (sector: string) => `Operating in the ${sector} sector with excellence and commitment. Specialists in construction solutions in Mozambique.`
     }
   }[language];
@@ -285,12 +296,59 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
                             <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
                               <Building2 className="w-3.5 h-3.5" />
                             </div>
-                            <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>NUIT: {profile.nuit}</p>
+                            <div className="flex flex-col">
+                              <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>NUIT: {profile.nuit}</p>
+                              {profile.license && (
+                                <p className={`text-[9px] font-bold uppercase tracking-tight mt-1 ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                                  {t.license}: {profile.license}
+                                </p>
+                              )}
+                            </div>
                           </div>
                         </>
                       )}
                     </div>
                   </div>
+
+                  {(profile.bankAccounts && profile.bankAccounts.length > 0) || (profile.mobileWallets && profile.mobileWallets.length > 0) ? (
+                    <div className={`p-6 rounded-3xl mb-8 border-2 border-dashed ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-100'}`}>
+                      <div className="space-y-6">
+                        {profile.bankAccounts && profile.bankAccounts.length > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="text-[10px] font-black text-brand uppercase tracking-widest">{t.banking}</h4>
+                            <div className="grid grid-cols-1 gap-3">
+                              {profile.bankAccounts.map((acc, i) => (
+                                <div key={i} className={`p-3 rounded-xl border flex flex-col gap-1 ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>
+                                  <p className={`text-xs font-black uppercase italic ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{acc.bankName}</p>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Conta: {acc.accountNumber}</span>
+                                    {acc.nib && <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">NIB: {acc.nib}</span>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {profile.mobileWallets && profile.mobileWallets.length > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="text-[10px] font-black text-brand uppercase tracking-widest">{t.wallets}</h4>
+                            <div className="grid grid-cols-1 gap-3">
+                              {profile.mobileWallets.map((wallet, i) => (
+                                <div key={i} className={`p-3 rounded-xl border flex flex-col gap-1 ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>
+                                  <p className={`text-xs font-black uppercase italic ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{wallet.provider}</p>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">{wallet.number}</span>
+                                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest italic truncate ml-2 max-w-[150px]">{wallet.name}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="flex gap-3">
                     {auth.currentUser?.uid === userId ? (

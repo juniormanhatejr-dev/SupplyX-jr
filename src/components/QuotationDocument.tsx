@@ -3,7 +3,6 @@ import { CheckCircle2, ShieldCheck, QrCode } from 'lucide-react';
 import SupplyXLogo from './SupplyXLogo';
 
 interface QuotationItem {
-  code: string;
   description: string;
   quantity: number;
   unit: string;
@@ -24,11 +23,12 @@ interface QuotationDocumentProps {
       email: string;
       phone: string;
       nuit: string;
-      bankingDetails: {
-        bankName: string;
-        accountNumber: string;
-        nib: string;
-      };
+      license?: string;
+      logoURL?: string;
+      bankAccounts?: { bankName: string; accountNumber: string; nib: string }[];
+      mobileWallets?: { provider: string; number: string; name: string }[];
+      signatureURL?: string;
+      stampURL?: string;
     };
     client: {
       name: string;
@@ -97,39 +97,71 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
       id="quotation-document"
     >
       {/* Top Branding Section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px' }}>
-        <div>
-          <h1 style={{ 
-            fontSize: '28px', 
-            fontWeight: 900, 
-            color: COLORS.darkBlue, 
-            margin: 0, 
-            textTransform: 'uppercase',
-            letterSpacing: '-0.5px'
-          }}>
-            {data.supplier.name}
-          </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-            {data.supplier.isVerified && (
-              <div style={{ 
-                backgroundColor: COLORS.teal, 
-                color: COLORS.white, 
-                padding: '4px 8px', 
-                borderRadius: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                fontSize: '10px',
-                fontWeight: 800,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
-                <CheckCircle2 size={12} />
-                Fornecedor Verificado
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: '20px', flex: 1 }}>
+          {data.supplier.logoURL && (
+            <div style={{ 
+              width: '80px', 
+              height: '80px', 
+              borderRadius: '16px', 
+              overflow: 'hidden',
+              border: `1px solid ${COLORS.borderGray}`,
+              backgroundColor: COLORS.lightGray,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <img 
+                src={data.supplier.logoURL} 
+                alt="Logo" 
+                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+              />
+            </div>
+          )}
+          <div style={{ flex: 1 }}>
+            <h1 style={{ 
+              fontSize: '28px', 
+              fontWeight: 900, 
+              color: COLORS.darkBlue, 
+              margin: 0, 
+              textTransform: 'uppercase',
+              letterSpacing: '-0.5px'
+            }}>
+              {data.supplier.name}
+            </h1>
+            <div style={{ marginTop: '5px', fontSize: '9px', fontWeight: 700, color: COLORS.textDark, lineHeight: '1.4' }}>
+              <p style={{ margin: '2px 0' }}>{data.supplier.address}</p>
+              <p style={{ margin: '2px 0' }}>
+                NUIT: <span style={{ fontWeight: 800 }}>{data.supplier.nuit}</span> 
+                {data.supplier.license ? ` | Alvará: ${data.supplier.license}` : ''}
+              </p>
+              <p style={{ margin: '2px 0' }}>Email: {data.supplier.email} | Tel: {data.supplier.phone}</p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+              {data.supplier.isVerified && (
+                <div style={{ 
+                  backgroundColor: COLORS.teal, 
+                  color: COLORS.white, 
+                  padding: '4px 8px', 
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  <CheckCircle2 size={12} />
+                  Fornecedor Verificado
+                </div>
+              )}
+              <div style={{ fontSize: '10px', color: COLORS.textMuted, fontWeight: 600 }}>
+                Procurement ID: SX-SUP-{data.supplier.nuit.slice(-4)}
               </div>
-            )}
-            <div style={{ fontSize: '10px', color: COLORS.textMuted, fontWeight: 600 }}>
-              Procurement ID: SX-SUP-{data.supplier.nuit.slice(-4)}
             </div>
           </div>
         </div>
@@ -288,7 +320,6 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
         <table style={{ width: '100%', borderCollapse: 'collapse', borderRadius: '8px', overflow: 'hidden' }}>
           <thead>
             <tr style={{ backgroundColor: COLORS.darkBlue, color: COLORS.white }}>
-              <th style={{ padding: '12px 10px', textAlign: 'left', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }}>Cód.</th>
               <th style={{ padding: '12px 10px', textAlign: 'left', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }}>Descrição do Material</th>
               <th style={{ padding: '12px 10px', textAlign: 'center', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }}>Quant.</th>
               <th style={{ padding: '12px 10px', textAlign: 'center', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }}>Un.</th>
@@ -304,7 +335,6 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                 backgroundColor: index % 2 === 0 ? COLORS.white : COLORS.lightGray,
                 borderBottom: `1px solid ${COLORS.borderGray}`
               }}>
-                <td style={{ padding: '10px', fontSize: '10px', fontWeight: 700, color: COLORS.textMuted }}>{item.code}</td>
                 <td style={{ padding: '10px', fontWeight: 800 }}>{item.description}</td>
                 <td style={{ padding: '10px', textAlign: 'center', fontWeight: 700 }}>{item.quantity.toFixed(2)}</td>
                 <td style={{ padding: '10px', textAlign: 'center', fontWeight: 700, textTransform: 'uppercase', fontSize: '9px' }}>{item.unit}</td>
@@ -372,14 +402,31 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
               <p style={{ fontSize: '8px', fontWeight: 800, margin: 0, color: COLORS.textMuted }}>VALIDAÇÃO DIGITAL</p>
             </div>
 
-            {/* Banking Details */}
-            <div style={{ flex: 1 }}>
-              <p style={{ fontSize: '10px', fontWeight: 800, color: COLORS.darkBlue, textTransform: 'uppercase', marginBottom: '8px' }}>Dados Bancários para Pagamento</p>
-              <div style={{ fontSize: '10px', fontWeight: 700, color: COLORS.textDark }}>
-                <p style={{ margin: '2px 0' }}>Banco: <span style={{ fontWeight: 800 }}>{data.supplier.bankingDetails.bankName}</span></p>
-                <p style={{ margin: '2px 0' }}>Conta: <span style={{ fontWeight: 800 }}>{data.supplier.bankingDetails.accountNumber}</span></p>
-                <p style={{ margin: '2px 0' }}>NIB: <span style={{ fontWeight: 800 }}>{data.supplier.bankingDetails.nib}</span></p>
-              </div>
+            {/* Banking and Wallets Details */}
+            <div style={{ flex: 1, minWidth: '0' }}>
+              <p style={{ fontSize: '10px', fontWeight: 800, color: COLORS.darkBlue, textTransform: 'uppercase', marginBottom: '8px' }}>Dados de Pagamento (Fornecedor)</p>
+              
+              {data.supplier.bankAccounts && data.supplier.bankAccounts.length > 0 && (
+                <div style={{ marginBottom: '10px' }}>
+                  <p style={{ fontSize: '9px', fontWeight: 800, color: COLORS.teal, textTransform: 'uppercase', marginBottom: '4px' }}>Contas Bancárias</p>
+                  {data.supplier.bankAccounts.map((acc, i) => (
+                    <div key={i} style={{ fontSize: '9px', fontWeight: 700, color: COLORS.textDark, marginBottom: '5px', paddingLeft: '5px', borderLeft: `2px solid ${COLORS.teal}` }}>
+                      <p style={{ margin: '1px 0' }}>{acc.bankName}: {acc.accountNumber} {acc.nib ? `(NIB: ${acc.nib})` : ''}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {data.supplier.mobileWallets && data.supplier.mobileWallets.length > 0 && (
+                <div>
+                  <p style={{ fontSize: '9px', fontWeight: 800, color: COLORS.teal, textTransform: 'uppercase', marginBottom: '4px' }}>Carteiras Móveis</p>
+                  {data.supplier.mobileWallets.map((wallet, i) => (
+                    <div key={i} style={{ fontSize: '9px', fontWeight: 700, color: COLORS.textDark, marginBottom: '5px', paddingLeft: '5px', borderLeft: `2px solid ${COLORS.teal}` }}>
+                      <p style={{ margin: '1px 0' }}>{wallet.provider}: {wallet.number} ({wallet.name})</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -415,9 +462,17 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
             </div>
           </div>
 
-          <div style={{ marginTop: '20px', textAlign: 'center' }}>
-            <div style={{ borderBottom: `1px solid ${COLORS.borderGray}`, height: '60px', marginBottom: '10px' }}></div>
-            <p style={{ fontSize: '9px', fontWeight: 800, margin: 0, color: COLORS.textMuted, textTransform: 'uppercase' }}>Assinatura & Carimbo do Fornecedor</p>
+          <div style={{ marginTop: '20px', textAlign: 'center', position: 'relative' }}>
+            <div style={{ height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: `1px solid ${COLORS.borderGray}`, marginBottom: '10px' }}>
+              {data.supplier.signatureURL && (
+                <img src={data.supplier.signatureURL} alt="Signature" style={{ maxHeight: '60px', mixBlendMode: 'multiply' }} />
+              )}
+              {data.supplier.stampURL && (
+                <img src={data.supplier.stampURL} alt="Stamp" style={{ maxHeight: '60px', opacity: 0.8, marginLeft: '20px', mixBlendMode: 'multiply' }} />
+              )}
+            </div>
+            <p style={{ fontSize: '9px', fontWeight: 800, margin: 0, color: COLORS.textMuted, textTransform: 'uppercase' }}>Assinatura & Carimbo Eletrónico</p>
+            <p style={{ fontSize: '7px', fontWeight: 600, margin: '2px 0', color: COLORS.textMuted }}>Verificado via SupplyX Platform</p>
           </div>
         </div>
       </div>

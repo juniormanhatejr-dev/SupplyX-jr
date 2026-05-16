@@ -7,8 +7,11 @@ import { MessageSquare, Bell, X } from 'lucide-react';
 interface NotificationContextType {
   permission: NotificationPermission;
   requestPermission: () => Promise<void>;
-  unreadCount: number;
-  totalNotifications: number;
+  unreadMessages: number;
+  unreadNotifications: number;
+  totalUnread: number;
+  notifications: any[];
+  markNotificationAsRead: (notificationId: string) => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -17,8 +20,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
   const [permission, setPermission] = useState<NotificationPermission>(
     typeof window !== 'undefined' ? Notification.permission : 'default'
   );
-  const [activeNotification, setActiveNotification] = useState<{ title: string; body: string; chatId: string } | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [activeNotification, setActiveNotification] = useState<{ title: string; body: string; chatId?: string } | null>(null);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -37,13 +42,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
     if (!auth.currentUser) return;
 
     const currentUserId = auth.currentUser.uid;
-    const q = query(
+    
+    // Listen to chats for messages
+    const qChats = query(
       collection(db, 'chats'),
       where('participants', 'array-contains', currentUserId)
     );
 
-    let isInitialLoad = true;
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    let isInitialLoadChats = true;
+    const unsubscribeChats = onSnapshot(qChats, (snapshot) => {
       let count = 0;
       snapshot.docs.forEach(doc => {
         const data = doc.data();
@@ -51,39 +58,62 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
           count += data.unreadCount[currentUserId];
         }
       });
-      setUnreadCount(count);
+      setUnreadMessages(count);
 
-      if (isInitialLoad) {
-        isInitialLoad = false;
-        return;
-      }
+      if (isInitialLoadChats) {
+        isInitialLoadChats = false;
+      } else {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added' || change.type === 'modified') {
+            const chatData = change.doc.data();
+            const lastSenderId = chatData.lastMessageSenderId;
+            const updatedAt = chatData.updatedAt?.toMillis?.() || Date.now();
+            const now = Date.now();
 
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added' || change.type === 'modified') {
-          const chatData = change.doc.data();
-          const lastSenderId = chatData.lastMessageSenderId;
-          const updatedAt = chatData.updatedAt?.toMillis?.() || Date.now(); // Fallback to now if pending
-          const now = Date.now();
-
-          // Only notify if message is recent (within last 30 seconds)
-          // or if it's a new message that just arrived
-          if (lastSenderId && lastSenderId !== currentUserId && (now - updatedAt < 30000 || !chatData.updatedAt)) {
-            const otherParticipantId = chatData.participants.find((id: string) => id !== currentUserId);
-            const senderName = chatData.participantNames[otherParticipantId] || (language === 'PT' ? 'Nova Mensagem' : 'New Message');
-            const body = chatData.lastMessage || '';
-
-            triggerNotification(senderName, body, change.doc.id);
+            if (lastSenderId && lastSenderId !== currentUserId && (now - updatedAt < 30000 || !chatData.updatedAt)) {
+              const otherParticipantId = chatData.participants.find((id: string) => id !== currentUserId);
+              const senderName = chatData.participantNames[otherParticipantId] || (language === 'PT' ? 'Nova Mensagem' : 'New Message');
+              const body = chatData.lastMessage || '';
+              triggerNotification(senderName, body, change.doc.id);
+            }
           }
-        }
-      });
-    }, (error) => {
-      console.error("Notification Sync Error:", error);
+        });
+      }
     });
 
-    return () => unsubscribe();
+    // Listen to general notifications
+    const qNotifs = query(
+      collection(db, 'notifications'),
+      where('userId', '==', currentUserId),
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
+
+    let isInitialLoadNotifs = true;
+    const unsubscribeNotifs = onSnapshot(qNotifs, (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setNotifications(fetched);
+      setUnreadNotifications(fetched.filter((n: any) => !n.read).length);
+
+      if (isInitialLoadNotifs) {
+        isInitialLoadNotifs = false;
+      } else {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            const notif = change.doc.data();
+            triggerNotification(notif.title, notif.message);
+          }
+        });
+      }
+    });
+
+    return () => {
+      unsubscribeChats();
+      unsubscribeNotifs();
+    };
   }, [auth.currentUser?.uid, language]);
 
-  const triggerNotification = (title: string, body: string, chatId: string) => {
+  const triggerNotification = (title: string, body: string, chatId?: string) => {
     // Play sound
     audioRef.current?.play().catch(() => {});
 
@@ -100,8 +130,25 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
     setTimeout(() => setActiveNotification(null), 5000);
   };
 
+  const markNotificationAsRead = async (notificationId: string) => {
+    try {
+      const { doc, updateDoc } = await import('firebase/firestore');
+      await updateDoc(doc(db, 'notifications', notificationId), { read: true });
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+    }
+  };
+
   return (
-    <NotificationContext.Provider value={{ permission, requestPermission, unreadCount, totalNotifications: unreadCount }}>
+    <NotificationContext.Provider value={{ 
+      permission, 
+      requestPermission, 
+      unreadMessages, 
+      unreadNotifications,
+      totalUnread: unreadMessages + unreadNotifications,
+      notifications,
+      markNotificationAsRead
+    }}>
       {children}
       
       <AnimatePresence>

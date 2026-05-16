@@ -51,20 +51,26 @@ export function usePresence(userId: string | null | undefined) {
         if (!docSnap.exists()) return;
 
         const data = docSnap.data();
-        if (!data.status) return;
+        const effectiveStatus = data.status || 'offline';
 
         setPresence(prev => {
-          const firestoreTime = data.lastSeen?.toMillis ? data.lastSeen.toMillis() : null;
+          const lastSeenTime = data.lastSeen?.toMillis ? data.lastSeen.toMillis() : null;
+          const lastActiveTime = data.lastActive?.toMillis ? data.lastActive.toMillis() : null;
+          const bestTime = lastActiveTime || lastSeenTime;
           
-          if (data.status === 'online') {
-            return { state: 'online', lastChanged: firestoreTime };
+          // Stale check: If online but no activity for 3 minutes, mark as offline
+          const isStale = effectiveStatus === 'online' && bestTime && (Date.now() - bestTime > 180000);
+          const finalStatus = isStale ? 'offline' : effectiveStatus;
+
+          if (finalStatus === 'online') {
+            return { state: 'online', lastChanged: bestTime };
           }
           
           if (prev?.state === 'online' && prev.lastChanged && (Date.now() - prev.lastChanged < 120000)) {
              return prev;
           }
           
-          return { state: data.status, lastChanged: firestoreTime };
+          return { state: finalStatus as 'online' | 'offline', lastChanged: bestTime };
         });
       }, (error) => {
         console.debug("Firestore Read fail:", error);

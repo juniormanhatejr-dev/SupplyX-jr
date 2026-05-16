@@ -17,6 +17,7 @@ import ChatView from './components/ChatView';
 import CartModal from './components/CartModal';
 import ProfileModal from './components/ProfileModal';
 import SupplyXLogo from './components/SupplyXLogo';
+import DiagnosticOverlay from './components/DiagnosticOverlay';
 import { OptimizedImage } from './components/ui/OptimizedImage';
 import { useAuth } from './contexts/AuthContext';
 import { useCart } from './contexts/CartContext';
@@ -31,7 +32,7 @@ export default function App() {
   const isOnline = useOnlineStatus();
   const { user, profile, loading, refreshProfile } = useAuth();
   
-  const { unreadCount: totalUnreadMessages } = useNotifications();
+  const { unreadMessages, unreadNotifications } = useNotifications();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [showQuoteFormDirectly, setShowQuoteFormDirectly] = useState(false);
@@ -349,9 +350,9 @@ export default function App() {
                     }`}
                   >
                     <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                    {totalUnreadMessages > 0 && (
+                    {unreadMessages > 0 && (
                       <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-black flex items-center justify-center rounded-full border-2 border-supplyx-deep animate-bounce shadow-lg shadow-red-500/20">
-                        {totalUnreadMessages}
+                        {unreadMessages}
                       </span>
                     )}
                   </button>
@@ -419,6 +420,7 @@ export default function App() {
             isDarkMode={isDarkMode}
             language={language}
           />
+          <DiagnosticOverlay />
         </main>
       </div>
     );

@@ -50,7 +50,27 @@ async function testConnection() {
 testConnection();
 */
 
-console.log('SupplyX Firebase Engine initialized');
+console.log('%c[ENGINE] SupplyX Firebase Core Initialized', 'color: #3b82f6; font-weight: bold;');
+console.log('[DEBUG] Project ID:', firebaseConfig.projectId);
+console.log('[DEBUG] RTDB URL:', (rtdb as any).repo_?.repoInfo_?.host || 'Auto-resolving...');
+
+// Global diagnostic state for extreme debugging
+if (typeof window !== 'undefined') {
+  (window as any).SUPPLYX_DEBUG = {
+    auth,
+    db,
+    rtdb,
+    storage,
+    getSystemStatus: () => ({
+      authenticated: !!auth.currentUser,
+      uid: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      online: navigator.onLine,
+      persistence: 'enabled',
+      timestamp: new Date().toISOString()
+    })
+  };
+}
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });

@@ -36,7 +36,7 @@ export default function UserPresenceIndicator({
 
   if (isOnline) {
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5" id="online-indicator">
         <div className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -48,11 +48,15 @@ export default function UserPresenceIndicator({
     );
   }
 
+  const lastSeenText = showLastSeen ? formatLastSeen(presence?.lastChanged, language) : '';
+  const offlineLabel = language === 'PT' ? 'Offline' : 'Offline';
+
   return (
-    <p className={`${className} ${offlineClassName}`}>
-      {showLastSeen 
-        ? formatLastSeen(presence?.lastChanged, language) 
-        : (language === 'PT' ? 'Offline' : 'Offline')}
-    </p>
+    <div className="flex items-center gap-1.5" id="offline-indicator">
+      <div className="h-2 w-2 rounded-full bg-zinc-400"></div>
+      <p className={`${className} ${offlineClassName}`}>
+        {lastSeenText || offlineLabel}
+      </p>
+    </div>
   );
 }

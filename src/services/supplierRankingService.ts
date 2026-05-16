@@ -23,6 +23,7 @@ export interface SupplierRanking {
   supplierId: string;
   productMatch: number; // 0 to 1
   distanceKm: number;
+  priceTotal: number;
   score: number; // Weighted combined score
 }
 
@@ -40,39 +41,65 @@ export function calculateDistance(loc1: Location, loc2: Location): number {
 
 export function rankSuppliers(
   buyerLocation: Location,
-  requestedItems: string[],
+  requestedItems: Array<{ material: string; quantity: number }>,
   suppliers: Array<{
     id: string;
     location: Location;
-    catalogItems: string[]; // List of product names or categories they have
+    catalog: Array<{ name: string; price: number }>;
   }>
 ): SupplierRanking[] {
-  return suppliers.map(supplier => {
-    // Calculate how many of the requested items this supplier has
-    const matchedItems = requestedItems.filter(item => 
-      supplier.catalogItems.some(catItem => 
-        catItem.toLowerCase().includes(item.toLowerCase()) || 
-        item.toLowerCase().includes(catItem.toLowerCase())
-      )
-    );
-    
-    const productMatch = requestedItems.length > 0 ? matchedItems.length / requestedItems.length : 0;
+  // First calculate totals to find min/max for normalization
+  const calculatedSuppliers = suppliers.map(supplier => {
+    let priceTotal = 0;
+    let matchedCount = 0;
+
+    requestedItems.forEach(req => {
+      const match = supplier.catalog.find(cat => 
+        cat.name.toLowerCase().includes(req.material.toLowerCase()) || 
+        req.material.toLowerCase().includes(cat.name.toLowerCase())
+      );
+      if (match) {
+        priceTotal += match.price * req.quantity;
+        matchedCount++;
+      } else {
+        // Penalty for missing items - estimate a high price
+        priceTotal += 5000 * req.quantity; 
+      }
+    });
+
+    const productMatch = requestedItems.length > 0 ? matchedCount / requestedItems.length : 0;
     const distanceKm = calculateDistance(buyerLocation, supplier.location);
-    
-    // Scoring logic:
-    // Higher product match is very important (90% target)
-    // Lower distance is better
-    // Weighted formula: (ProductMatch * 70%) + (InverseDistanceScore * 30%)
-    
-    const maxDistance = 2500; // Roughly length of Moz
-    const distanceScore = Math.max(0, 1 - (distanceKm / maxDistance));
-    const score = (productMatch * 0.7) + (distanceScore * 0.3);
-    
+
     return {
       supplierId: supplier.id,
       productMatch,
       distanceKm,
-      score
+      priceTotal
+    };
+  });
+
+  const minPrice = Math.min(...calculatedSuppliers.map(s => s.priceTotal)) || 1;
+  const maxPrice = Math.max(...calculatedSuppliers.map(s => s.priceTotal)) || 2;
+  const maxDistance = 2500;
+
+  return calculatedSuppliers.map(s => {
+    // Normalization (0 to 1 where 1 is best)
+    const priceScore = maxPrice === minPrice ? 1 : 1 - ((s.priceTotal - minPrice) / (maxPrice - minPrice));
+    const distanceScore = Math.max(0, 1 - (s.distanceKm / maxDistance));
+    
+    // Scoring logic (Weighted):
+    // 1. Availability (90% target) - 40%
+    // 2. Proximity - 30%
+    // 3. Price - 30%
+    
+    // Bonus for hitting the 90% availability target
+    const availabilityBonus = s.productMatch >= 0.9 ? 0.1 : 0;
+    
+    const score = (s.productMatch * 0.4) + (distanceScore * 0.3) + (priceScore * 0.3) + availabilityBonus;
+
+    return {
+      ...s,
+      score: Math.min(1, score)
     };
   }).sort((a, b) => b.score - a.score);
 }

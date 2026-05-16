@@ -10,6 +10,7 @@ interface UserProfile {
   userName?: string;
   nuit: string;
   address: string;
+  license?: string;
   phone: string;
   email: string;
   type: 'buyer' | 'supplier' | 'logistics';
@@ -19,6 +20,10 @@ interface UserProfile {
   coverURL?: string;
   city?: string;
   createdAt: string;
+  bankAccounts?: { bankName: string; accountNumber: string; nib: string }[];
+  mobileWallets?: { provider: string; number: string; name: string }[];
+  signatureURL?: string;
+  stampURL?: string;
 }
 
 interface AuthContextType {

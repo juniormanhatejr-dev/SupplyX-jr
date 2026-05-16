@@ -14,20 +14,25 @@ service cloud.firestore {
     // VALIDATION BLUEPRINTS
     // ---------------------------------------------------------
     
+    function isCreating() { return resource == null; }
+    function isUpdating() { return resource != null; }
+
     function isValidUser(data) {
       return (!('email' in data) || (data.email is string && data.email.size() <= 256)) &&
              (!('name' in data) || (data.name is string && data.name.size() <= 128)) &&
              (!('type' in data) || (data.type in ['buyer', 'supplier', 'logistics'])) &&
              (!('phone' in data) || (data.phone is string && data.phone.size() <= 40)) &&
+             (!('nuit' in data) || (data.nuit is string && data.nuit.size() <= 20)) &&
              (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
-             (!('sector' in data) || (data.sector is string && data.sector.size() <= 100));
+             (!('sector' in data) || (data.sector is string && data.sector.size() <= 100)) &&
+             (!('updatedAt' in data) || (isCreating() ? data.updatedAt == request.time : (data.updatedAt == request.time || data.updatedAt == existing().updatedAt)));
     }
 
     function isValidChat(data) {
       return data.keys().hasAll(['participants', 'createdAt', 'updatedAt']) &&
              data.participants is list && data.participants.size() >= 2 &&
              request.auth.uid in data.participants &&
-             data.createdAt == request.time &&
+             (isCreating() ? data.createdAt == request.time : data.createdAt == existing().createdAt) &&
              data.updatedAt == request.time;
     }
 
@@ -36,7 +41,7 @@ service cloud.firestore {
              data.senderId == request.auth.uid &&
              request.auth.uid in data.participants &&
              data.text is string && data.text.size() <= 5000 &&
-             data.createdAt == request.time;
+             (isCreating() ? data.createdAt == request.time : data.createdAt == existing().createdAt);
     }
 
     function isValidProduct(data) {
@@ -44,7 +49,7 @@ service cloud.firestore {
              data.supplierId == request.auth.uid &&
              data.price is number && data.price >= 0 &&
              data.name is string && data.name.size() <= 200 &&
-             data.createdAt == request.time;
+             (isCreating() ? data.createdAt == request.time : data.createdAt == existing().createdAt);
     }
 
     function isValidTruck(data) {
@@ -65,9 +70,12 @@ service cloud.firestore {
 
     function isValidNotification(data) {
       return data.keys().hasAll(['userId', 'title', 'message', 'createdAt', 'read']) &&
-             data.userId == request.auth.uid &&
+             (!('senderId' in data) || data.senderId == request.auth.uid) &&
+             (data.userId == request.auth.uid || (isSignedIn() && 'senderId' in data)) &&
+             data.userId is string && data.userId.size() <= 128 &&
              data.title is string && data.title.size() <= 200 &&
-             data.createdAt == request.time &&
+             data.message is string && data.message.size() <= 2000 &&
+             (isCreating() ? data.createdAt == request.time : data.createdAt == existing().createdAt) &&
              data.read is bool;
     }
 
@@ -75,24 +83,9 @@ service cloud.firestore {
     // MATCH BLOCKS
     // ---------------------------------------------------------
     
-    // Default Deny
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     match /users/{userId} {
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
-      allow create: if isOwner(userId) && 
-                       incoming().keys().hasAll(['uid', 'email', 'name', 'type']) &&
-                       isValidUser(incoming());
-      allow update: if isOwner(userId) && isValidUser(incoming()) && (
-        // Action: Profile Update or Presence Update
-        incoming().diff(existing()).affectedKeys().hasOnly([
-          'name', 'phone', 'address', 'city', 'bio', 'sector', 'photoURL', 'coverURL', 
-          'updatedAt', 'status', 'lastActive', 'fleetSize', 'specialization', 'userName', 'nuit'
-        ])
-      );
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId);
     }
 
     match /chats/{chatId} {
@@ -112,10 +105,11 @@ service cloud.firestore {
     }
 
     match /products/{productId} {
-      allow read: if true; // Marketplace is public
-      allow create: if isSignedIn() && isValidProduct(incoming());
-      allow update: if isSignedIn() && existing().supplierId == request.auth.uid && isValidProduct(incoming()) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'price', 'unit', 'category', 'image', 'stock', 'updatedAt', 'minOrder', 'supplierName'])
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(productId) && isValidProduct(incoming());
+      allow update: if isSignedIn() && isValidId(productId) && existing().supplierId == request.auth.uid && isValidProduct(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'price', 'unit', 'category', 'image', 'stock', 'updatedAt', 'minOrder', 'supplierName', 'onSale', 'salePrice'])
       );
       allow delete: if isSignedIn() && existing().supplierId == request.auth.uid;
     }
@@ -123,8 +117,8 @@ service cloud.firestore {
     match /trucks/{truckId} {
       allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
       allow get: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow create: if isSignedIn() && isValidTruck(incoming());
-      allow update: if isSignedIn() && existing().ownerId == request.auth.uid && isValidTruck(incoming()) && (
+      allow create: if isSignedIn() && isValidId(truckId) && isValidTruck(incoming());
+      allow update: if isSignedIn() && isValidId(truckId) && existing().ownerId == request.auth.uid && isValidTruck(incoming()) && (
         incoming().diff(existing()).affectedKeys().hasOnly(['model', 'plate', 'type', 'capacity', 'status'])
       );
       allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
@@ -133,8 +127,8 @@ service cloud.firestore {
     match /loads/{loadId} {
       allow list: if isSignedIn() && resource.data.carrierId == request.auth.uid;
       allow get: if isSignedIn() && resource.data.carrierId == request.auth.uid;
-      allow create: if isSignedIn() && isValidLoad(incoming());
-      allow update: if isSignedIn() && existing().carrierId == request.auth.uid && isValidLoad(incoming()) && (
+      allow create: if isSignedIn() && isValidId(loadId) && isValidLoad(incoming());
+      allow update: if isSignedIn() && isValidId(loadId) && existing().carrierId == request.auth.uid && isValidLoad(incoming()) && (
         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'truckId', 'updatedAt'])
       );
     }
@@ -147,6 +141,11 @@ service cloud.firestore {
         incoming().diff(existing()).affectedKeys().hasOnly(['read'])
       );
       allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

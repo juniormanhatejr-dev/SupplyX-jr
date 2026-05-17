@@ -79,6 +79,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
           }
         });
       }
+    }, (error) => {
+      console.error("Chat listener error:", error);
     });
 
     // Listen to general notifications
@@ -105,6 +107,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
           }
         });
       }
+    }, (error) => {
+      console.error("Notification listener error:", error);
     });
 
     return () => {

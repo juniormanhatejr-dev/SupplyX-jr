@@ -2,5 +2,5 @@
   "name": "SupplyX",
   "description": "Infraestrutura on-chain para procurement industrial e gestão logística global.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

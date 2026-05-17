@@ -24,11 +24,13 @@ interface Product {
   name: string;
   description: string;
   category: string;
+  subcategory?: string;
   price: number;
   onSale: boolean;
   salePrice: number;
   stock: number;
   image: string;
+  tags?: string[];
 }
 
 interface ProductDetailModalProps {
@@ -158,14 +160,28 @@ export default function ProductDetailModal({ product, isOpen, onClose, onEdit, i
               </div>
 
               <div className="mb-8">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
                    <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest ${isDarkMode ? 'bg-brand/10 text-brand' : 'bg-brand/5 text-brand'}`}>
                     {product.category}
                   </span>
+                  {product.subcategory && (
+                    <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest ${isDarkMode ? 'bg-zinc-800 text-zinc-400' : 'bg-zinc-100 text-zinc-500'}`}>
+                      {product.subcategory}
+                    </span>
+                  )}
                   <div className="flex items-center gap-1 text-zinc-400 text-[10px] font-black uppercase tracking-widest">
                     <ShieldCheck className="w-3 h-3" /> {t.verified}
                   </div>
                 </div>
+                {product.tags && product.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {product.tags.map((tag, i) => (
+                      <span key={i} className="text-[10px] font-bold text-zinc-500 italic">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <h2 className={`text-3xl md:text-4xl font-black italic uppercase tracking-tighter mb-4 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
                   {product.name}
                 </h2>

@@ -7,8 +7,12 @@ import {
   Zap,
   BarChart3,
   Truck,
-  ArrowRight
+  ArrowRight,
+  Search,
+  Sparkles
 } from 'lucide-react';
+import { useState } from 'react';
+import React from 'react';
 import { motion } from 'motion/react';
 import StatCard from './StatCard';
 import SalesChart from './SalesChart';
@@ -18,15 +22,25 @@ import TransactionList from './TransactionList';
 interface DashboardViewProps {
   onActivateIA: () => void;
   onCategoryClick?: (category: string) => void;
-  onNavigate?: (tab: string) => void;
+  onNavigate?: (tab: string, payload?: any) => void;
   isDarkMode?: boolean;
   language?: 'PT' | 'EN';
   userType?: 'buyer' | 'supplier';
 }
 
 export default function DashboardView({ onActivateIA, onCategoryClick, onNavigate, isDarkMode, language, userType = 'buyer' }: DashboardViewProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    onNavigate?.('Produtos / Materiais', { searchQuery });
+  };
+
   const translations = {
     PT: {
+      searchPlaceholder: 'O que você precisa construir hoje?',
+      searchBtn: 'Buscar Agora',
       stats: {
         total: userType === 'supplier' ? 'Faturamento Total (YTD)' : 'Total Comprado (Até agora)',
         open: userType === 'supplier' ? 'Novas Cotações (Lead)' : 'Solicitações em Aberto',
@@ -63,6 +77,8 @@ export default function DashboardView({ onActivateIA, onCategoryClick, onNavigat
       }
     },
     EN: {
+      searchPlaceholder: 'What do you need to build today?',
+      searchBtn: 'Search Now',
       stats: {
         total: userType === 'supplier' ? 'Total Revenue (YTD)' : 'Total Purchased (YTD)',
         open: userType === 'supplier' ? 'New Quotes (Lead)' : 'Open Requests',
@@ -134,6 +150,44 @@ export default function DashboardView({ onActivateIA, onCategoryClick, onNavigat
       exit={{ opacity: 0, y: -10 }}
       className="space-y-6"
     >
+      {/* Intelligent Search Section */}
+      <div className={`p-1 flex flex-col md:flex-row items-center gap-3 rounded-[32px] border shadow-2xl transition-all duration-500 overflow-hidden ${
+        isDarkMode 
+          ? 'bg-zinc-900/40 border-white/5 shadow-supplyx-blue/5' 
+          : 'bg-white border-zinc-100 shadow-zinc-200/50'
+      }`}>
+        <form onSubmit={handleSearch} className="flex-1 w-full flex items-center relative group">
+          <div className="absolute left-6 text-zinc-500 group-focus-within:text-supplyx-blue transition-colors">
+            <Search className="w-5 h-5" />
+          </div>
+          <input 
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t.searchPlaceholder}
+            className={`w-full py-6 pl-16 pr-6 bg-transparent text-sm font-bold outline-none transition-all ${
+              isDarkMode ? 'text-white placeholder:text-zinc-600' : 'text-zinc-900 placeholder:text-zinc-400'
+            }`}
+          />
+        </form>
+        <div className="flex items-center gap-2 pr-1 pb-1 md:pb-0">
+          <button 
+            onClick={onActivateIA}
+            className="hidden sm:flex items-center gap-2 px-6 py-5 rounded-[24px] bg-zinc-800/50 border border-white/5 text-supplyx-blue text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all active:scale-95 whitespace-nowrap"
+          >
+            <Sparkles className="w-4 h-4" />
+            AI Smart
+          </button>
+          <button 
+            onClick={handleSearch}
+            className="flex items-center gap-2 px-10 py-5 rounded-[24px] bg-brand text-white text-[10px] font-black uppercase tracking-widest shadow-xl shadow-brand/20 hover:brightness-110 active:scale-95 translate-x-0 transition-all whitespace-nowrap"
+          >
+            {t.searchBtn}
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {activeStats.map((stat, i) => (
           <motion.div

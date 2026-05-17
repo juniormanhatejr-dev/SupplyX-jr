@@ -24,10 +24,15 @@ import {
   AlertCircle,
   MessageSquare,
   Brain,
-  Camera
+  Camera,
+  Sparkles,
+  SearchCode
 } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType, uploadFile } from '../lib/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, getDoc } from 'firebase/firestore';
+import { normalizeText, generateSearchTokens } from '../lib/normalization';
+import { getProductMetadata, MASTER_CATALOG } from '../lib/masterCatalog';
+import { classifyProduct } from '../services/geminiService';
 import ProfileModal from './ProfileModal';
 import ProductDetailModal from './ProductDetailModal';
 import { OptimizedImage } from './ui/OptimizedImage';
@@ -38,13 +43,18 @@ interface Product {
   supplierId: string;
   supplierName?: string;
   name: string;
+  normalizedName?: string;
   description: string;
   category: string;
+  subcategory?: string;
   price: number;
   onSale: boolean;
   salePrice: number;
   stock: number;
   image: string;
+  tags?: string[];
+  synonyms?: string[];
+  searchIndex?: string[];
   createdAt: any;
 }
 
@@ -114,6 +124,8 @@ interface ProductsViewProps {
   isDarkMode?: boolean;
   language?: 'PT' | 'EN';
   initialCategory?: string;
+  initialSearchQuery?: string;
+  onClearSearch?: () => void;
   userType?: 'buyer' | 'supplier';
   supplierId?: string | null;
   onClearSupplierFilter?: () => void;
@@ -122,6 +134,8 @@ interface ProductsViewProps {
 export default function ProductsView({ 
   onNavigate, 
   initialCategory = 'Tudo', 
+  initialSearchQuery = '',
+  onClearSearch,
   isDarkMode, 
   language = 'PT', 
   userType = 'buyer',
@@ -142,7 +156,24 @@ export default function ProductsView({
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const { items } = useCart();
   const [supplierProfile, setSupplierProfile] = useState<any>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const suggestions = searchQuery.length > 2 
+    ? MASTER_CATALOG.filter(item => {
+        const q = normalizeText(searchQuery);
+        return normalizeText(item.nome_principal).includes(q) || 
+               item.sinonimos.some(s => normalizeText(s).includes(q)) ||
+               item.termos_populares.some(t => normalizeText(t).includes(q));
+      }).slice(0, 5)
+    : [];
+
+  useEffect(() => {
+    if (initialSearchQuery) {
+      setSearchQuery(initialSearchQuery);
+      onClearSearch?.();
+    }
+  }, [initialSearchQuery]);
 
   useEffect(() => {
     if (supplierId) {
@@ -190,6 +221,7 @@ export default function ProductsView({
       await addDoc(collection(db, 'chats'), {
         participants: [auth.currentUser.uid, product.supplierId],
         lastMessage: `${t.interestIn}: ${product.name}`,
+        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         participantNames: {
           [auth.currentUser.uid]: auth.currentUser.displayName || t.buyer,
@@ -419,10 +451,27 @@ export default function ProductsView({
     : products.filter(item => item.category === activeCategory);
 
   const displayProducts = baseProducts.filter(item => {
-    const q = searchQuery.toLowerCase();
-    return item.name.toLowerCase().includes(q) || 
-           (item.description && item.description.toLowerCase().includes(q)) ||
-           item.category.toLowerCase().includes(q);
+    if (!searchQuery) return true;
+    
+    const q = normalizeText(searchQuery);
+    const searchTerms = q.split(' ');
+    
+    // Check name and description
+    const nameNorm = normalizeText(item.name);
+    const descNorm = item.description ? normalizeText(item.description) : '';
+    
+    if (nameNorm.includes(q) || descNorm.includes(q)) return true;
+    
+    // Check tags, synonyms, and searchIndex
+    const additionalTerms = [
+      ...(item.tags || []),
+      ...(item.synonyms || []),
+      ...(item.searchIndex || []),
+      item.category,
+      item.subcategory || ''
+    ].map(t => normalizeText(t));
+    
+    return additionalTerms.some(term => term.includes(q) || searchTerms.some(st => term.includes(st)));
   });
 
   const handleServiceRequest = () => {
@@ -456,6 +505,29 @@ export default function ProductsView({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const [isClassifying, setIsClassifying] = useState(false);
+
+  const handleAIClassification = async () => {
+    if (!editingProduct?.name) return;
+    
+    setIsClassifying(true);
+    try {
+      const result = await classifyProduct(editingProduct.name, editingProduct.description || '');
+      setEditingProduct(prev => ({
+        ...prev!,
+        category: result.category,
+        subcategory: result.subcategory,
+        tags: Array.from(new Set([...(prev?.tags || []), ...result.tags])),
+        synonyms: Array.from(new Set([...(prev?.synonyms || []), ...result.synonyms])),
+        normalizedName: result.normalizedName
+      }));
+    } catch (error) {
+      console.error("AI Classification failed", error);
+    } finally {
+      setIsClassifying(false);
+    }
   };
 
   return (
@@ -501,12 +573,57 @@ export default function ProductsView({
           <input 
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setShowSuggestions(true);
+            }}
+            onFocus={() => setShowSuggestions(true)}
             placeholder={language === 'PT' ? 'Pesquisar produtos no catálogo...' : 'Search products in catalog...'}
             className={`flex-1 bg-transparent border-none outline-none text-sm font-bold ${
               isDarkMode ? 'text-white placeholder:text-zinc-600' : 'text-zinc-900 placeholder:text-zinc-400'
             }`}
           />
+          {showSuggestions && suggestions.length > 0 && (
+            <div className={`absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl border z-50 shadow-2xl backdrop-blur-xl ${
+              isDarkMode ? 'bg-zinc-900/90 border-zinc-800' : 'bg-white/90 border-zinc-100'
+            }`}>
+              <div className="px-3 py-2 border-b border-white/5 mb-1">
+                <span className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500">Sugestões SupplyX</span>
+              </div>
+              {suggestions.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setSearchQuery(item.nome_principal);
+                    setShowSuggestions(false);
+                  }}
+                  className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
+                    isDarkMode ? 'hover:bg-white/5 text-white' : 'hover:bg-zinc-50 text-zinc-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center text-brand">
+                      <SearchCode className="w-4 h-4" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-left font-bold leading-tight text-xs">{item.nome_principal}</p>
+                      <p className="text-[8px] font-black uppercase text-zinc-500">{item.categoria} • {item.subcategoria}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 flex-wrap justify-end">
+                    {item.tags.slice(0, 2).map((tag, i) => (
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[6px] font-black uppercase text-zinc-400">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          {showSuggestions && searchQuery.length > 0 && (
+            <div className="fixed inset-0 z-40" onClick={() => setShowSuggestions(false)} />
+          )}
           {searchQuery && (
             <button 
               onClick={() => setSearchQuery('')}
@@ -642,7 +759,7 @@ export default function ProductsView({
           )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
           {displayProducts.length > 0 ? displayProducts.map((item, index) => (
             <motion.div
               key={item.id} 
@@ -721,11 +838,18 @@ export default function ProductsView({
                     }}
                   >
                     <p className={`text-xs truncate font-bold ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}>{item.name}</p>
-                    {userType === 'buyer' && (
-                      <p className="text-[8px] font-black uppercase text-zinc-500 group-hover/info:text-brand transition-colors truncate">
-                        {item.supplierName || t.viewProfile}
-                      </p>
-                    )}
+                    <div className="flex items-center gap-1.5 overflow-hidden">
+                      {userType === 'buyer' && (
+                        <p className="text-[8px] font-black uppercase text-zinc-500 group-hover/info:text-brand transition-colors truncate shrink-0">
+                          {item.supplierName || t.supplier}
+                        </p>
+                      )}
+                      {item.subcategory && (
+                        <span className="text-[7px] font-bold text-zinc-400 uppercase italic whitespace-nowrap">
+                          {item.subcategory}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   {userType === 'supplier' && (
                     <span className={`text-[8px] font-black uppercase px-1.5 rounded shrink-0 ${item.stock > 0 ? 'text-emerald-500 bg-emerald-500/10' : 'text-red-500 bg-red-500/10'}`}>
@@ -759,7 +883,7 @@ export default function ProductsView({
           {t.moqLow} <span className="w-1 h-1 rounded-full bg-zinc-700" /> {t.shippingDays} <span className="w-1 h-1 rounded-full bg-zinc-700" /> {t.trueToDesign}
         </p>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
           {personalization.map((item) => (
             <div 
               key={item.id} 
@@ -793,7 +917,7 @@ export default function ProductsView({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className={`w-full max-w-lg p-8 rounded-[40px] relative border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-2xl'}`}
+              className={`w-full max-w-2xl p-8 rounded-[40px] relative border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-2xl'}`}
             >
               <button 
                 onClick={() => setIsEditorOpen(false)}
@@ -811,7 +935,19 @@ export default function ProductsView({
 
               <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1 scrollbar-hide">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.productName}</label>
+                  <div className="flex justify-between items-center px-1">
+                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.productName}</label>
+                    <button 
+                      onClick={handleAIClassification}
+                      disabled={isClassifying || !editingProduct?.name}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${
+                        isClassifying ? 'bg-brand/10 text-brand animate-pulse' : 'bg-brand/10 text-brand hover:bg-brand/20'
+                      }`}
+                    >
+                      <Brain className="w-3 h-3" />
+                      {isClassifying ? 'Analisando...' : 'IA Classificar'}
+                    </button>
+                  </div>
                   <input 
                     type="text"
                     value={editingProduct?.name || ''}
@@ -820,6 +956,16 @@ export default function ProductsView({
                     placeholder={t.placeholderProduct}
                   />
                 </div>
+
+                {editingProduct?.tags && editingProduct.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 px-1">
+                    {editingProduct.tags.map((tag, i) => (
+                      <span key={i} className="px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-[8px] font-black text-zinc-500 uppercase border border-zinc-200 dark:border-zinc-700">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
@@ -833,6 +979,19 @@ export default function ProductsView({
                     </select>
                   </div>
                   <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{language === 'PT' ? 'Subcategoria' : 'Subcategory'}</label>
+                    <input 
+                      type="text"
+                      value={editingProduct?.subcategory || ''}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, subcategory: e.target.value })}
+                      placeholder="Ex: Aço, Tubulação..."
+                      className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.stock}</label>
                     <input 
                       type="number"
@@ -841,9 +1000,6 @@ export default function ProductsView({
                       className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
                     />
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.price}</label>
                     <input 
@@ -853,6 +1009,7 @@ export default function ProductsView({
                       className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
                     />
                   </div>
+                </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.imageUrl}</label>
                     <div className="flex gap-4">
@@ -894,7 +1051,6 @@ export default function ProductsView({
                       </label>
                     </div>
                   </div>
-                </div>
 
                 {editingProduct?.image && (
                   <div className="relative aspect-video rounded-2xl overflow-hidden border-2 border-zinc-100 dark:border-zinc-800">
@@ -962,21 +1118,39 @@ export default function ProductsView({
                 <button 
                   onClick={async () => {
                     if (!editingProduct?.name || !auth.currentUser) return;
+                    
+                    setIsLoading(true);
                     const now = serverTimestamp();
+                    
+                    // Pre-process for intelligent search
+                    const normalizedName = normalizeText(editingProduct.name);
+                    const baseTokens = generateSearchTokens(editingProduct.name);
+                    const catalogMatch = getProductMetadata(editingProduct.name);
+                    
+                    const searchIndex = Array.from(new Set([
+                      ...baseTokens,
+                      ...(editingProduct.tags || []),
+                      ...(catalogMatch?.tags || []),
+                      ...(catalogMatch?.sinonimos || []),
+                      editingProduct.category,
+                      editingProduct.subcategory || catalogMatch?.subcategoria || ''
+                    ])).map(t => normalizeText(t)).filter(t => t.length > 1);
+
                     try {
                       if (editingProduct.id) {
-                        // For updates, we MUST NOT change createdAt to serverTimestamp()
-                        // because the rules enforce incoming().createdAt == existing().createdAt
                         const { id, createdAt, ...rest } = editingProduct;
                         await updateDoc(doc(db, 'products', id as string), {
                           ...rest,
+                          normalizedName,
+                          searchIndex,
                           supplierId: auth.currentUser.uid,
                           updatedAt: now
-                          // We omit createdAt so it remains unchanged in the document
                         });
                       } else {
                         const data = {
                           ...editingProduct,
+                          normalizedName,
+                          searchIndex,
                           supplierId: auth.currentUser.uid,
                           createdAt: now,
                           updatedAt: now
@@ -1007,7 +1181,7 @@ export default function ProductsView({
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className={`w-full max-w-md p-8 rounded-3xl relative ${isDarkMode ? 'bg-zinc-900 border border-zinc-800' : 'bg-white shadow-2xl'}`}
+              className={`w-full max-w-2xl p-8 rounded-3xl relative ${isDarkMode ? 'bg-zinc-900 border border-zinc-800' : 'bg-white shadow-2xl'}`}
             >
               <button 
                 onClick={() => setSelectedService(null)}

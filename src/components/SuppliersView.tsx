@@ -326,7 +326,7 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
           <Loader2 className="w-10 h-10 text-brand animate-spin" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
           {filteredSuppliers.map((s, i) => (
             <motion.div
               key={s.id}
@@ -442,6 +442,7 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
                       await addDoc(collection(db, 'chats'), {
                         participants: [auth.currentUser.uid, s.uid],
                         lastMessage: 'Início da conversa',
+                        createdAt: serverTimestamp(),
                         updatedAt: serverTimestamp(),
                         participantNames: {
                           [auth.currentUser.uid]: auth.currentUser.displayName || 'User',

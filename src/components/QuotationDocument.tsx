@@ -74,6 +74,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
   const grandTotal = subtotal - totalDiscount + totalVAT;
 
   const formatCurrency = (value: number) => {
+    if (value === 0) return 'Sob Consulta';
     return value.toLocaleString('pt-MZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' MT';
   };
 

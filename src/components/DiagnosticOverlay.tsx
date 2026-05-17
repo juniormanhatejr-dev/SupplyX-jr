@@ -44,6 +44,12 @@ const DiagnosticOverlay: React.FC = () => {
     console.warn = (...args) => {
       originalWarn.apply(console, args);
       const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+      
+      // Filter out non-critical Recharts dimension warnings that clutter the diagnostic feed
+      if (msg.includes('width(0)') || msg.includes('height(0)') || msg.includes('chart should be greater than 0')) {
+        return;
+      }
+      
       queueLog(msg, 'warn');
     };
 
@@ -66,6 +72,14 @@ const DiagnosticOverlay: React.FC = () => {
     }, 2000);
     return () => clearInterval(interval);
   }, []);
+
+  const isLocal = window.location.hostname === 'localhost' || 
+                  window.location.hostname === '127.0.0.1' || 
+                  window.location.hostname === '0.0.0.0';
+
+  if ((import.meta as any).env.PROD || !isLocal) {
+    return null;
+  }
 
   if (!isOpen) {
     return (

@@ -179,7 +179,7 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
     <div className="min-h-screen bg-supplyx-deep text-supplyx-white selection:bg-supplyx-blue selection:text-white font-sans">
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-[100] backdrop-blur-2xl border-b border-white/5 bg-supplyx-deep/70">
-        <div className="max-w-[1600px] mx-auto px-6 h-24 flex items-center justify-between">
+        <div className="w-full px-8 h-24 flex items-center justify-between">
           <SupplyXLogo size="md" isDark={true} />
           <div className="hidden lg:flex items-center gap-12">
             <div className="flex items-center gap-8">
@@ -208,7 +208,7 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
 
       {/* Hero Section */}
       <section className="relative pt-64 pb-32 overflow-hidden industrial-grid bg-supplyx-deep">
-        <div className="max-w-[1600px] mx-auto px-6">
+        <div className="w-full px-8 md:px-12">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -326,7 +326,7 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
 
       {/* Trust & Metrics Section */}
       <section className="py-24 bg-supplyx-dark border-y border-white/5">
-        <div className="max-w-[1600px] mx-auto px-6">
+        <div className="w-full px-8 md:px-12">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-4 py-12 rounded-[32px] bg-white/[0.02] border border-white/5 backdrop-blur-sm">
             {t.trust.metrics.map((metric, i) => (
               <motion.div
@@ -357,7 +357,7 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
 
       {/* Procurement Workflow Section */}
       <section id="workflow" className="py-48 industrial-grid relative overflow-hidden">
-        <div className="max-w-[1600px] mx-auto px-6 relative z-10">
+        <div className="w-full px-8 md:px-12 relative z-10">
           <div className="max-w-3xl mb-32">
             <p className="text-[10px] font-black uppercase tracking-[0.5em] text-supplyx-blue mb-8">{language === 'PT' ? 'Controlo Ponta-a-Ponta' : 'End-to-End Control'}</p>
             <h2 className="text-6xl md:text-8xl font-black uppercase tracking-tighter text-white mb-12 leading-none italic">
@@ -391,7 +391,7 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
 
       {/* Supplier Management Section */}
       <section id="suppliers" className="py-48 bg-supplyx-deep border-y border-white/5">
-        <div className="max-w-[1600px] mx-auto px-6">
+        <div className="w-full px-8 md:px-12">
           <div className="flex flex-col lg:flex-row justify-between items-end mb-32 gap-12">
             <div className="max-w-2xl">
               <p className="text-[10px] font-black uppercase tracking-[0.5em] text-supplyx-blue mb-8">{language === 'PT' ? 'Rede Verificada' : 'Verified Network'}</p>
@@ -439,7 +439,7 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
 
       {/* Live Logistics Section */}
       <section id="logistics" className="py-48 industrial-grid overflow-hidden">
-        <div className="max-w-[1600px] mx-auto px-6">
+        <div className="w-full px-8 md:px-12">
            <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
               <div>
                  <p className="text-[10px] font-black uppercase tracking-[0.5em] text-supplyx-blue mb-8">{language === 'PT' ? 'Visibilidade em Tempo Real' : 'Real-time Visibility'}</p>
@@ -505,7 +505,7 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
 
       {/* Enterprise Analytics Section */}
       <section id="analytics" className="py-48 bg-supplyx-dark border-y border-white/5">
-        <div className="max-w-[1600px] mx-auto px-6">
+        <div className="w-full px-8 md:px-12">
            <div className="text-center mb-40">
               <p className="text-[10px] font-black uppercase tracking-[0.6em] text-supplyx-blue mb-8">{language === 'PT' ? 'Inteligência de Performance' : 'Performance Intelligence'}</p>
               <h2 className="text-6xl md:text-8xl font-black uppercase tracking-tighter text-white mb-0 italic leading-none">{t.analytics.title}</h2>
@@ -557,7 +557,7 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
 
       {/* Mobile Experience Section */}
       <section className="py-48 industrial-grid bg-supplyx-deep">
-        <div className="max-w-[1600px] mx-auto px-6">
+        <div className="w-full px-8 md:px-12">
            <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
               <div className="order-2 lg:order-1 relative flex justify-center">
                  {/* Mobile Mockups */}
@@ -665,7 +665,7 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
 
       {/* CTA Section - The Closing */}
       <section className="py-48 relative overflow-hidden bg-supplyx-deep border-t border-white/5">
-        <div className="max-w-[1600px] mx-auto px-6">
+        <div className="w-full px-8 md:px-12">
           <div className="relative rounded-[48px] p-24 md:p-48 text-center overflow-hidden bg-zinc-900 border border-white/5 shadow-3xl">
               <div className="absolute inset-0 industrial-grid opacity-10" />
               <div className="relative z-10">
@@ -698,7 +698,7 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
 
       {/* Industrial Footer */}
       <footer className="pt-48 pb-20 border-t border-white/5 bg-supplyx-deep">
-        <div className="max-w-[1600px] mx-auto px-6">
+        <div className="w-full px-8 md:px-12">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-24 mb-48">
             <div className="md:col-span-4 space-y-16">
               <SupplyXLogo size="lg" isDark={true} />

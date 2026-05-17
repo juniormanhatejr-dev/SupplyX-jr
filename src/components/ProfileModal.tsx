@@ -134,7 +134,7 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className={`w-full max-w-lg rounded-[40px] overflow-hidden border relative ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-2xl'}`}
+            className={`w-full max-w-2xl rounded-[40px] overflow-hidden border relative ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-2xl'}`}
           >
             {/* Stay-on-top buttons */}
             <button 

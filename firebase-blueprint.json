@@ -12,6 +12,8 @@
         "address": { "type": "string" },
         "phone": { "type": "string" },
         "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "moderator", "admin", "superadmin"] },
+        "emailVerified": { "type": "boolean" },
         "type": { "type": "string", "enum": ["buyer", "supplier", "logistics"] },
         "sector": { "type": "string" },
         "city": { "type": "string" },
@@ -58,19 +60,24 @@
     },
     "Product": {
       "title": "Product",
-      "description": "Product offered by a supplier.",
+      "description": "Product offered by a supplier with intelligent recognition support.",
       "type": "object",
       "properties": {
         "name": { "type": "string" },
+        "normalizedName": { "type": "string" },
         "description": { "type": "string" },
         "price": { "type": "number" },
         "unit": { "type": "string" },
         "category": { "type": "string" },
+        "subcategory": { "type": "string" },
         "image": { "type": "string" },
         "supplierId": { "type": "string" },
         "supplierName": { "type": "string" },
         "minOrder": { "type": "number" },
         "stock": { "type": "number" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "synonyms": { "type": "array", "items": { "type": "string" } },
+        "searchIndex": { "type": "array", "items": { "type": "string" } },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -128,6 +135,10 @@
     "users/{userId}": {
       "schema": "User",
       "description": "Profiles of registered users."
+    },
+    "admins/{userId}": {
+      "schema": { "type": "object", "properties": { "role": { "type": "string" } } },
+      "description": "Restricted collection for administrative roles. Only superadmins can write here."
     },
     "chats/{chatId}": {
       "schema": "Chat",

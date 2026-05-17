@@ -281,6 +281,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       await addDoc(collection(db, 'chats'), {
         participants: [auth.currentUser.uid, otherId],
         lastMessage: `${t.interestInOrder}: ${order.id}`,
+        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         participantNames: {
           [auth.currentUser.uid]: auth.currentUser.displayName || (userType === 'supplier' ? t.supplier : t.buyer),
@@ -513,10 +514,8 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           itemPrices.push({ material: row.material, price });
           itemsFound++;
         } else {
-          // Estimate price if no match
-          const estPrice = (Math.random() * 2000 + 1000);
-          calculatedTotal += estPrice * parseFloat(row.quantity || '0');
-          itemPrices.push({ material: row.material, price: estPrice });
+          // DO NOT invent prices. Set to 0 and mark as pending.
+          itemPrices.push({ material: row.material, price: 0 });
         }
       });
 
@@ -524,10 +523,10 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         supplierId: sid,
         name: s?.name || (language === 'PT' ? 'Fornecedor' : 'Supplier'),
         price: calculatedTotal,
-        timeToDeliver: itemsFound > 0 
+        timeToDeliver: itemsFound === rows.length
           ? (language === 'PT' ? '2 dias' : '2 days') 
           : (language === 'PT' ? '4-5 dias (Sob consulta)' : '4-5 days (Pending quote)'),
-        confidence: itemsFound > 0 ? 98 : 65,
+        confidence: Math.round((itemsFound / rows.length) * 100),
         itemPrices
       };
     });
@@ -977,7 +976,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.98 }}
-        className="max-w-5xl mx-auto"
+        className="w-full max-w-[1920px] mx-auto"
       >
         {invoiceTemplate}
 
@@ -1334,8 +1333,13 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                             <div>
                               <p className={`text-2xl font-black italic tracking-tighter ${i === 0 ? 'text-brand' : isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>
                                 MT {res.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                {res.confidence < 100 && (
+                                  <span className="text-[10px] text-yellow-600 dark:text-yellow-500 font-black block leading-none mt-1">
+                                    + ITENS SOB CONSULTA
+                                  </span>
+                                )}
                               </p>
-                              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-none">{t.totalEstimated}</p>
+                              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-none mt-1">{t.totalEstimated}</p>
                             </div>
                             <button 
                               onClick={() => {

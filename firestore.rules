@@ -1,47 +1,71 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
     // ---------------------------------------------------------
-    // GLOBAL HELPERS
+    // 0. GLOBAL SAFETY NET
+    // ---------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------
+    // 1. GLOBAL HELPERS (PHASE 3)
     // ---------------------------------------------------------
     function isSignedIn() { return request.auth != null; }
-    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     
+    // RBAC: Trusted lookups (Pillar 4)
+    // We use get() for role lookups. Note: get() costs 1 read.
+    function getUserData(uid) { return get(/databases/$(database)/documents/users/$(uid)).data; }
+    function getAdminRole() { return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role; }
+    function isAdmin() { return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
+    function isSuperAdmin() { return isAdmin() && getAdminRole() == 'superadmin'; }
+
     // ---------------------------------------------------------
-    // VALIDATION BLUEPRINTS
+    // 2. VALIDATION BLUEPRINTS (Pillar 2)
     // ---------------------------------------------------------
     
-    function isCreating() { return resource == null; }
-    function isUpdating() { return resource != null; }
-
-    function isValidUser(data) {
-      return (!('email' in data) || (data.email is string && data.email.size() <= 256)) &&
-             (!('name' in data) || (data.name is string && data.name.size() <= 128)) &&
-             (!('type' in data) || (data.type in ['buyer', 'supplier', 'logistics'])) &&
-             (!('phone' in data) || (data.phone is string && data.phone.size() <= 40)) &&
-             (!('nuit' in data) || (data.nuit is string && data.nuit.size() <= 20)) &&
-             (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
-             (!('sector' in data) || (data.sector is string && data.sector.size() <= 100)) &&
-             (!('updatedAt' in data) || (isCreating() ? data.updatedAt == request.time : (data.updatedAt == request.time || data.updatedAt == existing().updatedAt)));
+    function isValidUser(data, isUpdate) {
+      return (!('uid' in data) || data.uid == request.auth.uid) &&
+             (!('email' in data) || data.email == request.auth.token.email) &&
+             (!('name' in data) || (data.name is string && data.name.size() <= 256)) &&
+             (!('userName' in data) || (data.userName is string && data.userName.size() <= 256)) &&
+             (!('nuit' in data) || (data.nuit is string && data.nuit.size() <= 40)) &&
+             (!('address' in data) || (data.address is string && data.address.size() <= 1024)) &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 60)) &&
+             (!('city' in data) || (data.city is string && data.city.size() <= 256)) &&
+             (!('sector' in data) || (data.sector is string && data.sector.size() <= 256)) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 5000)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 4096)) &&
+             (!('coverURL' in data) || (data.coverURL is string && data.coverURL.size() <= 4096)) &&
+             (!('specialization' in data) || (data.specialization is string && data.specialization.size() <= 256)) &&
+             (!('fleetSize' in data) || (data.fleetSize is string && data.fleetSize.size() <= 128)) &&
+             (!('type' in data) || data.type in ['buyer', 'supplier', 'logistics']) &&
+             (!('status' in data) || (data.status is string && data.status.size() <= 20)) &&
+             (!('role' in data) || (resource == null ? data.role == 'user' : data.role == existing().role)) &&
+             // Pillar 9: Immutable fields
+             (!('createdAt' in data) || (resource == null ? true : (existing().get('createdAt', null) == null ? true : data.createdAt == existing().createdAt))) &&
+             // Pillar 10: Strict timestamps
+             (!('updatedAt' in data) || data.updatedAt == request.time);
     }
 
     function isValidChat(data) {
-      return data.keys().hasAll(['participants', 'createdAt', 'updatedAt']) &&
-             data.participants is list && data.participants.size() >= 2 &&
+      return data.keys().hasAll(['participants']) &&
+             data.participants is list && data.participants.size() >= 2 && data.participants.size() <= 10 &&
              request.auth.uid in data.participants &&
-             (isCreating() ? data.createdAt == request.time : data.createdAt == existing().createdAt) &&
-             data.updatedAt == request.time;
+             (data.get('createdAt', null) == request.time || data.get('updatedAt', null) == request.time);
     }
 
     function isValidMessage(data) {
-      return data.keys().hasAll(['senderId', 'participants', 'text', 'createdAt']) &&
+      return data.keys().hasAll(['senderId', 'participants', 'text']) &&
              data.senderId == request.auth.uid &&
              request.auth.uid in data.participants &&
              data.text is string && data.text.size() <= 5000 &&
-             (isCreating() ? data.createdAt == request.time : data.createdAt == existing().createdAt);
+             (data.get('createdAt', null) == request.time || data.get('updatedAt', null) == request.time);
     }
 
     function isValidProduct(data) {
@@ -49,103 +73,108 @@ service cloud.firestore {
              data.supplierId == request.auth.uid &&
              data.price is number && data.price >= 0 &&
              data.name is string && data.name.size() <= 200 &&
-             (isCreating() ? data.createdAt == request.time : data.createdAt == existing().createdAt);
+             (!('normalizedName' in data) || (data.normalizedName is string && data.normalizedName.size() <= 200)) &&
+             (!('tags' in data) || (data.tags is list && data.tags.size() <= 20)) &&
+             (!('synonyms' in data) || (data.synonyms is list && data.synonyms.size() <= 20)) &&
+             (!('searchIndex' in data) || (data.searchIndex is list && data.searchIndex.size() <= 100)) &&
+             data.createdAt == request.time;
     }
 
     function isValidTruck(data) {
-      return data.keys().hasAll(['model', 'plate', 'ownerId', 'status']) &&
+      return data.keys().hasAll(['model', 'plate', 'ownerId']) &&
              data.ownerId == request.auth.uid &&
              data.model is string && data.model.size() <= 100 &&
-             data.plate is string && data.plate.size() <= 20 &&
-             data.status in ['available', 'in_transit', 'maintenance'];
+             data.plate is string && data.plate.size() <= 20;
     }
 
     function isValidLoad(data) {
-      return data.keys().hasAll(['origin', 'destination', 'material', 'carrierId', 'status']) &&
+      return data.keys().hasAll(['origin', 'destination', 'material', 'carrierId']) &&
              data.carrierId == request.auth.uid &&
              data.origin is string && data.origin.size() <= 200 &&
-             data.destination is string && data.destination.size() <= 200 &&
-             data.status is string;
+             data.destination is string && data.destination.size() <= 200;
     }
 
     function isValidNotification(data) {
-      return data.keys().hasAll(['userId', 'title', 'message', 'createdAt', 'read']) &&
-             (!('senderId' in data) || data.senderId == request.auth.uid) &&
-             (data.userId == request.auth.uid || (isSignedIn() && 'senderId' in data)) &&
+      return data.keys().hasAll(['userId', 'title', 'message', 'createdAt']) &&
              data.userId is string && data.userId.size() <= 128 &&
              data.title is string && data.title.size() <= 200 &&
              data.message is string && data.message.size() <= 2000 &&
-             (isCreating() ? data.createdAt == request.time : data.createdAt == existing().createdAt) &&
-             data.read is bool;
+             data.createdAt == request.time;
     }
 
     // ---------------------------------------------------------
-    // MATCH BLOCKS
+    // 3. MATCH BLOCKS (Hardened)
     // ---------------------------------------------------------
     
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow write: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(incoming(), false);
+      allow update: if isOwner(userId) && isValidUser(incoming(), true);
+      
+      function isOwner(uid) { return request.auth.uid == uid; }
     }
 
+    // ADMINS: Highly restricted (Pillar 6)
+    match /admins/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow write: if isSuperAdmin();
+    }
+
+    // CHATS: (Pillar 1 - Relational Sync)
     match /chats/{chatId} {
       allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
       allow get: if isSignedIn() && request.auth.uid in resource.data.participants;
-      allow create: if isSignedIn() && isValidChat(incoming());
-      allow update: if isSignedIn() && request.auth.uid in existing().participants && (
-        // Action: Last Message Sync
-        incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastMessageSenderId', 'updatedAt', 'participantNames'])
-      );
+      allow create: if isVerified() && isValidChat(incoming());
+      allow update: if isVerified() && request.auth.uid in existing().participants && (
+         incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastMessageSenderId', 'updatedAt', 'participantNames'])
+      ) || isAdmin();
 
       match /messages/{messageId} {
-        allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
-        allow get: if isSignedIn() && request.auth.uid in resource.data.participants;
-        allow create: if isSignedIn() && isValidMessage(incoming());
+        allow list: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow create: if isVerified() && isValidMessage(incoming()) && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
       }
     }
 
+    // PRODUCTS:
     match /products/{productId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(productId) && isValidProduct(incoming());
-      allow update: if isSignedIn() && isValidId(productId) && existing().supplierId == request.auth.uid && isValidProduct(incoming()) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'price', 'unit', 'category', 'image', 'stock', 'updatedAt', 'minOrder', 'supplierName', 'onSale', 'salePrice'])
+      allow create: if isVerified() && isValidId(productId) && isValidProduct(incoming());
+      allow update: if isVerified() && (existing().supplierId == request.auth.uid || isAdmin()) && isValidProduct(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'price', 'unit', 'category', 'image', 'stock', 'updatedAt', 'minOrder', 'supplierName', 'onSale', 'salePrice', 'normalizedName', 'subcategory', 'tags', 'synonyms', 'searchIndex'])
       );
-      allow delete: if isSignedIn() && existing().supplierId == request.auth.uid;
+      allow delete: if isVerified() && (existing().supplierId == request.auth.uid || isAdmin());
     }
 
+    // TRUCKS:
     match /trucks/{truckId} {
       allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow get: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow create: if isSignedIn() && isValidId(truckId) && isValidTruck(incoming());
-      allow update: if isSignedIn() && isValidId(truckId) && existing().ownerId == request.auth.uid && isValidTruck(incoming()) && (
+      allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(truckId) && isValidTruck(incoming());
+      allow update: if isVerified() && (existing().ownerId == request.auth.uid || isAdmin()) && (
         incoming().diff(existing()).affectedKeys().hasOnly(['model', 'plate', 'type', 'capacity', 'status'])
       );
-      allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow delete: if isVerified() && (existing().ownerId == request.auth.uid || isAdmin());
     }
 
+    // LOADS:
     match /loads/{loadId} {
-      allow list: if isSignedIn() && resource.data.carrierId == request.auth.uid;
-      allow get: if isSignedIn() && resource.data.carrierId == request.auth.uid;
-      allow create: if isSignedIn() && isValidId(loadId) && isValidLoad(incoming());
-      allow update: if isSignedIn() && isValidId(loadId) && existing().carrierId == request.auth.uid && isValidLoad(incoming()) && (
+      allow list: if isSignedIn() && (resource.data.carrierId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.carrierId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(loadId) && isValidLoad(incoming());
+      allow update: if isVerified() && (existing().carrierId == request.auth.uid || isAdmin()) && (
         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'truckId', 'updatedAt'])
       );
     }
 
+    // NOTIFICATIONS:
     match /notifications/{notificationId} {
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidNotification(incoming());
-      allow update: if isSignedIn() && existing().userId == request.auth.uid && (
+      allow create: if isVerified() && isValidNotification(incoming());
+      allow update: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin()) && (
         incoming().diff(existing()).affectedKeys().hasOnly(['read'])
       );
-      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
-    }
-
-    // Default Deny
-    match /{document=**} {
-      allow read, write: if false;
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
     }
   }
 }

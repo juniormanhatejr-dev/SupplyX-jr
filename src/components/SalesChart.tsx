@@ -84,7 +84,7 @@ export default function SalesChart({ isDarkMode, userType = 'buyer', language = 
       </div>
 
       <div className="flex-grow w-full h-[300px]">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           <AreaChart data={data}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDarkMode ? 'rgba(255,255,255,0.02)' : '#f4f4f5'} />
             <XAxis 

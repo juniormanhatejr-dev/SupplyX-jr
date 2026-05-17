@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Settings, User, Bell, Shield, CreditCard, HelpCircle, Moon, Sun, Monitor, Loader2, CheckCircle2, Eye, ArrowLeft, Upload, FileImage, Image as ImageIcon, X } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType, uploadFile } from '../lib/firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { sendEmailVerification } from 'firebase/auth';
 import { useAuth } from '../contexts/AuthContext';
 import ProfileModal from './ProfileModal';
 
@@ -159,6 +160,13 @@ export default function SettingsView({
       securityDesc: 'Senha e autenticação em duas etapas.',
       billing: 'Faturamento',
       billingDesc: 'Gerencie seus planos e métodos de pagamento.',
+      securityStatus: 'Status de Segurança',
+      securityStatusDesc: 'Verifique seu cargo atual e status de verificação de identidade.',
+      role: 'Cargo no Sistema',
+      verified: 'Identidade Verificada',
+      notVerified: 'E-mail não verificado',
+      resendVerification: 'Reenviar E-mail de Verificação',
+      resendSuccess: 'E-mail enviado com sucesso!',
       save: 'Salvar Alterações',
       cancel: 'Cancelar',
       updating: 'Atualizando...',
@@ -199,6 +207,13 @@ export default function SettingsView({
       securityDesc: 'Password and two-factor authentication.',
       billing: 'Billing',
       billingDesc: 'Manage plans and payment methods.',
+      securityStatus: 'Security Status',
+      securityStatusDesc: 'Check your current role and identity verification status.',
+      role: 'System Role',
+      verified: 'Verified Identity',
+      notVerified: 'Email Unverified',
+      resendVerification: 'Resend Verification Email',
+      resendSuccess: 'Email sent successfully!',
       save: 'Save Changes',
       cancel: 'Cancel',
       updating: 'Updating...',
@@ -241,7 +256,7 @@ export default function SettingsView({
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="max-w-4xl mx-auto space-y-8"
+      className="w-full max-w-7xl mx-auto space-y-8"
     >
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -308,6 +323,32 @@ export default function SettingsView({
               </div>
             </button>
           ))}
+          
+          {/* Admin Section (only if isAdmin) */}
+          {(profile as any)?.role === 'admin' || (profile as any)?.role === 'superadmin' ? (
+            <button 
+              className={`p-6 rounded-3xl border text-left transition-all hover:scale-[1.02] active:scale-98 relative overflow-hidden group ${
+                isDarkMode ? 'bg-red-500/5 border-red-500/20 hover:bg-red-500/10' : 'bg-red-50 border-red-100 shadow-sm'
+              }`}
+            >
+               <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                 <Shield className="w-16 h-16 text-red-500" />
+               </div>
+               <div className="flex items-center gap-4">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-red-500/20`}>
+                  <Shield className="w-7 h-7 text-red-500" />
+                </div>
+                <div>
+                  <h3 className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                    {language === 'PT' ? 'PAINEL ADMINISTRATIVO' : 'ADMIN DASHBOARD'}
+                  </h3>
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">
+                    {language === 'PT' ? 'Gerencie usuários, cargos e logs.' : 'Manage users, roles and logs.'}
+                  </p>
+                </div>
+              </div>
+            </button>
+          ) : null}
         </div>
       ) : (
         <motion.form 
@@ -323,6 +364,46 @@ export default function SettingsView({
             <button type="button" onClick={() => setIsEditingProfile(false)} className="text-zinc-500 hover:text-red-500 font-bold text-xs uppercase tracking-widest">
               {t.cancel}
             </button>
+          </div>
+
+          {/* Security Status Card (Pillar 8 & 9) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4">
+            <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-100'} flex items-center justify-between`}>
+              <div>
+                <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">{t.role}</p>
+                <p className={`text-xs font-black uppercase italic ${isDarkMode ? 'text-brand' : 'text-brand'}`}>{profile?.role || 'user'}</p>
+              </div>
+              <Shield className="w-5 h-5 text-brand opacity-40" />
+            </div>
+            <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-100'} flex items-center justify-between`}>
+              <div>
+                <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">{t.verified}</p>
+                <div className="flex items-center gap-2">
+                  <p className={`text-xs font-black uppercase italic ${profile?.emailVerified ? 'text-emerald-500' : 'text-amber-500'}`}>
+                    {profile?.emailVerified ? t.verified : t.notVerified}
+                  </p>
+                  {!profile?.emailVerified && (
+                    <button 
+                      type="button"
+                      onClick={async () => {
+                        if (auth.currentUser) {
+                          try {
+                            await sendEmailVerification(auth.currentUser);
+                            alert(t.resendSuccess);
+                          } catch (err: any) {
+                            alert(err.message);
+                          }
+                        }
+                      }}
+                      className="text-[8px] font-black uppercase tracking-widest text-brand hover:underline"
+                    >
+                      [{t.resendVerification}]
+                    </button>
+                  )}
+                </div>
+              </div>
+              <CheckCircle2 className={`w-5 h-5 ${profile?.emailVerified ? 'text-emerald-500' : 'text-amber-500'} opacity-40`} />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -31,6 +31,7 @@ import { useNotifications } from './contexts/NotificationContext';
 export default function App() {
   const isOnline = useOnlineStatus();
   const { user, profile, loading, refreshProfile } = useAuth();
+  const hasIncompleteProfile = !!user && (!profile || !profile.type);
   
   const { unreadMessages, unreadNotifications } = useNotifications();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -50,6 +51,7 @@ export default function App() {
   const [initialRecipientId, setInitialRecipientId] = useState<string | null>(null);
   const [initialChatId, setInitialChatId] = useState<string | null>(null);
   const [prevTab, setPrevTab] = useState<string | null>(null);
+  const [persistentSearchQuery, setPersistentSearchQuery] = useState('');
 
   useEffect(() => {
     const handleNavigate = (e: any) => {
@@ -149,7 +151,7 @@ export default function App() {
     );
   }
 
-  if (!user) {
+  if (!user || (hasIncompleteProfile && !loading)) {
     if (view === 'landing') {
       return (
         <LandingPageView 
@@ -166,6 +168,7 @@ export default function App() {
         language={language} 
         onSuccess={refreshProfile}
         onBack={() => setView('landing')}
+        forceOnboarding={hasIncompleteProfile}
       />
     );
   }
@@ -179,6 +182,9 @@ export default function App() {
     }
     if (tab === 'Ajustes' && payload?.edit) {
       setShouldEditProfile(true);
+    }
+    if (tab === 'Produtos / Materiais' && payload?.searchQuery) {
+      setPersistentSearchQuery(payload.searchQuery);
     }
     
     if (tab !== activeTab) {
@@ -203,6 +209,8 @@ export default function App() {
         return <ProductsView 
           onNavigate={handleNavigateWithPayload} 
           initialCategory={selectedCategory}
+          initialSearchQuery={persistentSearchQuery}
+          onClearSearch={() => setPersistentSearchQuery('')}
           supplierId={selectedSupplierForCatalog}
           onClearSupplierFilter={() => setSelectedSupplierForCatalog(null)}
           {...commonProps} 
@@ -394,7 +402,7 @@ export default function App() {
             </div>
           </header>
 
-          <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-8">
+          <div className="w-full px-4 md:px-8 py-8">
             {renderContent()}
           </div>
 

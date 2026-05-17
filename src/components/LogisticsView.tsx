@@ -566,7 +566,7 @@ function LogisticsTrackingView({ isDarkMode, language, userType }: LogisticsView
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
         {[
           { label: t.activeVehicles, val: '12', icon: Truck, color: 'text-brand', bg: 'bg-brand/10' },
           { label: t.completedDeliveries, val: '45', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },

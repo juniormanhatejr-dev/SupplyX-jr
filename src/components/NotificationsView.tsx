@@ -100,7 +100,7 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="max-w-4xl mx-auto space-y-12"
+      className="w-full max-w-7xl mx-auto space-y-12"
     >
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-white/5 pb-12">
         <div>

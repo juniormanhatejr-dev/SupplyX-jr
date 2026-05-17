@@ -77,8 +77,7 @@ export const presenceService = {
           })
           .catch((err) => {
             if (err.message.includes("PERMISSION_DENIED")) {
-              console.warn("[Presence] RTDB Access Denied. Falling back to Firestore-only presence.");
-              // If we get permission denied, we stop trying RTDB to avoid spamming errors
+              // Silently fallback to Firestore-only presence if RTDB is not setup/accessible
               unsubscribe();
             }
           });

@@ -3,10 +3,20 @@ import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import imageCompression from 'browser-image-compression';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
+
+// Initialize App Check (Pillar 5)
+if (typeof window !== 'undefined' && (firebaseConfig as any).appCheckToken) {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider((firebaseConfig as any).appCheckToken),
+    isTokenAutoRefreshEnabled: true
+  });
+}
+
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 // Initialize Realtime Database for Professional Presence System
@@ -138,11 +148,20 @@ export function handleFirestoreError(error: any, operationType: OperationType, p
   
   // Format specific user-friendly messages
   let userMessage = 'Erro de permissão no banco de dados.';
-  if (errMessage.includes('insufficient permissions') || errMessage.includes('PERMISSION_DENIED')) {
-    userMessage = `Acesso Negado: Você não tem permissão para ${operationType} em ${path}. Verifique se você está autenticado corretamente.`;
+  
+  // Detect Auth Errors related to Vercel/Domains (Common User Request)
+  if (errMessage.includes('auth/unauthorized-domain')) {
+    userMessage = 'Erro de Autenticação: O domínio atual não está autorizado no Console do Firebase. Adicione este domínio em Autenticação > Configurações > Domínios Autorizados no Console.';
+  } else if (errMessage.includes('insufficient permissions') || errMessage.includes('PERMISSION_DENIED')) {
+    userMessage = `Acesso Negado: Você não tem permissão para ${operationType} em ${path}. Verifique se seu e-mail está verificado e se você possui o cargo necessário.`;
   }
 
-  throw new Error(JSON.stringify(errInfo));
+  // Log to diagnostic system
+  if (typeof window !== 'undefined' && (window as any).SUPPLYX_DEBUG) {
+    (window as any).SUPPLYX_DEBUG.lastError = errInfo;
+  }
+
+  throw new Error(JSON.stringify({ ...errInfo, userMessage }));
 }
 
 export async function uploadFile(path: string, file: File): Promise<string> {

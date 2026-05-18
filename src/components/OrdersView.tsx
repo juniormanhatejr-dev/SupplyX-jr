@@ -28,7 +28,7 @@ import {
   X,
   User,
 } from 'lucide-react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import ProfileModal from './ProfileModal';
 import QuotationDocument from './QuotationDocument';
@@ -283,20 +283,46 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const [downloadingOrderId, setDownloadingOrderId] = useState<string | null>(null);
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
+  const [realQuotations, setRealQuotations] = useState<any[]>([]);
   const user = auth.currentUser;
 
   useEffect(() => {
-    if (user) {
-      const docRef = doc(db, 'users', user.uid);
-      getDoc(docRef).then(docSnap => {
-        if (docSnap.exists()) {
-          setProfile(docSnap.data());
-        }
-      }).catch(error => {
-        handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
-      });
+    if (!user) return;
+
+    // Build query based on user type
+    let q;
+    if (userType === 'supplier') {
+      q = query(
+        collection(db, 'quotations'),
+        where('supplierId', '==', user.uid)
+      );
+    } else {
+      q = query(
+        collection(db, 'quotations'),
+        where('buyerId', '==', user.uid)
+      );
     }
-  }, [user]);
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const docs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      // Sort in memory to avoid composite index requirement
+      const sortedDocs = [...docs].sort((a: any, b: any) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      });
+      setRealQuotations(sortedDocs);
+    }, (error) => {
+      console.error('Error listening to quotations:', error);
+      // Fallback to empty if permissions fail
+      setRealQuotations([]);
+    });
+
+    return () => unsubscribe();
+  }, [user, userType]);
 
   useEffect(() => {
     const q = query(collection(db, 'products'));
@@ -503,73 +529,98 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     );
   };
 
-  const startAiAnalysis = () => {
+  const startAiAnalysis = async () => {
     setStep(3);
     setIsAiProcessing(true);
     
-    const responses: SupplierResponse[] = selectedSuppliers.map(sid => {
-      const s = mergedSuppliers.find(as => as.id === sid);
+    try {
+      const requestId = `RQ-${Math.floor(Date.now()/100000)}`;
       
-      // Calculate real total based on products if they exist
-      let calculatedTotal = 0;
-      let itemsFound = 0;
-      const itemPrices: { material: string; price: number }[] = [];
+      const responses: SupplierResponse[] = await Promise.all(selectedSuppliers.map(async (sid) => {
+        const s = mergedSuppliers.find(as => as.id === sid);
+        
+        // Calculate real total based on products if they exist
+        let calculatedTotal = 0;
+        let itemsFound = 0;
+        const itemPrices: { material: string; price: number }[] = [];
 
-      rows.forEach(row => {
-        // Try to find matching product for this supplier
-        const match = allProducts.find(p => 
-          p.supplierId === sid && 
-          (p.name.toLowerCase().includes(row.material.toLowerCase()) || 
-           row.material.toLowerCase().includes(p.name.toLowerCase()))
-        );
+        rows.forEach(row => {
+          const match = allProducts.find(p => 
+            p.supplierId === sid && 
+            (p.name.toLowerCase().includes(row.material.toLowerCase()) || 
+             row.material.toLowerCase().includes(p.name.toLowerCase()))
+          );
 
-        if (match) {
-          const price = match.price || 0;
-          calculatedTotal += price * parseFloat(row.quantity || '0');
-          itemPrices.push({ material: row.material, price });
-          itemsFound++;
-        } else {
-          // DO NOT invent prices. Set to 0 and mark as pending.
-          itemPrices.push({ material: row.material, price: 0 });
+          if (match) {
+            const price = match.price || 0;
+            calculatedTotal += price * parseFloat(row.quantity || '0');
+            itemPrices.push({ material: row.material, price });
+            itemsFound++;
+          } else {
+            itemPrices.push({ material: row.material, price: 0 });
+          }
+        });
+
+        // 1. Create a real Quotation document in Firestore for each supplier
+        // This allows real-time viewing on the supplier's side
+        try {
+          await addDoc(collection(db, 'quotations'), {
+            requestId,
+            buyerId: user?.uid,
+            buyerName: profile?.name || 'Cliente SupplyX',
+            supplierId: sid,
+            supplierName: s?.name || 'Fornecedor',
+            items: rows.map(r => ({
+              material: r.material,
+              quantity: r.quantity,
+              unit: r.unit,
+              requestedDate: r.date
+            })),
+            status: 'pending',
+            totalAmount: calculatedTotal,
+            confidence: Math.round((itemsFound / rows.length) * 100),
+            createdAt: serverTimestamp(),
+            language
+          });
+
+          // 2. Also send a notification via service
+          await notificationService.sendNotification({
+            userId: sid,
+            senderId: user?.uid,
+            title: language === 'PT' ? 'Novo Pedido de Cotação' : 'New Quote Request',
+            message: language === 'PT' 
+              ? `Você recebeu uma nova solicitação de cotação de ${profile?.name || 'um cliente'}.` 
+              : `You received a new quote request from ${profile?.name || 'a client'}.`,
+            type: 'quote_request',
+            metadata: {
+              requestId,
+              buyerId: user?.uid,
+              itemsCount: rows.length
+            }
+          });
+        } catch (e) {
+          console.error(`Error saving quotation for ${sid}:`, e);
         }
-      });
 
-      return {
-        supplierId: sid,
-        name: s?.name || (language === 'PT' ? 'Fornecedor' : 'Supplier'),
-        price: calculatedTotal,
-        timeToDeliver: itemsFound === rows.length
-          ? (language === 'PT' ? '2 dias' : '2 days') 
-          : (language === 'PT' ? '4-5 dias (Sob consulta)' : '4-5 days (Pending quote)'),
-        confidence: Math.round((itemsFound / rows.length) * 100),
-        itemPrices
-      };
-    });
+        return {
+          supplierId: sid,
+          name: s?.name || (language === 'PT' ? 'Fornecedor' : 'Supplier'),
+          price: calculatedTotal,
+          timeToDeliver: itemsFound === rows.length
+            ? (language === 'PT' ? '2 dias' : '2 days') 
+            : (language === 'PT' ? '4-5 dias (Sob consulta)' : '4-5 days (Pending quote)'),
+          confidence: Math.round((itemsFound / rows.length) * 100),
+          itemPrices
+        };
+      }));
 
-    const sorted = [...responses].sort((a, b) => a.price - b.price);
-
-    // Notify selected suppliers
-    responses.forEach(async (res) => {
-      await notificationService.sendNotification({
-        userId: res.supplierId,
-        senderId: user?.uid,
-        title: language === 'PT' ? 'Novo Pedido de Cotação' : 'New Quote Request',
-        message: language === 'PT' 
-          ? `Você recebeu uma nova solicitação de cotação de ${profile?.name || 'um cliente'}.` 
-          : `You received a new quote request from ${profile?.name || 'a client'}.`,
-        type: 'quote_request',
-        metadata: {
-          requestId: `RQ-${Math.floor(Date.now()/100000)}`,
-          buyerId: user?.uid,
-          itemsCount: rows.length
-        }
-      });
-    });
-
-    setTimeout(() => {
+      const sorted = [...responses].sort((a, b) => a.price - b.price);
       setAiResponses(sorted);
+    } catch (err) {
+      console.error('Error in AI analysis:', err);
+    } finally {
       setIsAiProcessing(false);
-    }, 2500);
+    }
   };
 
   const exportAllPDFs = () => {
@@ -1470,6 +1521,145 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
+          {realQuotations.map((order) => (
+            <motion.div 
+              key={order.id} 
+              whileHover={{ y: -4 }}
+              onClick={() => {
+                if (userType === 'supplier' && order.status === 'pending') {
+                  setRespondingTo(order);
+                }
+              }}
+              className={`p-5 sm:p-6 rounded-[28px] sm:rounded-[32px] border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 transition-all cursor-pointer group relative overflow-hidden ${
+                isDarkMode 
+                  ? 'bg-supplyx-dark border-white/5 hover:border-supplyx-blue/50 shadow-2xl shadow-black/20' 
+                  : 'bg-white border-zinc-100 hover:border-supplyx-blue/30 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
+              }`}
+            >
+              <div className="flex items-center gap-4 sm:gap-5 w-full sm:w-auto relative z-10">
+                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[18px] sm:rounded-[20px] flex items-center justify-center border transition-all shrink-0 ${
+                  isDarkMode 
+                    ? 'bg-zinc-800/50 border-white/5 group-hover:bg-supplyx-blue/10 group-hover:border-supplyx-blue/20' 
+                    : 'bg-zinc-50 border-zinc-100 group-hover:bg-supplyx-blue/5 group-hover:border-supplyx-blue/10'
+                }`}>
+                  <FileText className={`w-5 h-5 sm:w-6 sm:h-6 transition-colors ${isDarkMode ? 'text-zinc-500 group-hover:text-supplyx-blue' : 'text-zinc-400 group-hover:text-supplyx-blue'}`} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <h4 className={`text-base sm:text-lg font-black italic tracking-tight transition-colors truncate ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{order.requestId || order.id}</h4>
+                    {(order.status === t.status.quote || order.status === 'pending') && (
+                       <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue animate-pulse" />
+                    )}
+                  </div>
+                  <p 
+                    className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-supplyx-blue transition-colors flex items-center gap-2 truncate"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const profileId = userType === 'supplier' ? order.buyerId : order.supplierId;
+                      if (profileId) {
+                        setViewingProfileId(profileId);
+                        setIsProfileModalOpen(true);
+                      }
+                    }}
+                  >
+                    <User className="w-3 h-3" />
+                    {userType === 'supplier' ? `${t.client}: ${order.buyerName || 'Client'}` : `${t.supplier}: ${order.supplierName}`}
+                  </p>
+                </div>
+                
+                {/* Mobile Status Badge */}
+                <div className="sm:hidden shrink-0">
+                  <div className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border
+                    ${order.status === t.status.delivered ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+                      order.status === t.status.transit ? 'bg-supplyx-blue/10 text-supplyx-blue border-supplyx-blue/20' :
+                      (order.status === t.status.waiting || order.status === 'responded') ? 'bg-amber-500/10 text-amber-500 border-amber-500/10' :
+                      'bg-indigo-500/10 text-indigo-500 border-indigo-500/10'}`}>
+                    {order.status === 'pending' ? t.status.quote : (order.status === 'responded' ? t.status.waiting : order.status)}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-10 w-full sm:w-auto p-4 sm:p-0 rounded-2xl bg-zinc-900/5 sm:bg-transparent relative z-10">
+                <div className="text-left sm:text-right">
+                  <p className={`text-lg sm:text-xl font-black italic tracking-tighter leading-none mb-1 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                    MT {order.totalAmount?.toLocaleString('pt-BR') || '0.00'}
+                  </p>
+                  <p className="text-[8px] sm:text-[9px] text-zinc-500 font-bold uppercase tracking-[0.2em]">
+                    {order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString() : new Date().toLocaleDateString()}
+                  </p>
+                </div>
+                
+                <div className="flex items-center gap-2 sm:gap-4">
+                  {/* Desktop Only Status */}
+                  <div className={`hidden sm:block px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border
+                    ${order.status === t.status.delivered ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+                      order.status === t.status.transit ? 'bg-supplyx-blue/10 text-supplyx-blue border-supplyx-blue/20' :
+                      (order.status === t.status.waiting || order.status === 'responded') ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                      'bg-indigo-500/10 text-indigo-500 border-indigo-500/10'}`}>
+                    {order.status === 'pending' ? t.status.quote : (order.status === 'responded' ? t.status.waiting : order.status)}
+                  </div>
+                  
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <button 
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        // Download PDF logic for real quotations
+                        setDownloadingOrderId(order.id);
+                        try {
+                           const items = (order.items || []).map((it: any) => ({
+                             description: it.material,
+                             quantity: parseFloat(it.quantity || '0'),
+                             unit: it.unit,
+                             unitPrice: 0, // In responded status, use response values
+                             discount: 0,
+                             vatPer: 16
+                           }));
+
+                           const mockRes: SupplierResponse = {
+                              supplierId: order.supplierId,
+                              name: order.supplierName,
+                              price: order.totalAmount || 0,
+                              timeToDeliver: '2 dias',
+                              confidence: order.confidence || 0,
+                              itemPrices: items.map((it: any) => ({ material: it.description, price: it.unitPrice }))
+                           };
+                           setSelectedResponseIndex(0);
+                           await downloadPDF(mockRes);
+                        } finally {
+                          setDownloadingOrderId(null);
+                        }
+                      }}
+                      disabled={downloadingOrderId === order.id}
+                      className={`p-2 sm:p-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-50 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-white' : 'bg-zinc-50 text-zinc-500 hover:text-zinc-900'}`}
+                    >
+                      {downloadingOrderId === order.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    </button>
+                    {userType === 'supplier' && order.status === 'pending' && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRespondingTo(order);
+                        }}
+                        className="px-4 sm:px-5 py-2 sm:py-2.5 bg-supplyx-blue text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-blue-500/20"
+                      >
+                        {t.respond}
+                      </button>
+                    )}
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startChat(order);
+                      }}
+                      className={`p-2 sm:p-2.5 rounded-xl transition-all active:scale-95 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-supplyx-blue' : 'bg-zinc-50 text-zinc-500 hover:text-supplyx-blue'}`}
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+          {/* Keep hardcoded orders for now to avoid empty list feeling if no real data */}
           {getOrders(t).map((order) => (
             <motion.div 
               key={order.id} 
@@ -1632,14 +1822,12 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                 <div className={`p-4 rounded-2xl ${isDarkMode ? 'bg-zinc-800/50' : 'bg-zinc-50'}`}>
                   <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-3">{t.orderSummarySmall}</p>
                   <div className="space-y-2">
-                    <div className="flex justify-between text-xs font-bold">
-                      <span className="text-zinc-500">{language === 'PT' ? 'Cimento CP-II 50kg' : 'Cement CP-II 50kg'}</span>
-                      <span className={isDarkMode ? 'text-white' : 'text-zinc-900'}>100 {language === 'PT' ? 'Sacos' : 'Bags'}</span>
-                    </div>
-                    <div className="flex justify-between text-xs font-bold">
-                      <span className="text-zinc-500">{language === 'PT' ? 'Vergalhão 10mm' : 'Rebar 10mm'}</span>
-                      <span className={isDarkMode ? 'text-white' : 'text-zinc-900'}>50 {language === 'PT' ? 'Unid.' : 'Units'}</span>
-                    </div>
+                    {respondingTo.items?.map((item: any, i: number) => (
+                      <div key={i} className="flex justify-between text-xs font-bold">
+                        <span className="text-zinc-500">{item.material}</span>
+                        <span className={isDarkMode ? 'text-white' : 'text-zinc-900'}>{item.quantity} {item.unit}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -1668,14 +1856,40 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
               <div className="mt-8">
                 <button 
-                  onClick={() => {
+                  onClick={async () => {
                     setIsResponding(true);
-                    setTimeout(() => {
-                      setIsResponding(false);
+                    try {
+                      // Update Firestore document
+                      await updateDoc(doc(db, 'quotations', respondingTo.id), {
+                        status: 'responded',
+                        responseValue: parseFloat(responseValue),
+                        respondedAt: serverTimestamp(),
+                        totalAmount: parseFloat(responseValue)
+                      });
+
+                      // Notify buyer
+                      await notificationService.sendNotification({
+                        userId: respondingTo.buyerId,
+                        senderId: auth.currentUser?.uid,
+                        title: language === 'PT' ? 'Proposta Recebida' : 'Proposal Received',
+                        message: language === 'PT' 
+                          ? `O fornecedor ${profile?.name || 'seu fornecedor'} respondeu à sua cotação ${respondingTo.requestId}.` 
+                          : `The supplier ${profile?.name || 'your supplier'} responded to your quote ${respondingTo.requestId}.`,
+                        type: 'success',
+                        metadata: {
+                          requestId: respondingTo.requestId,
+                          quotationId: respondingTo.id
+                        }
+                      });
+
                       setRespondingTo(null);
                       setResponseValue('');
                       alert(t.successProposal);
-                    }, 1500);
+                    } catch (err) {
+                      console.error('Error responding to quote:', err);
+                    } finally {
+                      setIsResponding(false);
+                    }
                   }}
                   disabled={!responseValue || isResponding}
                   className="w-full py-5 bg-[#0052CC] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-brand hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"

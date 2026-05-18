@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
 import { 
   BarChart, 
   Bar, 
@@ -67,6 +69,28 @@ export default function SupplierDashboard({ isDarkMode, language, onNavigate }: 
   const [activeRange, setActiveRange] = useState('7D');
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizationDone, setOptimizationDone] = useState(false);
+  const [pendingQuotesCount, setPendingQuotesCount] = useState(0);
+  const [totalSalesVal, setTotalSalesVal] = useState('MT 45.8K');
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    // Listen to pending quotes - Filter in memory to avoid index requirement
+    const q = query(
+      collection(db, 'quotations'),
+      where('supplierId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const pendingDocs = snapshot.docs.filter(doc => doc.data().status === 'pending');
+      setPendingQuotesCount(pendingDocs.length);
+    }, (error) => {
+      console.error('Error listening to dashboard quotes:', error);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const handleOptimize = () => {
     setIsOptimizing(true);
@@ -210,7 +234,7 @@ export default function SupplierDashboard({ isDarkMode, language, onNavigate }: 
       {/* KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: t.kpis.totalSales, value: 'MT 45.8K', trend: '+12.5%', icon: DollarSign, color: 'text-emerald-500' },
+          { label: t.kpis.totalSales, value: totalSalesVal, trend: '+12.5%', icon: DollarSign, color: 'text-emerald-500' },
           { label: t.kpis.unitsSold, value: '1,240', trend: '+8.2%', icon: Package, color: 'text-brand' },
           { label: t.kpis.pageViews, value: '8.4K', trend: '+24.1%', icon: Eye, color: 'text-blue-500' },
           { label: t.kpis.buyBox, value: '92%', trend: '-2.1%', icon: Award, color: 'text-amber-500' },
@@ -328,9 +352,9 @@ export default function SupplierDashboard({ isDarkMode, language, onNavigate }: 
             <h3 className={`font-black uppercase italic tracking-tighter mb-4 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.actionRequired}</h3>
             <div className="space-y-3">
               {[
-                { label: t.ordersToShip, count: 12, icon: Truck, color: 'text-brand', bg: 'bg-brand/10', tab: 'Pedidos / Cotações' },
-                { label: t.pendingQuotes, count: 5, icon: FileText, color: 'text-amber-500', bg: 'bg-amber-500/10', tab: 'Pedidos / Cotações' },
-                { label: language === 'PT' ? 'Mensagens' : 'Messages', count: 3, icon: MoreVertical, color: 'text-blue-500', bg: 'bg-blue-500/10', tab: 'Mensagens' },
+                { label: t.ordersToShip, count: 0, icon: Truck, color: 'text-brand', bg: 'bg-brand/10', tab: 'Pedidos / Cotações' },
+                { label: t.pendingQuotes, count: pendingQuotesCount, icon: FileText, color: 'text-amber-500', bg: 'bg-amber-500/10', tab: 'Pedidos / Cotações' },
+                { label: language === 'PT' ? 'Mensagens' : 'Messages', count: 0, icon: MoreVertical, color: 'text-blue-500', bg: 'bg-blue-500/10', tab: 'Mensagens' },
               ].map((action, i) => (
                 <button 
                   key={i}

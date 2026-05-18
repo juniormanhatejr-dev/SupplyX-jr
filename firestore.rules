@@ -97,6 +97,14 @@ service cloud.firestore {
              data.destination is string && data.destination.size() <= 200;
     }
 
+    function isValidQuotation(data) {
+      return data.keys().hasAll(['buyerId', 'supplierId', 'status', 'items']) &&
+             data.buyerId is string && data.supplierId is string &&
+             data.status in ['pending', 'responded', 'accepted', 'rejected', 'cancelled'] &&
+             data.items is list &&
+             (data.get('createdAt', null) == request.time || data.get('updatedAt', null) == request.time);
+    }
+
     function isValidNotification(data) {
       return data.keys().hasAll(['userId', 'title', 'message', 'createdAt']) &&
              data.userId is string && data.userId.size() <= 128 &&
@@ -177,6 +185,15 @@ service cloud.firestore {
         incoming().diff(existing()).affectedKeys().hasOnly(['read'])
       );
       allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // QUOTATIONS:
+    match /quotations/{quotationId} {
+      allow list: if isSignedIn() && (resource.data.buyerId == request.auth.uid || resource.data.supplierId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.buyerId == request.auth.uid || resource.data.supplierId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidQuotation(incoming());
+      allow update: if isVerified() && (existing().buyerId == request.auth.uid || existing().supplierId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
     }
   }
 }

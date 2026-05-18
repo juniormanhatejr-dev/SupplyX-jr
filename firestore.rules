@@ -40,8 +40,12 @@ service cloud.firestore {
              (!('city' in data) || (data.city is string && data.city.size() <= 256)) &&
              (!('sector' in data) || (data.sector is string && data.sector.size() <= 256)) &&
              (!('bio' in data) || (data.bio is string && data.bio.size() <= 5000)) &&
-             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 4096)) &&
-             (!('coverURL' in data) || (data.coverURL is string && data.coverURL.size() <= 4096)) &&
+             // Pillar 11: Base64 Fallback support (1MB limit for Firestore doc)
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1100000)) &&
+             (!('coverURL' in data) || (data.coverURL is string && data.coverURL.size() <= 1100000)) &&
+             (!('license' in data) || (data.license is string && data.license.size() <= 256)) &&
+             (!('bankAccounts' in data) || data.bankAccounts is list) && 
+             (!('mobileWallets' in data) || data.mobileWallets is list) &&
              (!('specialization' in data) || (data.specialization is string && data.specialization.size() <= 256)) &&
              (!('fleetSize' in data) || (data.fleetSize is string && data.fleetSize.size() <= 128)) &&
              (!('type' in data) || data.type in ['buyer', 'supplier', 'logistics']) &&
@@ -68,16 +72,17 @@ service cloud.firestore {
              (data.get('createdAt', null) == request.time || data.get('updatedAt', null) == request.time);
     }
 
-    function isValidProduct(data) {
-      return data.keys().hasAll(['name', 'price', 'supplierId', 'createdAt']) &&
+    function isValidProduct(data, isUpdate) {
+      return data.keys().hasAll(['name', 'price', 'supplierId']) &&
              data.supplierId == request.auth.uid &&
              data.price is number && data.price >= 0 &&
              data.name is string && data.name.size() <= 200 &&
+             (!('image' in data) || (data.image is string && data.image.size() <= 1100000)) &&
              (!('normalizedName' in data) || (data.normalizedName is string && data.normalizedName.size() <= 200)) &&
              (!('tags' in data) || (data.tags is list && data.tags.size() <= 20)) &&
              (!('synonyms' in data) || (data.synonyms is list && data.synonyms.size() <= 20)) &&
              (!('searchIndex' in data) || (data.searchIndex is list && data.searchIndex.size() <= 100)) &&
-             data.createdAt == request.time;
+             (isUpdate ? true : data.createdAt == request.time);
     }
 
     function isValidTruck(data) {
@@ -139,8 +144,8 @@ service cloud.firestore {
     match /products/{productId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow create: if isVerified() && isValidId(productId) && isValidProduct(incoming());
-      allow update: if isVerified() && (existing().supplierId == request.auth.uid || isAdmin()) && isValidProduct(incoming()) && (
+      allow create: if isVerified() && isValidId(productId) && isValidProduct(incoming(), false);
+      allow update: if isVerified() && (existing().supplierId == request.auth.uid || isAdmin()) && isValidProduct(incoming(), true) && (
         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'price', 'unit', 'category', 'image', 'stock', 'updatedAt', 'minOrder', 'supplierName', 'onSale', 'salePrice', 'normalizedName', 'subcategory', 'tags', 'synonyms', 'searchIndex'])
       );
       allow delete: if isVerified() && (existing().supplierId == request.auth.uid || isAdmin());

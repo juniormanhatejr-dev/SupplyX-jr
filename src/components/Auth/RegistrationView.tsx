@@ -24,7 +24,8 @@ import { auth, db, signInWithGoogle } from '../../lib/firebase';
 import { 
   createUserWithEmailAndPassword, 
   updateProfile, 
-  signInWithEmailAndPassword 
+  signInWithEmailAndPassword,
+  sendEmailVerification
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../../lib/firebase';
@@ -165,6 +166,8 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
   const [isRobotValid, setIsRobotValid] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [isPendingVerification, setIsPendingVerification] = useState(false);
 
   // Sync mode if forceOnboarding changes
   useEffect(() => {
@@ -231,6 +234,10 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
         const user = userCredential.user;
 
         await updateProfile(user, { displayName: formData.name });
+        
+        // Pillar Check: Send verification email directly to ensure identity
+        await sendEmailVerification(user);
+        setVerificationSent(true);
 
         if (!user.uid) throw new Error("Firebase Auth UID not found after creation.");
 
@@ -268,6 +275,14 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       } else {
         const userCredential = await signInWithEmailAndPassword(auth, formData.email.trim(), formData.password);
         const user = userCredential.user;
+
+        if (!user.emailVerified) {
+          await sendEmailVerification(user);
+          setVerificationSent(true);
+          setIsPendingVerification(true);
+          setIsLoading(false);
+          return;
+        }
 
         const docRef = doc(db, 'users', user.uid);
         const docSnap = await getDoc(docRef);
@@ -360,6 +375,14 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       const result = await signInWithGoogle();
       const user = result.user;
 
+      // Force identity confirmation behavior if not verified (rare for Google, but possible)
+      if (!user.emailVerified) {
+        await sendEmailVerification(user);
+        setVerificationSent(true);
+        setIsPendingVerification(true);
+        return;
+      }
+
       const docRef = doc(db, 'users', user.uid);
       const docSnap = await getDoc(docRef);
       const profileData = docSnap.exists() ? docSnap.data() : null;
@@ -421,6 +444,20 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
         </div>
         <p className="text-supplyx-blue text-[10px] font-black uppercase tracking-widest leading-none bg-supplyx-blue/10 px-4 py-1.5 rounded-full inline-block border border-supplyx-blue/20">{t.slogan}</p>
         
+        {verificationSent && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6 p-4 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-md"
+          >
+            <p className="text-xs font-black uppercase tracking-widest text-emerald-500 italic">
+              {language === 'PT' 
+                ? 'Verificação enviada! Verifique seu e-mail para confirmar sua identidade.' 
+                : 'Verification sent! Check your email to confirm your identity.'}
+            </p>
+          </motion.div>
+        )}
+
         {mode === 'onboarding' && (
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
@@ -472,7 +509,65 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
 
         <div className="p-8">
           <AnimatePresence mode="wait">
-            {mode === 'onboarding' && step === 0 ? (
+            {isPendingVerification ? (
+              <motion.div 
+                key="pending-verification"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="text-center space-y-8 py-12"
+              >
+                <div className="w-20 h-20 bg-brand/10 rounded-[32px] flex items-center justify-center mx-auto border border-brand/20 relative">
+                  <Mail className="w-10 h-10 text-brand" />
+                  <motion.div 
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-zinc-900" 
+                  />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black uppercase tracking-tighter italic mb-4">
+                    {language === 'PT' ? 'VERIFICAÇÃO NECESSÁRIA' : 'VERIFICATION REQUIRED'}
+                  </h3>
+                  <p className="text-xs text-zinc-500 font-medium leading-relaxed max-w-xs mx-auto">
+                    {language === 'PT' 
+                      ? 'Por segurança, enviamos um e-mail de confirmação. Por favor, clique no link enviado para confirmar sua identidade diretamente com o Google/SupplyX.' 
+                      : 'For security, we sent a confirmation email. Please click the link sent to confirm your identity directly with Google/SupplyX.'}
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <button 
+                    onClick={() => {
+                      setIsLoading(true);
+                      auth.currentUser?.reload().then(() => {
+                        if (auth.currentUser?.emailVerified) {
+                          onSuccess();
+                        } else {
+                          setError(language === 'PT' ? 'E-mail ainda não verificado.' : 'Email not verified yet.');
+                        }
+                        setIsLoading(false);
+                      });
+                    }}
+                    className="w-full py-5 rounded-2xl bg-brand text-white font-black text-sm uppercase tracking-widest italic transition-all active:scale-95 flex items-center justify-center gap-2 shadow-xl shadow-brand/20"
+                  >
+                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
+                    {language === 'PT' ? 'JÁ VERIFIQUEI MEU E-MAIL' : 'I ALREADY VERIFIED MY EMAIL'}
+                  </button>
+                  <button 
+                    onClick={() => {
+                      if (auth.currentUser) {
+                        sendEmailVerification(auth.currentUser);
+                        setError(language === 'PT' ? 'Link de verificação reenviado!' : 'Verification link resent!');
+                      }
+                    }}
+                    className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors"
+                  >
+                    {language === 'PT' ? 'REENVIAR E-MAIL DE CONFIRMAÇÃO' : 'RESEND CONFIRMATION EMAIL'}
+                  </button>
+                </div>
+              </motion.div>
+            ) : mode === 'onboarding' && step === 0 ? (
               <motion.div 
                 key="role-selection"
                 initial={{ opacity: 0, scale: 0.95 }}

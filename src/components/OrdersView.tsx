@@ -6,7 +6,6 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { sanitizeDocumentColors } from '../lib/colorSanitizer';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import imageCompression from 'browser-image-compression';
 import { 
   FileText, 
   Clock, 
@@ -22,10 +21,8 @@ import {
   Download,
   Printer,
   Eye,
-  Image as ImageIcon,
   Camera,
   Loader2,
-  Sparkles,
   Smartphone,
   MessageSquare,
   X,
@@ -298,7 +295,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   };
   const [selectedResponseIndex, setSelectedResponseIndex] = useState<number>(0);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
-  const [isImagingProcessing, setIsImageProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
@@ -306,7 +302,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const invoiceRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const paymentMethods = [
     { id: 'bim', name: 'Millennium BIM', type: 'Bank', color: 'bg-[#002d72]', logo: 'https://www.millenniumbim.co.mz/Resources/Themes/BIM/Images/logo-millenniumbim.png' },
@@ -370,94 +365,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     worksheet['!cols'] = wscols;
 
     XLSX.writeFile(workbook, `lista_materiais_supplyx_${new Date().getTime()}.xlsx`);
-  };
-
-  const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsImageProcessing(true);
-    try {
-      // Compress image before sending to AI
-      const options = {
-        maxSizeMB: 1,
-        maxWidthOrHeight: 1920,
-        useWebWorker: true
-      };
-      
-      const compressedFile = await imageCompression(file, options);
-      
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(compressedFile);
-      });
-
-      const base64Data = await base64Promise;
-      const base64Image = base64Data.split(',')[1];
-
-      if (!process.env.GEMINI_API_KEY) {
-        throw new Error('GEMINI_API_KEY is not defined');
-      }
-
-      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash",
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: SchemaType.ARRAY,
-            items: {
-              type: SchemaType.OBJECT,
-              properties: {
-                material: { type: SchemaType.STRING },
-                quantity: { type: SchemaType.STRING },
-                unit: { type: SchemaType.STRING }
-              },
-              required: ["material", "quantity", "unit"]
-            }
-          }
-        }
-      });
-      
-      const result = await model.generateContent([
-        {
-          text: "Extract construction materials from this list/image. Return as a JSON array of objects with keys: material, quantity, and unit. Keep quantities as strings. Return ONLY the JSON array.",
-        },
-        {
-          inlineData: {
-            data: base64Image,
-            mimeType: compressedFile.type
-          }
-        }
-      ]);
-
-      const responseText = result.response.text();
-      const extractedData = JSON.parse(responseText || "[]");
-      
-      if (Array.isArray(extractedData)) {
-        const newRows = extractedData.map((item: any) => ({
-          id: Math.random(),
-          material: item.material,
-          quantity: item.quantity,
-          unit: item.unit,
-          date: new Date().toISOString().split('T')[0]
-        }));
-        
-        // If the first real result is just empty placeholders, replace them
-        if (rows.length === 2 && rows[0]?.material === 'Cimento CP-II 50kg' && rows[1]?.material === 'Vergalhão 10mm') {
-          setRows(newRows);
-        } else {
-          setRows([...rows, ...newRows]);
-        }
-      }
-    } catch (error) {
-      console.error("Error processing image:", error);
-      alert(language === 'PT' ? 'Erro ao processar imagem. Por favor, tente novamente.' : 'Error processing image. Please try again.');
-    } finally {
-      setIsImageProcessing(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
   };
 
   const addRow = () => {
@@ -729,11 +636,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       back: 'Voltar',
       payNow: 'Pagar Agora',
       excel: 'Baixar Planilha (Excel)',
-      imageRequest: 'Solicitar via Imagem',
-      imageSub: 'Tire uma foto da sua lista manuscrita ou impressa',
-      aiTip: 'Dica IA',
-      aiTipDesc: 'Nossa IA reconhece textos manuscritos e tabelas técnicas. Basta subir a imagem e nós preenchemos a cotação.',
-      extracting: 'Extraindo materiais...',
       simultaneousAi: 'AI simultânea em processamento',
       analysisComplete: 'Análise Concluída',
       analysisSub: 'Resultados ordenados por menor custo',
@@ -829,11 +731,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       back: 'Back',
       payNow: 'Pay Now',
       excel: 'Download Spreadsheet (Excel)',
-      imageRequest: 'Request via Image',
-      imageSub: 'Take a photo of your handwritten or printed list',
-      aiTip: 'AI Tip',
-      aiTipDesc: 'Our AI recognizes handwritten text and technical tables. Just upload the image and we fill the quote.',
-      extracting: 'Extracting materials...',
       simultaneousAi: 'Simultaneous AI processing',
       analysisComplete: 'Analysis Complete',
       analysisSub: 'Results ordered by lowest cost',
@@ -1023,7 +920,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                    </div>
                 </div>
 
-                <div className="flex flex-col lg:flex-row gap-8 mb-8">
+                <div className="flex flex-col gap-8 mb-8">
                   <div className={`flex-grow overflow-x-auto border rounded-[32px] ${isDarkMode ? 'border-zinc-800 bg-zinc-950 shadow-3xl' : 'border-zinc-100 bg-white shadow-xl shadow-zinc-200/50'} relative`}>
                     <table className="w-full text-left border-collapse min-w-[1200px] table-fixed">
                       <thead className={`${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-100'} border-b sticky top-0 z-20`}>
@@ -1089,7 +986,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                  type="number" 
                                  value={row.discCmr} 
                                  onChange={(e) => updateRow(row.id, 'discCmr', e.target.value)}
-                                 className="w-full bg-transparent border-none text-center text-[11px] font-bold outline-none text-red-500"
+                                 className={`w-full bg-transparent border-none text-center text-[11px] font-bold outline-none text-red-500`}
                                />
                             </td>
                             <td className="px-4 py-4 text-center">
@@ -1139,55 +1036,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                           <span className="text-[10px] font-black uppercase tracking-widest">{t.excel}</span>
                         </button>
                       </div>
-                  </div>
-
-                  <div className="w-full lg:w-96 shrink-0 space-y-6">
-                    <input 
-                      type="file" 
-                      ref={fileInputRef}
-                      onChange={handleImageUpload}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                    <button 
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isImagingProcessing}
-                      className={`w-full aspect-video rounded-[32px] border-2 border-dashed flex flex-col items-center justify-center p-8 text-center transition-all group relative overflow-hidden
-                        ${isDarkMode 
-                          ? 'border-white/5 hover:border-supplyx-blue bg-white/5 hover:bg-supplyx-blue/5' 
-                          : 'border-zinc-200 hover:border-supplyx-blue bg-zinc-50 hover:bg-supplyx-blue/5'}`}
-                    >
-                      {isImagingProcessing ? (
-                        <div className="relative z-10 space-y-4">
-                          <Loader2 className="w-12 h-12 text-brand animate-spin mx-auto" />
-                          <p className={`text-sm font-black uppercase tracking-widest ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>SupplyX Vision</p>
-                          <p className="text-[10px] font-bold text-zinc-500 uppercase">{t.extracting}</p>
-                        </div>
-                      ) : (
-                        <div className="relative z-10 space-y-4">
-                          <div className={`mx-auto w-16 h-16 rounded-3xl flex items-center justify-center shadow-2xl transition-transform group-hover:scale-110 ${isDarkMode ? 'bg-zinc-800 text-supplyx-blue border border-white/5' : 'bg-white text-supplyx-blue shadow-zinc-200/50'}`}>
-                            <ImageIcon className="w-8 h-8" />
-                          </div>
-                          <div>
-                            <p className={`text-sm font-black uppercase tracking-widest ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.imageRequest}</p>
-                            <p className="text-[10px] font-bold text-zinc-500 uppercase mt-2 leading-relaxed px-6">{t.imageSub}</p>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* AI Sparkles Accent */}
-                      <Sparkles className="absolute -top-4 -right-4 w-12 h-12 text-brand opacity-10 group-hover:opacity-20 transition-opacity" />
-                    </button>
-
-                    <div className={`mt-4 p-4 rounded-2xl border ${isDarkMode ? 'bg-[#0052CC]/5 border-[#0052CC]/20' : 'bg-[#0052CC]/5 border-[#0052CC]/10'}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Zap className="w-3 h-3 text-brand fill-brand" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-brand">{t.aiTip}</span>
-                      </div>
-                      <p className={`text-[9px] font-medium leading-relaxed ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                        {t.aiTipDesc}
-                      </p>
-                    </div>
                   </div>
                 </div>
                 <div className={`flex flex-col sm:flex-row justify-between items-center p-6 rounded-3xl gap-4 ${isDarkMode ? 'bg-zinc-800/50' : 'bg-zinc-50'}`}>

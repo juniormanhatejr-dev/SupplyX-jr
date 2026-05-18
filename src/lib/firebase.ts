@@ -195,11 +195,11 @@ export async function uploadFile(path: string, file: File): Promise<string> {
   try {
     console.log(`Starting uploadBytes to: ${path}`);
     
-    // Create a promise that rejects after 10 seconds to force fallback
+    // Create a promise that rejects after 20 seconds to force fallback
     const uploadWithTimeout = Promise.race([
       uploadBytes(fileRef, fileToUpload),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Upload timeout - switching to fallback')), 10000)
+        setTimeout(() => reject(new Error('Upload timeout (20s) - switching to local storage fallback')), 20000)
       )
     ]) as Promise<any>;
 
@@ -209,15 +209,25 @@ export async function uploadFile(path: string, file: File): Promise<string> {
     console.log(`Download URL obtained: ${url}`);
     return url;
   } catch (error: any) {
-    console.warn('Firebase Storage failed or timed out, attempting Base64 fallback:', error.code || error.message);
+    const isTimeout = error.message?.includes('timeout') || error.code === 'storage/retry-limit-exceeded';
+    console.warn(`Firebase Storage ${isTimeout ? 'Timed Out' : 'Failed'}:`, error.code || error.message);
     
     // If it's an image and small enough (or after compression), use Base64 as fallback
-    if (file.type.startsWith('image/') && fileToUpload.size < 2000000) { // Under 2MB
-      console.log('Using Base64 fallback for file of size:', fileToUpload.size);
+    // Firestore limit is 1MB, so we keep Base64 fallback under 800KB to be safe
+    if (file.type.startsWith('image/') && fileToUpload.size < 800000) { 
+      console.log('Using Base64 local fallback for file of size:', fileToUpload.size);
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
+        reader.onloadend = () => {
+          const base64 = reader.result as string;
+          // Pillar Check: Ensure base64 isn't astronomically long if somehow compression logic was bypassed
+          if (base64.length > 1048576) {
+            reject(new Error('Arquivo excessivamente grande para armazenamento local (Fallback Base64). Tente uma imagem menor.'));
+          } else {
+            resolve(base64);
+          }
+        };
+        reader.onerror = () => reject(new Error('Falha ao processar arquivo para fallback local.'));
         reader.readAsDataURL(fileToUpload);
       });
     }
@@ -226,16 +236,15 @@ export async function uploadFile(path: string, file: File): Promise<string> {
       code: error.code,
       message: error.message,
       bucket: storage.app.options.storageBucket,
-      path: path,
-      error: error
+      path: path
     });
     
-    if (error.code === 'storage/retry-limit-exceeded' || error.message?.includes('retry limit')) {
-      throw new Error('Falha de conexão com o Storage. Se o problema persistir, certifique-se de que o Storage está ativado nas configurações do seu projeto Firebase.');
+    if (error.code === 'storage/retry-limit-exceeded' || isTimeout) {
+      throw new Error('Conexão instável ou timeout no servidor de arquivos. Tente uma imagem menor ou verifique sua internet.');
     } else if (error.code === 'storage/unauthorized') {
-      throw new Error('Acesso negado ao Storage. Verifique as regras de segurança.');
+      throw new Error('Permissão negada para salvar arquivos. Certifique-se de estar logado e verificado.');
     } else {
-      throw new Error(`Erro no upload: ${error.message}`);
+      throw new Error(`Falha no carregamento: ${error.message || 'Erro desconhecido no Storage'}`);
     }
   }
 }

@@ -13,7 +13,7 @@ service cloud.firestore {
     // 1. GLOBAL HELPERS (PHASE 3)
     // ---------------------------------------------------------
     function isSignedIn() { return request.auth != null; }
-    function isVerified() { return isSignedIn(); } // Relaxed for better UX/Development until email providers are fully configured
+    function isVerified() { return isSignedIn(); } 
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
@@ -74,14 +74,12 @@ service cloud.firestore {
 
     function isValidProduct(data, isUpdate) {
       return data.keys().hasAll(['name', 'price', 'supplierId']) &&
-             data.supplierId == request.auth.uid &&
-             data.price is number && data.price >= 0 &&
+             (isAdmin() || data.supplierId == request.auth.uid) &&
+             data.price is number && 
              data.name is string && data.name.size() <= 200 &&
              (!('image' in data) || (data.image is string && data.image.size() <= 1100000)) &&
              (!('normalizedName' in data) || (data.normalizedName is string && data.normalizedName.size() <= 200)) &&
-             (!('tags' in data) || (data.tags is list && data.tags.size() <= 20)) &&
-             (!('synonyms' in data) || (data.synonyms is list && data.synonyms.size() <= 20)) &&
-             (!('searchIndex' in data) || (data.searchIndex is list && data.searchIndex.size() <= 100)) &&
+             (!('tags' in data) || (data.tags is list && data.tags.size() <= 50)) &&
              (isUpdate ? true : data.createdAt == request.time);
     }
 
@@ -144,10 +142,8 @@ service cloud.firestore {
     match /products/{productId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow create: if isSignedIn(); // Relaxed for troubleshooting
-      allow update: if isVerified() && (existing().supplierId == request.auth.uid || isAdmin()) && isValidProduct(incoming(), true) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'price', 'unit', 'category', 'image', 'stock', 'updatedAt', 'minOrder', 'supplierName', 'onSale', 'salePrice', 'normalizedName', 'subcategory', 'tags', 'synonyms', 'searchIndex', 'supplierId', 'createdAt'])
-      );
+      allow create: if isSignedIn(); 
+      allow update: if isVerified() && (existing().supplierId == request.auth.uid || isAdmin()) && isValidProduct(incoming(), true);
       allow delete: if isVerified() && (existing().supplierId == request.auth.uid || isAdmin());
     }
 

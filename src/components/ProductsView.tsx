@@ -990,6 +990,17 @@ export default function ProductsView({
                   />
                 </div>
 
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{language === 'PT' ? 'Descrição Detalhada' : 'Detailed Description'}</label>
+                  <textarea 
+                    value={editingProduct?.description || ''}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
+                    rows={3}
+                    placeholder="Ex: Cimento de alta resistência, ideal para lages e vigas..."
+                    className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all resize-none ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
+                  />
+                </div>
+
                 {editingProduct?.tags && editingProduct.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2 px-1">
                     {editingProduct.tags.map((tag, i) => (
@@ -1029,7 +1040,10 @@ export default function ProductsView({
                     <input 
                       type="number"
                       value={editingProduct?.stock || 0}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, stock: parseInt(e.target.value) })}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setEditingProduct({ ...editingProduct, stock: isNaN(val) ? 0 : val });
+                      }}
                       className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
                     />
                   </div>
@@ -1038,7 +1052,10 @@ export default function ProductsView({
                     <input 
                       type="number"
                       value={editingProduct?.price || 0}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) })}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setEditingProduct({ ...editingProduct, price: isNaN(val) ? 0 : val });
+                      }}
                       className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
                     />
                   </div>
@@ -1120,7 +1137,10 @@ export default function ProductsView({
                        <input 
                         type="number"
                         value={editingProduct.salePrice || 0}
-                        onChange={(e) => setEditingProduct({ ...editingProduct, salePrice: parseFloat(e.target.value) })}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setEditingProduct({ ...editingProduct, salePrice: isNaN(val) ? 0 : val });
+                        }}
                         className={`w-20 p-2 rounded-lg text-xs font-bold outline-none border ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white' : 'bg-white border-zinc-200'}`}
                       />
                     </div>

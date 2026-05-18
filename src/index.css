@@ -70,7 +70,16 @@
 
 @layer base {
   body {
-    @apply bg-supplyx-deep text-slate-200 antialiased font-sans selection:bg-supplyx-blue/30;
+    @apply bg-supplyx-deep text-slate-200 antialiased font-sans selection:bg-supplyx-blue/30 overflow-x-hidden;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Smooth scroll only when not reduced motion */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
   }
 }
 

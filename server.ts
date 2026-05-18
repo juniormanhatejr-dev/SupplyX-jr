@@ -5,6 +5,7 @@ import multer from 'multer';
 import admin from 'firebase-admin';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import compression from 'compression';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,22 +14,32 @@ const __dirname = path.dirname(__filename);
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf-8'));
 
 // Initialize Firebase Admin
-// Note: In Cloud Run/AI Studio, we use default credentials if available, 
-// otherwise we can initialize with basic config. For Storage without service account,
-// we might need specific credentials, but often the default environment ones work.
+const storageBucket = process.env.FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket;
+
+if (!storageBucket) {
+  console.error('[SERVER] FATAL: Firebase Storage bucket is not configured. Set FIREBASE_STORAGE_BUCKET in secrets.');
+  // We don't throw yet to allow other parts of the server (like Vite) to maybe work if they don't need storage
+}
+
 if (!admin.apps.length) {
+  console.log(`[SERVER] Initializing Firebase Admin for project: ${firebaseConfig.projectId}`);
   admin.initializeApp({
     projectId: firebaseConfig.projectId,
-    storageBucket: firebaseConfig.storageBucket
+    storageBucket: storageBucket
   });
 }
 
 const storage = admin.storage();
-const bucket = storage.bucket();
+const bucket = storage.bucket(storageBucket);
+
+console.log(`[SERVER] Using Firebase bucket: ${storageBucket || 'UNDEFINED'}`);
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Performance improvements
+  app.use(compression());
 
   // Use multer for memory storage
   const upload = multer({
@@ -39,37 +50,39 @@ async function startServer() {
   });
 
   // API Proxy for Uploads (Bypass CORS)
-  app.post('/api/upload', upload.single('file'), async (req, res) => {
+  app.post('/api/upload', upload.single('file'), async (req: any, res) => {
     try {
       const file = req.file;
       const destination = req.body.path;
+
+      if (!storageBucket) {
+        throw new Error('Firebase Storage bucket is not configured.');
+      }
 
       if (!file || !destination) {
         return res.status(400).json({ error: 'Missing file or path' });
       }
 
-      console.log(`[SERVER] Proxy upload request for: ${destination}`);
+      console.log(`[SERVER] Uploading: ${destination} to bucket: ${storageBucket}`);
 
       const fileRef = bucket.file(destination);
       await fileRef.save(file.buffer, {
         metadata: {
           contentType: file.mimetype,
         },
-        public: true, // Make it public if your rules allow or if you want easy access
+        resumable: false,
       });
 
-      // Get public URL
-      // Note: getDownloadURL in Admin SDK is different. We can construct it or use signing.
-      // Constructing standard Firebase Storage URL:
-      // https://firebasestorage.googleapis.com/v0/b/[BUCKET]/o/[PATH]?alt=media
       const encodedPath = encodeURIComponent(destination);
-      const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/${encodedPath}?alt=media`;
+      const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${storageBucket}/o/${encodedPath}?alt=media`;
 
-      console.log(`[SERVER] Upload successful: ${publicUrl}`);
+      console.log(`[SERVER] Upload success: ${publicUrl}`);
       res.json({ url: publicUrl });
     } catch (error: any) {
-      console.error('[SERVER] Upload error:', error);
-      res.status(500).json({ error: error.message });
+      console.error('[SERVER] Upload failed:', error.message);
+      res.status(500).json({ 
+        error: error.message || 'Error saving file to Storage'
+      });
     }
   });
 
@@ -87,8 +100,16 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    
+    // Cache static assets (images, fonts) for a year
+    app.use(express.static(distPath, {
+      maxAge: '1y',
+      immutable: true,
+      index: false
+    }));
+
     app.get('*', (req, res) => {
+      res.set('Cache-Control', 'no-store'); // Index.html should never be cached
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

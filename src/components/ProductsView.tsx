@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { useState, useEffect, ChangeEvent } from 'react';
+import { useState, useEffect, ChangeEvent, memo, useMemo, useDeferredValue } from 'react';
 import { 
   ChevronDown, 
   Target, 
@@ -131,6 +131,112 @@ interface ProductsViewProps {
   onClearSupplierFilter?: () => void;
 }
 
+interface ProductCardProps {
+  item: Product;
+  index: number;
+  userType: string;
+  isDarkMode: boolean;
+  language: string;
+  t: any;
+  onProductClick: (item: Product) => void;
+  onChatClick: (item: Product) => void;
+  onSupplierClick: (supplierId: string) => void;
+}
+
+const ProductCard = memo(({ item, index, userType, isDarkMode, language, t, onProductClick, onChatClick, onSupplierClick }: ProductCardProps) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3, delay: Math.min(index * 0.03, 0.3) }}
+      onClick={() => onProductClick(item)}
+      className="space-y-2 group cursor-pointer relative"
+    >
+      <div className={`aspect-square rounded-2xl overflow-hidden ${isDarkMode ? 'bg-zinc-900 border border-white/5' : 'bg-white border border-zinc-100 shadow-sm'}`}>
+        <OptimizedImage 
+          src={item.image} 
+          alt="" 
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          referrerPolicy="no-referrer"
+          containerClassName="w-full h-full"
+          isPriority={index < 6}
+        />
+        {userType === 'supplier' && (
+          <div className="absolute top-2 right-2 bg-zinc-900/80 p-2 rounded-xl backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity">
+            <Edit3 className="w-4 h-4 text-white" />
+          </div>
+        )}
+        {userType === 'buyer' && (
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onChatClick(item);
+            }}
+            className="absolute bottom-2 right-2 bg-brand p-2.5 rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0"
+          >
+            <MessageSquare className="w-4 h-4 text-white" />
+          </button>
+        )}
+        {(item as any).fromCache && (
+          <div className="absolute top-2 right-2 bg-amber-500/80 text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded backdrop-blur-md flex items-center gap-1">
+            <Clock className="w-2 h-2" />
+            OFFLINE
+          </div>
+        )}
+        {item.onSale && (
+          <div className="absolute top-2 left-2 bg-red-600 text-white text-[8px] font-black uppercase px-2 py-1 rounded-lg flex items-center gap-1 shadow-lg">
+            <Tag className="w-3 h-3" /> {t.sale}
+          </div>
+        )}
+      </div>
+      <div className="space-y-0.5 px-1">
+        <div className="flex items-center gap-2">
+          {item.onSale ? (
+            <>
+              <p className="text-[#FF4400] font-black text-base sm:text-lg">MT {item.salePrice}</p>
+              <p className="text-zinc-500 text-[10px] sm:text-xs line-through opacity-50">MT {item.price}</p>
+            </>
+          ) : (
+            <p className="text-[#FF4400] font-black text-base sm:text-lg">MT {item.price}</p>
+          )}
+        </div>
+        <div className="flex justify-between items-center">
+          <div 
+            className="flex-1 min-w-0 pr-2 cursor-pointer group/info"
+            onClick={(e) => {
+              if (userType === 'buyer') {
+                e.stopPropagation();
+                onSupplierClick(item.supplierId);
+              }
+            }}
+          >
+            <p className={`text-[11px] sm:text-xs truncate font-bold leading-tight ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}>{item.name}</p>
+            <div className="flex items-center gap-1.5 overflow-hidden mt-0.5">
+              {userType === 'buyer' && (
+                <p className="text-[8px] font-black uppercase text-zinc-500 group-hover/info:text-brand transition-colors truncate shrink-0 tracking-widest">
+                  {item.supplierName || t.supplier}
+                </p>
+              )}
+              {item.subcategory && (
+                <span className="text-[7px] font-bold text-zinc-400 uppercase italic whitespace-nowrap opacity-60">
+                  {item.subcategory}
+                </span>
+              )}
+            </div>
+          </div>
+          {userType === 'supplier' && (
+            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded shrink-0 ${item.stock > 0 ? 'text-emerald-500 bg-emerald-500/10' : 'text-red-500 bg-red-500/10'}`}>
+              {item.stock > 0 ? `${item.stock}` : '0'}
+            </span>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+});
+
+ProductCard.displayName = 'ProductCard';
+
 export default function ProductsView({ 
   onNavigate, 
   initialCategory = 'Tudo', 
@@ -157,6 +263,7 @@ export default function ProductsView({
   const { items } = useCart();
   const [supplierProfile, setSupplierProfile] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   const suggestions = searchQuery.length > 2 
@@ -440,39 +547,39 @@ export default function ProductsView({
     return () => unsubscribe();
   }, [userType, supplierId]); // Added supplierId to dependencies
 
+  const displayProducts = useMemo(() => {
     const baseProducts = activeCategory === 'All' || activeCategory === 'Tudo'
-    ? (products.length > 0 ? products : (userType === 'buyer' ? bestOffers.map(p => ({ 
-        ...p, 
-        id: p.id.toString(), 
-        supplierId: 'demo',
-        name: language === 'PT' ? p.descPT : p.descEN,
-        category: language === 'PT' ? p.categoryPT : p.categoryEN
-      } as any)) : []))
-    : products.filter(item => item.category === activeCategory);
+      ? (products.length > 0 ? products : (userType === 'buyer' ? bestOffers.map(p => ({ 
+          ...p, 
+          id: p.id.toString(), 
+          supplierId: 'demo',
+          name: language === 'PT' ? p.descPT : p.descEN,
+          category: language === 'PT' ? p.categoryPT : p.categoryEN
+        } as any)) : []))
+      : products.filter(item => item.category === activeCategory);
 
-  const displayProducts = baseProducts.filter(item => {
-    if (!searchQuery) return true;
+    if (!deferredSearchQuery) return baseProducts;
     
-    const q = normalizeText(searchQuery);
+    const q = normalizeText(deferredSearchQuery);
     const searchTerms = q.split(' ');
     
-    // Check name and description
-    const nameNorm = normalizeText(item.name);
-    const descNorm = item.description ? normalizeText(item.description) : '';
-    
-    if (nameNorm.includes(q) || descNorm.includes(q)) return true;
-    
-    // Check tags, synonyms, and searchIndex
-    const additionalTerms = [
-      ...(item.tags || []),
-      ...(item.synonyms || []),
-      ...(item.searchIndex || []),
-      item.category,
-      item.subcategory || ''
-    ].map(t => normalizeText(t));
-    
-    return additionalTerms.some(term => term.includes(q) || searchTerms.some(st => term.includes(st)));
-  });
+    return baseProducts.filter(item => {
+      const nameNorm = normalizeText(item.name);
+      const descNorm = item.description ? normalizeText(item.description) : '';
+      
+      if (nameNorm.includes(q) || descNorm.includes(q)) return true;
+      
+      const additionalTerms = [
+        ...(item.tags || []),
+        ...(item.synonyms || []),
+        ...(item.searchIndex || []),
+        item.category,
+        item.subcategory || ''
+      ].map(t => normalizeText(t));
+      
+      return additionalTerms.some(term => term.includes(q) || searchTerms.some(st => term.includes(st)));
+    });
+  }, [activeCategory, products, deferredSearchQuery, language, userType]);
 
   const handleServiceRequest = () => {
     setIsSuccess(true);
@@ -759,106 +866,32 @@ export default function ProductsView({
           )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 md:gap-6">
           {displayProducts.length > 0 ? displayProducts.map((item, index) => (
-            <motion.div
-              key={item.id} 
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3, delay: index * 0.05 }}
-              onClick={() => {
+            <ProductCard 
+              key={item.id}
+              item={item}
+              index={index}
+              userType={userType}
+              isDarkMode={isDarkMode || false}
+              language={language}
+              t={t}
+              onProductClick={(product) => {
                 if (userType === 'buyer') {
-                  setSelectedProductDetail(item);
+                  setSelectedProductDetail(product);
                   setIsDetailModalOpen(true);
                 }
                 if (userType === 'supplier') {
-                  setEditingProduct(item);
+                  setEditingProduct(product);
                   setIsEditorOpen(true);
                 }
               }}
-              className="space-y-2 group cursor-pointer relative"
-            >
-              <div className={`aspect-square rounded-xl overflow-hidden ${isDarkMode ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
-                <OptimizedImage 
-                  src={item.image} 
-                  alt="" 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                  referrerPolicy="no-referrer"
-                  containerClassName="w-full h-full"
-                  isPriority={index < 4}
-                />
-                {userType === 'supplier' && (
-                  <div className="absolute top-2 right-2 bg-zinc-900/80 p-2 rounded-lg backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Edit3 className="w-4 h-4 text-white" />
-                  </div>
-                )}
-                {userType === 'buyer' && (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      startChat(item);
-                    }}
-                    className="absolute bottom-2 right-2 bg-brand p-2.5 rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0"
-                  >
-                    <MessageSquare className="w-4 h-4 text-white" />
-                  </button>
-                )}
-                {(item as any).fromCache && (
-                  <div className="absolute top-2 right-2 bg-amber-500/80 text-white text-[7px] font-black uppercase px-1.5 py-0.5 rounded backdrop-blur-md flex items-center gap-1">
-                    <Clock className="w-2 h-2" />
-                    {language === 'PT' ? 'Offline' : 'Offline'}
-                  </div>
-                )}
-                {item.onSale && (
-                  <div className="absolute top-2 left-2 bg-red-600 text-white text-[8px] font-black uppercase px-2 py-1 rounded-lg flex items-center gap-1">
-                    <Tag className="w-3 h-3" /> {t.sale}
-                  </div>
-                )}
-              </div>
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  {item.onSale ? (
-                    <>
-                      <p className="text-[#FF4400] font-black text-lg">MT {item.salePrice}</p>
-                      <p className="text-zinc-500 text-xs line-through">MT {item.price}</p>
-                    </>
-                  ) : (
-                    <p className="text-[#FF4400] font-black text-lg">MT {item.price}</p>
-                  )}
-                </div>
-                <div className="flex justify-between items-center">
-                  <div 
-                    className="flex-1 min-w-0 pr-2 cursor-pointer group/info"
-                    onClick={(e) => {
-                      if (userType === 'buyer') {
-                        e.stopPropagation();
-                        setViewingProfileId(item.supplierId);
-                        setIsProfileModalOpen(true);
-                      }
-                    }}
-                  >
-                    <p className={`text-xs truncate font-bold ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}>{item.name}</p>
-                    <div className="flex items-center gap-1.5 overflow-hidden">
-                      {userType === 'buyer' && (
-                        <p className="text-[8px] font-black uppercase text-zinc-500 group-hover/info:text-brand transition-colors truncate shrink-0">
-                          {item.supplierName || t.supplier}
-                        </p>
-                      )}
-                      {item.subcategory && (
-                        <span className="text-[7px] font-bold text-zinc-400 uppercase italic whitespace-nowrap">
-                          {item.subcategory}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {userType === 'supplier' && (
-                    <span className={`text-[8px] font-black uppercase px-1.5 rounded shrink-0 ${item.stock > 0 ? 'text-emerald-500 bg-emerald-500/10' : 'text-red-500 bg-red-500/10'}`}>
-                      {item.stock > 0 ? `${item.stock} ${t.inStock}` : t.outOfStock}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </motion.div>
+              onChatClick={startChat}
+              onSupplierClick={(profileId) => {
+                setViewingProfileId(profileId);
+                setIsProfileModalOpen(true);
+              }}
+            />
           )) : (
             <div className="col-span-full py-10 text-center">
               <p className="text-zinc-400 font-bold">{t.noProducts}</p>

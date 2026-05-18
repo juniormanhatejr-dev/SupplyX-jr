@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, ChangeEvent } from 'react';
+import { useState, useRef, useEffect, ChangeEvent, memo, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import SupplyXLogo from './SupplyXLogo';
 import { motion, AnimatePresence } from 'motion/react';
@@ -43,10 +43,10 @@ const availableSuppliers = [
 ];
 
 const getOrders = (t: any) => [
-  { id: 'OC-2401', supplier: t.supplierNames.votorantim, supplierId: 'S2', total: 'MT 12.450,00', status: t.status.delivered, date: '04/05/2024' },
-  { id: 'OC-2402', supplier: t.supplierNames.gerdau, supplierId: 'S1', total: 'MT 45.890,00', status: t.status.transit, date: '05/05/2024' },
-  { id: 'OC-2403', supplier: t.supplierNames.tigre, supplierId: 'S4', total: 'MT 3.210,00', status: t.status.waiting, date: '05/05/2024' },
-  { id: 'RTF-992', supplier: t.multiSuppliers, supplierId: 'multi', total: 'N/A', status: t.status.quote, date: '06/05/2024' },
+  { id: 'OC-2401', supplier: t.supplierNames.votorantim, supplierId: 'S2', total: 'MT 12.450,00', status: t.status.delivered, date: '04/05/2024', itemsCount: 5 },
+  { id: 'OC-2402', supplier: t.supplierNames.gerdau, supplierId: 'S1', total: 'MT 45.890,00', status: t.status.transit, date: '05/05/2024', itemsCount: 12 },
+  { id: 'OC-2403', supplier: t.supplierNames.tigre, supplierId: 'S4', total: 'MT 3.210,00', status: t.status.waiting, date: '05/05/2024', itemsCount: 3 },
+  { id: 'RTF-992', supplier: t.multiSuppliers, supplierId: 'multi', total: 'N/A', status: t.status.quote, date: '06/05/2024', itemsCount: 8 },
 ];
 
 interface OrdersViewProps {
@@ -159,6 +159,114 @@ function MaterialComboBox({ value, onChange, options, isDarkMode, language }: Ma
     </div>
   );
 }
+
+interface TableRowProps {
+  row: any;
+  index: number;
+  isDarkMode: boolean;
+  language: string;
+  t: any;
+  allProducts: any[];
+  onUpdate: (id: number, field: string, value: any) => void;
+  onRemove: (id: number) => void;
+}
+
+const OrderRow = memo(({ row, index, isDarkMode, language, t, allProducts, onUpdate, onRemove }: TableRowProps) => {
+  const subtotal = useMemo(() => {
+    const qty = parseFloat(row.quantity) || 0;
+    const price = parseFloat(row.price) || 0;
+    const dCmr = parseFloat(row.discCmr) || 0;
+    const dFnc = parseFloat(row.discFnc) || 0;
+    const vat = parseFloat(row.vat) || 16;
+    
+    const base = qty * price;
+    const discounted = base * (1 - dCmr/100) * (1 - dFnc/100);
+    const final = row.vatIncluded ? discounted : discounted * (1 + vat/100);
+    return final.toFixed(2);
+  }, [row]);
+
+  return (
+    <tr className={`${isDarkMode ? 'hover:bg-supplyx-blue/5' : 'hover:bg-zinc-50/50'} group transition-colors duration-200 border-b ${isDarkMode ? 'border-white/5' : 'border-zinc-50'}`}>
+      <td className="px-4 py-4 font-mono text-[10px] font-bold text-zinc-500 text-center">{index + 1}</td>
+      <td className="px-4 py-4">
+        <MaterialComboBox 
+          value={row.material} 
+          onChange={(val) => onUpdate(row.id, 'material', val)}
+          options={Array.from(new Set(allProducts.map(p => p.name)))}
+          isDarkMode={isDarkMode}
+          language={language as 'PT' | 'EN'}
+        />
+      </td>
+      <td className="px-4 py-4">
+         <input 
+           type="text" 
+           value={row.quantity} 
+           onChange={(e) => onUpdate(row.id, 'quantity', e.target.value)}
+           className={`w-full bg-transparent border-none text-center text-[13px] font-black italic outline-none transition-all ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-900'}`}
+         />
+      </td>
+      <td className="px-4 py-4">
+         <select 
+           value={row.unit}
+           onChange={(e) => onUpdate(row.id, 'unit', e.target.value)}
+           className={`w-full bg-transparent border-none text-center text-[10px] font-black uppercase italic outline-none rounded-lg focus:ring-1 focus:ring-supplyx-blue/30 ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}
+         >
+           <option value="Unid.">UN</option>
+           <option value="Kg">KG</option>
+           <option value="Barra">BR</option>
+           <option value="M2">M2</option>
+           <option value="M3">M3</option>
+           <option value="Saco">SAC</option>
+         </select>
+      </td>
+      <td className="px-4 py-4">
+         <input 
+           type="number" 
+           value={row.price} 
+           onChange={(e) => onUpdate(row.id, 'price', e.target.value)}
+           className={`w-full bg-transparent border-none text-right text-[13px] font-black italic outline-none ${isDarkMode ? 'text-zinc-300' : 'text-zinc-900'}`}
+         />
+      </td>
+      <td className="px-4 py-4 text-center">
+         <input 
+           type="number" 
+           value={row.discCmr} 
+           onChange={(e) => onUpdate(row.id, 'discCmr', e.target.value)}
+           className={`w-full bg-transparent border-none text-center text-[11px] font-bold outline-none text-red-500`}
+         />
+      </td>
+      <td className="px-4 py-4 text-center">
+         <input 
+           type="number" 
+           value={row.discFnc} 
+           onChange={(e) => onUpdate(row.id, 'discFnc', e.target.value)}
+           className="w-full bg-transparent border-none text-center text-[11px] font-bold outline-none text-blue-500"
+         />
+      </td>
+      <td className="px-4 py-4 text-center text-[11px] font-bold text-zinc-500">
+         {row.vat}%
+      </td>
+      <td className="px-4 py-4 text-center">
+         <input 
+           type="checkbox" 
+           checked={row.vatIncluded} 
+           onChange={(e) => onUpdate(row.id, 'vatIncluded', e.target.checked)}
+           className="w-4 h-4 rounded border-zinc-300 accent-supplyx-blue"
+         />
+      </td>
+      <td className="px-4 py-4 text-right text-[13px] font-black text-brand italic">
+         MT {subtotal}
+      </td>
+      <td className="px-4 pr-6 py-4 text-center">
+        <button onClick={() => onRemove(row.id)} className="text-zinc-600 hover:text-red-500 opacity-30 group-hover:opacity-100 transition-all p-1">
+          <X className="w-3 h-3" />
+        </button>
+      </td>
+    </tr>
+  );
+});
+
+OrderRow.displayName = 'OrderRow';
 
 export default function OrdersView({ startWithForm = false, onFormClose, onNavigate, isDarkMode, language, userType = 'buyer' }: OrdersViewProps) {
   const [showForm, setShowForm] = useState(userType === 'supplier' ? false : startWithForm);
@@ -371,15 +479,15 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     setRows([...rows, { id: Date.now(), material: '', quantity: '', unit: 'Unid.', date: '' }]);
   };
 
-  const removeRow = (id: number) => {
+  const removeRow = useCallback((id: number) => {
     if (rows.length > 1) {
-      setRows(rows.filter(r => r.id !== id));
+      setRows(prev => prev.filter(r => r.id !== id));
     }
-  };
+  }, [rows.length]);
 
-  const updateRow = (id: number, field: string, value: any) => {
-    setRows(rows.map(r => r.id === id ? { ...r, [field]: value } : r));
-  };
+  const updateRow = useCallback((id: number, field: string, value: any) => {
+    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+  }, []);
 
   const handleClose = () => {
     setShowForm(false);
@@ -940,83 +1048,17 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                       </thead>
                       <tbody className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-zinc-50'}`}>
                         {rows.map((row, index) => (
-                          <tr key={row.id} className={`${isDarkMode ? 'hover:bg-supplyx-blue/5' : 'hover:bg-zinc-50/50'} group transition-colors duration-300`}>
-                            <td className="px-4 py-4 font-mono text-[10px] font-bold text-zinc-500 text-center">{index + 1}</td>
-                            <td className="px-4 py-4">
-                              <MaterialComboBox 
-                                value={row.material} 
-                                onChange={(val) => updateRow(row.id, 'material', val)}
-                                options={Array.from(new Set(allProducts.map(p => p.name)))}
-                                isDarkMode={isDarkMode}
-                                language={language}
-                              />
-                            </td>
-                            <td className="px-4 py-4">
-                               <input 
-                                 type="text" 
-                                 value={row.quantity} 
-                                 onChange={(e) => updateRow(row.id, 'quantity', e.target.value)}
-                                 className={`w-full bg-transparent border-none text-center text-[13px] font-black italic outline-none transition-all ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-900'}`}
-                               />
-                            </td>
-                            <td className="px-4 py-4">
-                               <select 
-                                 value={row.unit}
-                                 onChange={(e) => updateRow(row.id, 'unit', e.target.value)}
-                                 className={`w-full bg-transparent border-none text-center text-[10px] font-black uppercase italic outline-none ${isDarkMode ? 'text-zinc-500' : 'text-zinc-500'}`}
-                               >
-                                 <option value="Unid.">UN</option>
-                                 <option value="Kg">KG</option>
-                                 <option value="Barra">BR</option>
-                                 <option value="M2">M2</option>
-                                 <option value="M3">M3</option>
-                                 <option value="Saco">SAC</option>
-                               </select>
-                            </td>
-                            <td className="px-4 py-4">
-                               <input 
-                                 type="number" 
-                                 value={row.price} 
-                                 onChange={(e) => updateRow(row.id, 'price', e.target.value)}
-                                 className={`w-full bg-transparent border-none text-right text-[13px] font-black italic outline-none ${isDarkMode ? 'text-zinc-300' : 'text-zinc-900'}`}
-                               />
-                            </td>
-                            <td className="px-4 py-4 text-center">
-                               <input 
-                                 type="number" 
-                                 value={row.discCmr} 
-                                 onChange={(e) => updateRow(row.id, 'discCmr', e.target.value)}
-                                 className={`w-full bg-transparent border-none text-center text-[11px] font-bold outline-none text-red-500`}
-                               />
-                            </td>
-                            <td className="px-4 py-4 text-center">
-                               <input 
-                                 type="number" 
-                                 value={row.discFnc} 
-                                 onChange={(e) => updateRow(row.id, 'discFnc', e.target.value)}
-                                 className="w-full bg-transparent border-none text-center text-[11px] font-bold outline-none text-blue-500"
-                               />
-                            </td>
-                            <td className="px-4 py-4 text-center text-[11px] font-bold text-zinc-500">
-                               {row.vat}%
-                            </td>
-                            <td className="px-4 py-4 text-center">
-                               <input 
-                                 type="checkbox" 
-                                 checked={row.vatIncluded} 
-                                 onChange={(e) => updateRow(row.id, 'vatIncluded', e.target.checked)}
-                                 className="w-4 h-4 rounded border-zinc-300"
-                               />
-                            </td>
-                            <td className="px-4 py-4 text-right text-[13px] font-black text-brand italic">
-                               MT {updateSubtotal(row)}
-                            </td>
-                            <td className="px-4 pr-6 py-4 text-center">
-                              <button onClick={() => removeRow(row.id)} className="text-zinc_300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1">
-                                <X className="w-3 h-3" />
-                              </button>
-                            </td>
-                          </tr>
+                          <OrderRow 
+                            key={row.id}
+                            row={row}
+                            index={index}
+                            isDarkMode={isDarkMode || false}
+                            language={language || 'PT'}
+                            t={t}
+                            allProducts={allProducts}
+                            onUpdate={updateRow}
+                            onRemove={removeRow}
+                          />
                         ))}
                       </tbody>
                     </table>
@@ -1432,29 +1474,29 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             <motion.div 
               key={order.id} 
               whileHover={{ y: -4 }}
-              className={`p-6 rounded-[32px] border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 transition-all cursor-pointer group relative overflow-hidden ${
+              className={`p-5 sm:p-6 rounded-[28px] sm:rounded-[32px] border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 transition-all cursor-pointer group relative overflow-hidden ${
                 isDarkMode 
                   ? 'bg-supplyx-dark border-white/5 hover:border-supplyx-blue/50 shadow-2xl shadow-black/20' 
                   : 'bg-white border-zinc-100 hover:border-supplyx-blue/30 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
               }`}
             >
-              <div className="flex items-center gap-5 w-full sm:w-auto relative z-10">
-                <div className={`w-14 h-14 rounded-[20px] flex items-center justify-center border transition-all ${
+              <div className="flex items-center gap-4 sm:gap-5 w-full sm:w-auto relative z-10">
+                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[18px] sm:rounded-[20px] flex items-center justify-center border transition-all shrink-0 ${
                   isDarkMode 
                     ? 'bg-zinc-800/50 border-white/5 group-hover:bg-supplyx-blue/10 group-hover:border-supplyx-blue/20' 
                     : 'bg-zinc-50 border-zinc-100 group-hover:bg-supplyx-blue/5 group-hover:border-supplyx-blue/10'
                 }`}>
-                  <FileText className={`w-6 h-6 transition-colors ${isDarkMode ? 'text-zinc-500 group-hover:text-supplyx-blue' : 'text-zinc-400 group-hover:text-supplyx-blue'}`} />
+                  <FileText className={`w-5 h-5 sm:w-6 sm:h-6 transition-colors ${isDarkMode ? 'text-zinc-500 group-hover:text-supplyx-blue' : 'text-zinc-400 group-hover:text-supplyx-blue'}`} />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className={`text-lg font-black italic tracking-tight transition-colors ${isDarkMode ? 'text-white' : 'text-zinc-900 font-black'}`}>{order.id}</h4>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <h4 className={`text-base sm:text-lg font-black italic tracking-tight transition-colors truncate ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{order.id}</h4>
                     {order.status === t.status.quote && (
                        <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue animate-pulse" />
                     )}
                   </div>
                   <p 
-                    className="text-[10px] font-black uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-supplyx-blue transition-colors flex items-center gap-2"
+                    className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-supplyx-blue transition-colors flex items-center gap-2 truncate"
                     onClick={(e) => {
                       e.stopPropagation();
                       const profileId = userType === 'supplier' ? 'buyer_demo_uid' : (order as any).supplierId;
@@ -1465,18 +1507,31 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                     }}
                   >
                     <User className="w-3 h-3" />
-                    {userType === 'supplier' ? `${t.client}: ${language === 'PT' ? 'Manhate Jr Const.' : 'Manhate Jr Const.'}` : `${t.supplier}: ${order.supplier}`}
+                    {userType === 'supplier' ? `${t.client}: Manhate Jr` : `${t.supplier}: ${order.supplier}`}
                   </p>
+                </div>
+                
+                {/* Mobile Status Badge */}
+                <div className="sm:hidden shrink-0">
+                  <div className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border
+                    ${order.status === t.status.delivered ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+                      order.status === t.status.transit ? 'bg-supplyx-blue/10 text-supplyx-blue border-supplyx-blue/20' :
+                      order.status === t.status.waiting ? 'bg-amber-500/10 text-amber-500 border-amber-500/10' :
+                      'bg-indigo-500/10 text-indigo-500 border-indigo-500/10'}`}>
+                    {order.status}
+                  </div>
                 </div>
               </div>
               
-              <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-10 w-full sm:w-auto mt-2 sm:mt-0 relative z-10">
+              <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-10 w-full sm:w-auto p-4 sm:p-0 rounded-2xl bg-zinc-900/5 sm:bg-transparent relative z-10">
                 <div className="text-left sm:text-right">
-                  <p className={`text-xl font-black italic tracking-tighter leading-none mb-1 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{order.total}</p>
-                  <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-[0.2em]">{order.date}</p>
+                  <p className={`text-lg sm:text-xl font-black italic tracking-tighter leading-none mb-1 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{order.total}</p>
+                  <p className="text-[8px] sm:text-[9px] text-zinc-500 font-bold uppercase tracking-[0.2em]">{order.date}</p>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border
+                
+                <div className="flex items-center gap-2 sm:gap-4">
+                  {/* Desktop Only Status */}
+                  <div className={`hidden sm:block px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border
                     ${order.status === t.status.delivered ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
                       order.status === t.status.transit ? 'bg-supplyx-blue/10 text-supplyx-blue border-supplyx-blue/20' :
                       order.status === t.status.waiting ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
@@ -1484,7 +1539,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                     {order.status}
                   </div>
                   
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     {order.status === t.status.quote && (
                       <button 
                         onClick={async (e) => {
@@ -1506,8 +1561,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                           }
                         }}
                         disabled={downloadingOrderId === order.id}
-                        className={`p-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-50 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10' : 'bg-zinc-50 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'}`}
-                        title={t.download}
+                        className={`p-2 sm:p-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-50 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-white' : 'bg-zinc-50 text-zinc-500 hover:text-zinc-900'}`}
                       >
                         {downloadingOrderId === order.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                       </button>
@@ -1518,7 +1572,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                           e.stopPropagation();
                           setRespondingTo(order);
                         }}
-                        className="px-5 py-2.5 bg-supplyx-blue text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 active:scale-95 transition-all shadow-xl shadow-blue-500/20"
+                        className="px-4 sm:px-5 py-2 sm:py-2.5 bg-supplyx-blue text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-blue-500/20"
                       >
                         {t.respond}
                       </button>
@@ -1528,7 +1582,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                         e.stopPropagation();
                         startChat(order);
                       }}
-                      className={`p-2.5 rounded-xl transition-all active:scale-95 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-supplyx-blue hover:bg-supplyx-blue/5' : 'bg-zinc-50 text-zinc-500 hover:text-supplyx-blue hover:bg-supplyx-blue/5'}`}
+                      className={`p-2 sm:p-2.5 rounded-xl transition-all active:scale-95 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-supplyx-blue' : 'bg-zinc-50 text-zinc-500 hover:text-supplyx-blue'}`}
                     >
                       <MessageSquare className="w-4 h-4" />
                     </button>

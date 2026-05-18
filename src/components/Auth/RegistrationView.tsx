@@ -196,7 +196,9 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
     const hasLower = /[a-z]/.test(pass);
     const hasDigit = /[0-9]/.test(pass);
     const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(pass);
-    return pass.length >= 8 && hasUpper && hasLower && hasDigit && hasSpecial;
+    // User requested flexibility: Any password is valid as long as it meets character requirements
+    // We use 6 as minimum to match the UI labels and Firebase common defaults
+    return pass.length >= 6 && hasUpper && hasLower && hasDigit && hasSpecial;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -213,7 +215,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
         return;
       }
       if (!validatePassword(formData.password)) {
-        setError(language === 'PT' ? 'A senha deve ter no mínimo 8 caracteres, incluindo letras maiúsculas, minúsculas, números e símbolos.' : 'Password must be at least 8 characters, including uppercase, lowercase, numbers, and symbols.');
+        setError(language === 'PT' ? 'A senha deve ter no mínimo 6 caracteres, incluindo letras maiúsculas, minúsculas, números e símbolos.' : 'Password must be at least 6 characters, including uppercase, lowercase, numbers, and symbols.');
         return;
       }
     }

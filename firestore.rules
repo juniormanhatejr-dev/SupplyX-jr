@@ -113,6 +113,7 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isOwner(userId) && isValidUser(incoming(), false);
       allow update: if isOwner(userId) && isValidUser(incoming(), true);
+      allow delete: if isVerified() && (userId == request.auth.uid || isAdmin());
       
       function isOwner(uid) { return request.auth.uid == uid; }
     }

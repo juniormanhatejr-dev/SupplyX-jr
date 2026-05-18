@@ -258,6 +258,7 @@ export default function App() {
             setShouldEditProfile(false);
             setActiveTab(profile?.type === 'supplier' ? 'Seller Central' : 'Dashboard');
           }} 
+          onNavigate={handleNavigateWithPayload}
           {...commonProps} 
         />;
       default:

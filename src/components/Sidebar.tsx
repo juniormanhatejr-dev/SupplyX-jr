@@ -103,8 +103,8 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
         onClick={onClose}
       />
 
-      <aside className={`fixed left-0 top-0 h-screen w-64 flex flex-col z-[70] transition-all duration-500 transform lg:translate-x-0
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+      <aside className={`fixed left-0 top-0 h-screen w-64 flex flex-col z-[70] transition-transform duration-500 transform 
+        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         ${isDarkMode ? 'bg-supplyx-deep border-r border-white/5 shadow-3xl' : 'bg-white border-r border-zinc-200'}`}>
         
         <div className="p-8 flex items-center justify-between">

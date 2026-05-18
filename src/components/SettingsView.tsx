@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings, User, Bell, Shield, CreditCard, HelpCircle, Moon, Sun, Monitor, Loader2, CheckCircle2, Eye, ArrowLeft, Upload, FileImage, Image as ImageIcon, X } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType, uploadFile } from '../lib/firebase';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, getDocs, deleteDoc, query, where } from 'firebase/firestore';
 import { sendEmailVerification } from 'firebase/auth';
 import { useAuth } from '../contexts/AuthContext';
 import ProfileModal from './ProfileModal';
@@ -11,6 +11,7 @@ interface SettingsViewProps {
   isDarkMode: boolean;
   language: 'PT' | 'EN';
   onBack?: () => void;
+  onNavigate?: (tab: string, payload?: any) => void;
   initialIsEditing?: boolean;
   onLanguageChange?: (lang: 'PT' | 'EN') => void;
   onThemeToggle?: () => void;
@@ -328,7 +329,7 @@ export default function SettingsView({
           {(profile as any)?.role === 'admin' || (profile as any)?.role === 'superadmin' ? (
             <button 
               className={`p-6 rounded-3xl border text-left transition-all hover:scale-[1.02] active:scale-98 relative overflow-hidden group ${
-                isDarkMode ? 'bg-red-500/5 border-red-500/20 hover:bg-red-500/10' : 'bg-red-50 border-red-100 shadow-sm'
+                isDarkMode ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800' : 'bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
               }`}
             >
                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">

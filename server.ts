@@ -18,7 +18,6 @@ const storageBucket = process.env.FIREBASE_STORAGE_BUCKET || firebaseConfig.stor
 
 if (!storageBucket) {
   console.error('[SERVER] FATAL: Firebase Storage bucket is not configured. Set FIREBASE_STORAGE_BUCKET in secrets.');
-  // We don't throw yet to allow other parts of the server (like Vite) to maybe work if they don't need storage
 }
 
 if (!admin.apps.length) {

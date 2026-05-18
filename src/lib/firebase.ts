@@ -173,14 +173,14 @@ export async function uploadFile(path: string, file: File): Promise<string> {
     try {
       console.log('Starting image compression...');
       const options = {
-        maxSizeMB: 0.2, // Reduced from 0.5MB for faster loading
-        maxWidthOrHeight: 1024, // Reduced from 1280
+        maxSizeMB: 0.2,
+        maxWidthOrHeight: 1024,
         useWebWorker: true,
-        initialQuality: 0.6 // Reduced from 0.7
+        initialQuality: 0.6
       };
       
       if (path.includes('photo_') || path.includes('avatar')) {
-        options.maxSizeMB = 0.1; // 100KB for avatars
+        options.maxSizeMB = 0.1;
         options.maxWidthOrHeight = 400;
       }
 
@@ -191,9 +191,32 @@ export async function uploadFile(path: string, file: File): Promise<string> {
     }
   }
 
+  // Pillar 11: Priority Upload - Server Side Proxy to Bypass CORS
+  try {
+    console.log('[UPLOAD] Attempting Server-Side Proxy Upload (CORS-Bypass)...');
+    const formData = new FormData();
+    formData.append('file', fileToUpload);
+    formData.append('path', path);
+
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log('[UPLOAD] Server proxy success:', data.url);
+      return data.url;
+    }
+    console.warn('[UPLOAD] Server proxy failed, trying direct Storage:', await response.text());
+  } catch (proxyError) {
+    console.warn('[UPLOAD] Server proxy error (Expected in some environments), falling back:', proxyError);
+  }
+
+  // Direct Storage Upload (Secondary Fallback)
   const fileRef = ref(storage, path);
   try {
-    console.log(`Starting uploadBytes to: ${path}`);
+    console.log(`Starting direct uploadBytes to: ${path}`);
     
     // Create a promise that rejects after 20 seconds to force fallback
     const uploadWithTimeout = Promise.race([
@@ -203,27 +226,27 @@ export async function uploadFile(path: string, file: File): Promise<string> {
       )
     ]) as Promise<any>;
 
-    const result = await uploadWithTimeout;
-    console.log('Upload successful, storage result:', result.metadata?.fullPath);
+    await uploadWithTimeout;
     const url = await getDownloadURL(fileRef);
-    console.log(`Download URL obtained: ${url}`);
+    console.log(`Direct upload URL obtained: ${url}`);
     return url;
   } catch (error: any) {
-    const isTimeout = error.message?.includes('timeout') || error.code === 'storage/retry-limit-exceeded';
-    console.warn(`Firebase Storage ${isTimeout ? 'Timed Out' : 'Failed'}:`, error.code || error.message);
+    console.warn(`Firebase Storage Direct Upload Failed:`, error.code || error.message);
     
-    // If it's an image and small enough (or after compression), use Base64 as fallback
-    // Firestore limit is 1MB, so we keep Base64 fallback under 800KB to be safe
-    if (file.type.startsWith('image/') && fileToUpload.size < 800000) { 
-      console.log('Using Base64 local fallback for file of size:', fileToUpload.size);
+    // Pillar Check: CORS/Domain Error Detection
+    const isCorsError = error.message?.includes('cross-origin') || error.code === 'storage/unauthorized' || error.message?.includes('CORS');
+    
+    // Final Fallback: Base64 in Firestore (Small Files Only)
+    if (file.type.startsWith('image/') && fileToUpload.size < 900000) { 
+      console.log('Using Base64 local fallback due to total Storage failure/CORS:', fileToUpload.size);
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const base64 = reader.result as string;
-          // Pillar Check: Ensure base64 isn't astronomically long if somehow compression logic was bypassed
           if (base64.length > 1048576) {
-            reject(new Error('Arquivo excessivamente grande para armazenamento local (Fallback Base64). Tente uma imagem menor.'));
+            reject(new Error('Imagem excessivamente grande para o modo de compatibilidade (Vercel/Base64). Tente uma imagem abaixo de 800KB.'));
           } else {
+            console.log('Base64 fallback successful');
             resolve(base64);
           }
         };
@@ -232,19 +255,11 @@ export async function uploadFile(path: string, file: File): Promise<string> {
       });
     }
 
-    console.error('Firebase Storage Critical Error:', {
-      code: error.code,
-      message: error.message,
-      bucket: storage.app.options.storageBucket,
-      path: path
-    });
-    
-    if (error.code === 'storage/retry-limit-exceeded' || isTimeout) {
-      throw new Error('Conexão instável ou timeout no servidor de arquivos. Tente uma imagem menor ou verifique sua internet.');
-    } else if (error.code === 'storage/unauthorized') {
-      throw new Error('Permissão negada para salvar arquivos. Certifique-se de estar logado e verificado.');
+    if (isCorsError) {
+      throw new Error('Configuração de Domínio: O carregamento falhou. Tente uma imagem menor (abaixo de 800KB) para usar o modo de compatibilidade automática.');
     } else {
-      throw new Error(`Falha no carregamento: ${error.message || 'Erro desconhecido no Storage'}`);
+      throw new Error(`Falha no carregamento: ${error.message || 'Erro desconhecido.'}`);
     }
   }
 }
+

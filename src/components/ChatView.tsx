@@ -13,6 +13,7 @@ import {
   CheckCheck,
   UserPlus,
   Clock,
+  Trash2,
   ArrowLeft
 } from 'lucide-react';
 import ProfileModal from './ProfileModal';
@@ -28,6 +29,7 @@ import {
   addDoc, 
   updateDoc, 
   doc, 
+  deleteDoc,
   serverTimestamp,
   limit,
   getDocs
@@ -241,6 +243,15 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
 
     return () => unsubscribe();
   }, [activeRoom]);
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!activeRoom || !auth.currentUser) return;
+    try {
+      await deleteDoc(doc(db, `chats/${activeRoom.id}/messages`, messageId));
+    } catch (err) {
+      console.error('Error deleting message:', err);
+    }
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -478,7 +489,16 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                     key={msg.id}
                     className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div className={`max-w-[80%] md:max-w-[60%] space-y-1`}>
+                    <div className={`max-w-[80%] md:max-w-[60%] space-y-1 group/msg relative`}>
+                      {isMine && (
+                         <button 
+                           onClick={() => handleDeleteMessage(msg.id)}
+                           className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 rounded-lg opacity-0 group-hover/msg:opacity-100 hover:bg-zinc-800 text-zinc-500 hover:text-red-500 transition-all"
+                         >
+                           <Trash2 className="w-3.5 h-3.5" />
+                         </button>
+                      )}
+                      
                       <div className={`p-4 rounded-3xl text-sm font-medium ${
                         isMine 
                           ? 'bg-brand text-white rounded-tr-none' 

@@ -28,20 +28,28 @@ const SupplyXLogo: React.FC<SupplyXLogoProps> = ({
   };
 
   return (
-    <div className={`flex items-center gap-3 ${className}`}>
-      <div className={`${sizes[size]} relative flex items-center justify-center rounded-2xl overflow-hidden shadow-2xl group`}>
-        <img 
-          src="/src/assets/images/supplyx_logo_1779177786558.png" 
-          alt="SupplyX" 
-          className="w-full h-full object-cover"
-          id="supplyx-logo-img"
-          referrerPolicy="no-referrer"
-        />
+    <div className={`flex flex-col items-center gap-1 ${className}`}>
+      <div className="flex items-center gap-3">
+        <div className={`${sizes[size]} relative flex items-center justify-center rounded-2xl overflow-hidden shadow-2xl group`}>
+          <img 
+            src="/src/assets/images/supplyx_logo_v2_1779179688631.png" 
+            alt="SupplyX" 
+            className="w-full h-full object-cover"
+            id="supplyx-logo-img"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+        
+        {showText && size !== 'lg' && size !== 'xl' && (
+          <span className={`${textSizes[size]} font-black italic tracking-tighter ${isDark ? 'text-white' : 'text-supplyx-deep'}`}>
+            Supply<span className="text-supplyx-blue">X</span>
+          </span>
+        )}
       </div>
       
-      {showText && size !== 'lg' && size !== 'xl' && (
-        <span className={`${textSizes[size]} font-black italic tracking-tighter ${isDark ? 'text-white' : 'text-supplyx-deep'}`}>
-          Supply<span className="text-supplyx-blue">X</span>
+      {size !== 'sm' && (
+        <span className="text-[7px] font-black tracking-[0.2em] text-zinc-500 uppercase mt-0.5 text-center leading-none">
+          Powered by Manhate Link África
         </span>
       )}
     </div>

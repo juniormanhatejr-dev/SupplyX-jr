@@ -745,44 +745,71 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const downloadPDF = async (response: SupplierResponse) => {
     if (!invoiceRef.current) return;
     
-    // Create a temporary container for the PDF content
-    const element = invoiceRef.current;
+    setIsLoading(true);
     try {
+      const element = invoiceRef.current;
+      
+      // Ensure element is visible enough for html2canvas
+      const originalStyle = element.style.display;
+      
       const canvas = await html2canvas(element, {
-        scale: 2, 
+        scale: 2.5, 
         useCORS: true,
+        allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        imageTimeout: 15000,
+        imageTimeout: 20000,
         onclone: (clonedDoc) => {
+          const clonedElement = clonedDoc.getElementById('quotation-document');
+          if (clonedElement) {
+            clonedElement.style.position = 'relative';
+            clonedElement.style.left = '0';
+            clonedElement.style.top = '0';
+            clonedElement.style.margin = '0';
+          }
           sanitizeDocumentColors(clonedDoc, false);
         }
       });
       
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a4', true);
       
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
+      const imgWidth = 210; 
+      const pageHeight = 297;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       let heightLeft = imgHeight;
       let position = 0;
 
-      // Add first page
+      const addFooter = (doc: any, pageNum: number) => {
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Powered by Manhate Link África - SupplyX Ecosystem v2.0', 105, 285, { align: 'center' });
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.text(`Documento Gerado Eletronicamente | Página ${pageNum}`, 105, 290, { align: 'center' });
+      };
+
+      let pageCount = 1;
       pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+      addFooter(pdf, pageCount);
       heightLeft -= pageHeight;
 
-      // Add subsequent pages if content exceeds A4 height
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
+        pageCount++;
         pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+        addFooter(pdf, pageCount);
         heightLeft -= pageHeight;
       }
       
-      pdf.save(`Cotação_${response.name.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
+      const timestamp = new Date().getTime();
+      pdf.save(`Cotacao_SupplyX_${response.name.replace(/\s+/g, '_')}_${timestamp}.pdf`);
     } catch (error) {
       console.error("PDF generator error:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1092,7 +1119,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   }, [respondingTo, responseValue, responseDiscount, aiResponses, selectedResponseIndex, mergedSuppliers, profile, user, rows]);
 
   const invoiceTemplate = (
-    <div className="fixed -left-[2000px] top-0 pointer-events-none z-[-100]">
+    <div style={{ position: 'fixed', left: '-5000px', top: 0, width: '210mm', pointerEvents: 'none', zIndex: -100 }}>
       <QuotationDocument data={quotationData} innerRef={invoiceRef} />
     </div>
   );
@@ -1823,7 +1850,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                         {downloadingOrderId === order.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                       </button>
                     )}
-                    {userType === 'supplier' && order.status === t.status.quote && (
+                    {userType === 'supplier' && order.status === t.status.quote && order.id && !order.id.startsWith('DEMO-') && (
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1944,33 +1971,40 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                   onClick={async () => {
                     setIsResponding(true);
                     try {
-                      // Update Firestore document
-                      const val = parseFloat(responseValue) || 0;
-                      const disc = parseFloat(responseDiscount) || 0;
-                      const finalVal = val * (1 - disc / 100);
+                      const isDemo = respondingTo.id && respondingTo.id.startsWith('DEMO-');
+                      
+                      if (!isDemo) {
+                        // Update Firestore document
+                        const val = parseFloat(responseValue) || 0;
+                        const disc = parseFloat(responseDiscount) || 0;
+                        const finalVal = val * (1 - disc / 100);
 
-                      await updateDoc(doc(db, 'quotations', respondingTo.id), {
-                        status: 'responded',
-                        responseValue: val,
-                        discountPercent: disc,
-                        respondedAt: serverTimestamp(),
-                        totalAmount: finalVal
-                      });
+                        await updateDoc(doc(db, 'quotations', respondingTo.id), {
+                          status: 'responded',
+                          responseValue: val,
+                          discountPercent: disc,
+                          respondedAt: serverTimestamp(),
+                          totalAmount: finalVal
+                        });
 
-                      // Notify buyer
-                      await notificationService.sendNotification({
-                        userId: respondingTo.buyerId,
-                        senderId: auth.currentUser?.uid,
-                        title: language === 'PT' ? 'Proposta Recebida' : 'Proposal Received',
-                        message: language === 'PT' 
-                          ? `O fornecedor ${profile?.name || 'seu fornecedor'} respondeu à sua cotação ${respondingTo.requestId}.` 
-                          : `The supplier ${profile?.name || 'your supplier'} responded to your quote ${respondingTo.requestId}.`,
-                        type: 'success',
-                        metadata: {
-                          requestId: respondingTo.requestId,
-                          quotationId: respondingTo.id
-                        }
-                      });
+                        // Notify buyer
+                        await notificationService.sendNotification({
+                          userId: respondingTo.buyerId,
+                          senderId: auth.currentUser?.uid,
+                          title: language === 'PT' ? 'Proposta Recebida' : 'Proposal Received',
+                          message: language === 'PT' 
+                            ? `O fornecedor ${profile?.name || 'seu fornecedor'} respondeu à sua cotação ${respondingTo.requestId}.` 
+                            : `The supplier ${profile?.name || 'your supplier'} responded to your quote ${respondingTo.requestId}.`,
+                          type: 'success',
+                          metadata: {
+                            requestId: respondingTo.requestId,
+                            quotationId: respondingTo.id
+                          }
+                        });
+                      } else {
+                        // Simulate delay for demo
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                      }
 
                       setRespondingTo(null);
                       setResponseValue('');
@@ -1978,6 +2012,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                       alert(t.successProposal);
                     } catch (err) {
                       console.error('Error responding to quote:', err);
+                      alert(language === 'PT' ? 'Erro ao enviar proposta' : 'Error sending proposal');
                     } finally {
                       setIsResponding(false);
                     }

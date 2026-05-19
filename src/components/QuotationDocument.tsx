@@ -97,6 +97,51 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
       }}
       id="quotation-document"
     >
+      {/* Watermark Logo & Text */}
+      <div style={{ 
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        opacity: 0.03,
+        zIndex: 0,
+        pointerEvents: 'none',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden'
+      }}>
+        <img 
+          src="/src/assets/images/supplyx_logo_v2_1779179688631.png" 
+          alt="Watermark" 
+          style={{ 
+            width: '140%', 
+            height: '140%', 
+            objectFit: 'contain',
+            filter: 'grayscale(1) contrast(1.1) brightness(1.2)',
+            transform: 'rotate(-20deg)',
+            opacity: 0.7
+          }}
+          referrerPolicy="no-referrer"
+          crossOrigin="anonymous"
+        />
+        <div style={{
+          fontSize: '56px',
+          fontWeight: 900,
+          color: '#000',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5em',
+          textAlign: 'center',
+          width: '100%',
+          fontFamily: 'serif',
+          opacity: 0.8
+        }}>
+          Powered by Manhate Link África
+        </div>
+      </div>
+
       {/* Top Branding Section */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px', alignItems: 'flex-start' }}>
         <div style={{ display: 'flex', gap: '20px', flex: 1 }}>
@@ -479,10 +524,10 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
           <div style={{ marginTop: '20px', textAlign: 'center', position: 'relative' }}>
             <div style={{ height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: `1px solid ${COLORS.borderGray}`, marginBottom: '10px' }}>
               {data.supplier.signatureURL && (
-                <img src={data.supplier.signatureURL} alt="Signature" style={{ maxHeight: '60px', mixBlendMode: 'multiply' }} />
+                <img src={data.supplier.signatureURL} alt="Signature" style={{ maxHeight: '60px' }} />
               )}
               {data.supplier.stampURL && (
-                <img src={data.supplier.stampURL} alt="Stamp" style={{ maxHeight: '60px', opacity: 0.8, marginLeft: '20px', mixBlendMode: 'multiply' }} />
+                <img src={data.supplier.stampURL} alt="Stamp" style={{ maxHeight: '60px', opacity: 0.8, marginLeft: '20px' }} />
               )}
             </div>
             <p style={{ fontSize: '9px', fontWeight: 800, margin: 0, color: COLORS.textMuted, textTransform: 'uppercase' }}>Assinatura & Carimbo Eletrónico</p>

@@ -39,7 +39,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, isDarkMode, language, userType, onLogout }: SidebarProps) {
-  const { unreadCount } = useNotifications();
+  const { unreadMessages, unreadNotifications } = useNotifications();
   const { profile } = useAuth();
   const translations = {
     PT: {
@@ -147,12 +147,12 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
               {isActive && (
                 <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
               )}
-              {item.originalLabel === 'Mensagens' && unreadCount > 0 && (
+              {item.originalLabel === 'Mensagens' && unreadMessages > 0 && (
                 <div className="absolute right-4 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[8px] font-black animate-bounce shadow-lg shadow-red-500/20">
-                  {unreadCount}
+                  {unreadMessages}
                 </div>
               )}
-              {item.originalLabel === 'Notificações' && unreadCount > 0 && (
+              {item.originalLabel === 'Notificações' && unreadNotifications > 0 && (
                 <div className="absolute right-4 w-2 h-2 rounded-full bg-red-500 animate-pulse border border-white" />
               )}
             </button>

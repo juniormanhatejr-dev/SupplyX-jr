@@ -144,6 +144,7 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow list: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
         allow create: if isVerified() && isValidMessage(incoming()) && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow delete: if isVerified() && request.auth.uid == existing().senderId;
       }
     }
 

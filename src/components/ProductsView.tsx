@@ -549,13 +549,7 @@ export default function ProductsView({
 
   const displayProducts = useMemo(() => {
     const baseProducts = activeCategory === 'All' || activeCategory === 'Tudo'
-      ? (products.length > 0 ? products : (userType === 'buyer' ? bestOffers.map(p => ({ 
-          ...p, 
-          id: p.id.toString(), 
-          supplierId: 'demo',
-          name: language === 'PT' ? p.descPT : p.descEN,
-          category: language === 'PT' ? p.categoryPT : p.categoryEN
-        } as any)) : []))
+      ? products
       : products.filter(item => item.category === activeCategory);
 
     if (!deferredSearchQuery) return baseProducts;
@@ -900,47 +894,7 @@ export default function ProductsView({
         </div>
       </div>
 
-      {/* Personalização Rápida Section */}
-      <div className={`rounded-[32px] p-8 shadow-sm border ${isDarkMode ? 'bg-zinc-900/50 border-white/5 backdrop-blur-md' : 'bg-white border-zinc-100 shadow-sm'}`}>
-        <div 
-          onClick={() => setSelectedService(t.quickPersonalize)}
-          className="flex justify-between items-center mb-2 cursor-pointer group/header"
-        >
-          <div className="flex items-center gap-4">
-            <PencilRuler className={`w-6 h-6 transition-colors group-hover/header:text-brand ${isDarkMode ? 'text-zinc-300' : 'text-zinc-800'}`} />
-            <h2 className={`text-2xl font-black italic uppercase tracking-tighter transition-colors group-hover/header:text-brand ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.quickPersonalize}</h2>
-          </div>
-          <ArrowRight className="w-5 h-5 text-zinc-400 group-hover/header:translate-x-1 group-hover/header:text-brand transition-all" />
-        </div>
-        <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mb-8 flex items-center gap-3">
-          {t.moqLow} <span className="w-1 h-1 rounded-full bg-zinc-700" /> {t.shippingDays} <span className="w-1 h-1 rounded-full bg-zinc-700" /> {t.trueToDesign}
-        </p>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
-          {personalization.map((item) => (
-            <div 
-              key={item.id} 
-              onClick={() => setSelectedService(language === 'PT' ? item.badgePT : item.badgeEN)}
-              className="relative group cursor-pointer"
-            >
-              <div className={`aspect-square rounded-xl overflow-hidden ${isDarkMode ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
-                <OptimizedImage 
-                  src={item.image} 
-                  alt="" 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                  referrerPolicy="no-referrer"
-                  containerClassName="w-full h-full"
-                />
-              </div>
-              <div className="absolute bottom-2 left-2 right-2">
-                <div className="bg-zinc-900/60 backdrop-blur-sm text-white text-[10px] md:text-xs font-bold py-1.5 px-3 rounded-lg text-center truncate">
-                  {language === 'PT' ? item.badgePT : item.badgeEN}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Personalização Rápida Section (Removed as per user request to hide non-DB data) */}
 
       {/* Service Request Modal */}
       <AnimatePresence>

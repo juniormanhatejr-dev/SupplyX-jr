@@ -11,9 +11,11 @@ import {
   Search,
   Sparkles
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import React from 'react';
 import { motion } from 'motion/react';
+import { db } from '../lib/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import StatCard from './StatCard';
 import SalesChart from './SalesChart';
 import BudgetDonutChart from './BudgetDonutChart';
@@ -30,6 +32,19 @@ interface DashboardViewProps {
 
 export default function DashboardView({ onActivateIA, onCategoryClick, onNavigate, isDarkMode, language, userType = 'buyer' }: DashboardViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [supplierCount, setSupplierCount] = useState<number | null>(null);
+  const [revenue, setRevenue] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Basic count of suppliers in the DB
+    const q = query(collection(db, 'users'), where('type', '==', 'supplier'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setSupplierCount(snapshot.size);
+    }, (err) => {
+      console.error('Error counting suppliers:', err);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,17 +134,17 @@ export default function DashboardView({ onActivateIA, onCategoryClick, onNavigat
   const t = translations[language || 'PT'];
 
   const buyerStats: { label: string; value: string; change: string; trend: 'up' | 'down'; icon: any }[] = [
-    { label: t.stats.total, value: "MT 842.150", change: "+18.4%", trend: "up", icon: DollarSign },
-    { label: t.stats.open, value: "14", change: t.stats.newToday, trend: "up", icon: CircleDollarSign },
-    { label: t.stats.saving, value: "MT 52.400", change: "+2.4%", trend: "up", icon: ArrowUpRight },
-    { label: t.stats.suppliers, value: "156", change: `+4 ${t.stats.newAdded}`, trend: "up", icon: CreditCard },
+    { label: t.stats.total, value: "MT 0", change: "+0%", trend: "up", icon: DollarSign },
+    { label: t.stats.open, value: "0", change: t.stats.newToday, trend: "up", icon: CircleDollarSign },
+    { label: t.stats.saving, value: "MT 0", change: "+0%", trend: "up", icon: ArrowUpRight },
+    { label: t.stats.suppliers, value: supplierCount?.toString() || "0", change: "+0", trend: "up", icon: CreditCard },
   ];
 
   const supplierStats: { label: string; value: string; change: string; trend: 'up' | 'down'; icon: any }[] = [
-    { label: t.stats.total, value: "MT 1.2M", change: "+42.5%", trend: "up", icon: ArrowUpRight },
-    { label: t.stats.open, value: "28", change: `8 ${t.stats.newAdded}`, trend: "up", icon: CircleDollarSign },
-    { label: t.stats.saving, value: "MT 4.200", change: "-1.2%", trend: "down", icon: DollarSign },
-    { label: t.stats.suppliers, value: "8.4K", change: "+210", trend: "up", icon: CreditCard },
+    { label: t.stats.total, value: "MT 0", change: "+0%", trend: "up", icon: ArrowUpRight },
+    { label: t.stats.open, value: "0", change: `0 ${t.stats.newAdded}`, trend: "up", icon: CircleDollarSign },
+    { label: t.stats.saving, value: "MT 0", change: "0%", trend: "down", icon: DollarSign },
+    { label: t.stats.suppliers, value: "0", change: "+0", trend: "up", icon: CreditCard },
   ];
 
   const activeStats = userType === 'supplier' ? supplierStats : buyerStats;
@@ -376,12 +391,7 @@ export default function DashboardView({ onActivateIA, onCategoryClick, onNavigat
             </div>
             
             <div className="space-y-6">
-              {[
-                { time: '2m', user: 'Logística Nacala', action: t.actions.dispatch, desc: language === 'PT' ? 'Saída Porto de Nacala' : 'Departure Nacala Port', type: 'logistics' },
-                { time: '15m', user: 'Votorantim', action: t.actions.accepted, desc: 'OC-2401 Confirmed', type: 'order' },
-                { time: '1h', user: 'Fernando M.', action: t.actions.payment, desc: 'MT 12.450 (BIM)', type: 'payment' },
-                { time: '3h', user: 'Procurement AI', action: t.actions.optimization, desc: language === 'PT' ? 'Economia identificada' : 'Cost save identified', type: 'ai' },
-              ].map((activity, i) => (
+              {[].map((activity, i) => (
                 <div key={i} className="flex gap-4 items-start">
                   <div className={`w-1 h-6 rounded-full mt-1 ${
                     activity.type === 'logistics' ? 'bg-supplyx-blue' :
@@ -407,10 +417,7 @@ export default function DashboardView({ onActivateIA, onCategoryClick, onNavigat
                <Calendar className="w-4 h-4 text-zinc-600" />
             </div>
             <div className="space-y-4">
-              {[
-                { item: 'Bulk Cement', date: language === 'PT' ? 'Amanhã' : 'Tomorrow', status: language === 'PT' ? 'Em Rota' : 'En Route', color: 'text-supplyx-blue' },
-                { item: 'Steel Rebar', date: 'May 12', status: language === 'PT' ? 'Processando' : 'Processing', color: 'text-zinc-500' },
-              ].map((d, i) => (
+              {[].map((d, i) => (
                  <div key={i} className="flex justify-between items-center group-hover:translate-x-1 transition-transform">
                     <div>
                        <p className="text-xs font-black text-white italic uppercase tracking-tight">{d.item}</p>

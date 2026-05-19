@@ -54,13 +54,7 @@ export default function TransactionList({ isDarkMode, userType = 'buyer', langua
     }
   }[language];
 
-  const orders = [
-    { id: 'OC-2401', supplier: 'Votorantim Cimentos', item: language === 'PT' ? 'Cimento CP-II' : 'Cement CP-II', amount: 'MT 12.450', status: t.statuses.finished, date: `14:20` },
-    { id: 'OC-2402', supplier: 'Gerdau S.A.', item: language === 'PT' ? 'Vergalhão CA-50' : 'CA-50 Rebar', amount: 'MT 45.890', status: t.statuses.pending, date: `13:45` },
-    { id: 'OC-2403', supplier: 'Tigre Tubos', item: language === 'PT' ? 'Tubulação PVC 100mm' : 'PVC Tubing 100mm', amount: 'MT 3.210', status: t.statuses.quoting, date: `12:10` },
-    { id: 'OC-2404', supplier: 'Amanco Wavin', item: language === 'PT' ? 'Conexões Hidráulicas' : 'Hydraulic Fittings', amount: 'MT 1.150', status: t.statuses.finished, date: `11:30` },
-    { id: 'OC-2405', supplier: 'Saint-Gobain', item: language === 'PT' ? 'Argamassa AC-III' : 'Mortar AC-III', amount: 'MT 8.900', status: t.statuses.cancelled, date: `18:20` },
-  ];
+  const orders: any[] = [];
 
   return (
     <div className={`rounded-[32px] border transition-all overflow-hidden ${

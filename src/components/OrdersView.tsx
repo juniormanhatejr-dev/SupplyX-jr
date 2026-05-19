@@ -34,20 +34,9 @@ import ProfileModal from './ProfileModal';
 import QuotationDocument from './QuotationDocument';
 import { notificationService } from '../services/notificationService';
 
-const availableSuppliers = [
-  { id: 'S1', name: 'CONSTRUCENTER BEIRA', quality: 'A+', segment: 'Geral' },
-  { id: 'S2', name: 'Votorantim', quality: 'A', segment: 'Básicos' },
-  { id: 'S3', name: 'Saint-Gobain', quality: 'B+', segment: 'Acabamento' },
-  { id: 'S4', name: 'Tigre S.A.', quality: 'A+', segment: 'Hidráulica' },
-  { id: 'S5', name: 'Mineradora Vale', quality: 'A', segment: 'Básicos' },
-];
+const availableSuppliers: any[] = [];
 
-const getOrders = (t: any) => [
-  { id: 'OC-2401', supplier: t.supplierNames.votorantim, supplierId: 'S2', total: 'MT 12.450,00', status: t.status.delivered, date: '04/05/2024', itemsCount: 5 },
-  { id: 'OC-2402', supplier: t.supplierNames.gerdau, supplierId: 'S1', total: 'MT 45.890,00', status: t.status.transit, date: '05/05/2024', itemsCount: 12 },
-  { id: 'OC-2403', supplier: t.supplierNames.tigre, supplierId: 'S4', total: 'MT 3.210,00', status: t.status.waiting, date: '05/05/2024', itemsCount: 3 },
-  { id: 'RTF-992', supplier: t.multiSuppliers, supplierId: 'multi', total: 'N/A', status: t.status.quote, date: '06/05/2024', itemsCount: 8 },
-];
+const getOrders = (t: any) => [];
 
 interface OrdersViewProps {
   startWithForm?: boolean;
@@ -271,7 +260,9 @@ OrderRow.displayName = 'OrderRow';
 export default function OrdersView({ startWithForm = false, onFormClose, onNavigate, isDarkMode, language, userType = 'buyer' }: OrdersViewProps) {
   const [showForm, setShowForm] = useState(userType === 'supplier' ? false : startWithForm);
   const [respondingTo, setRespondingTo] = useState<any>(null);
+  const [activePdfQuote, setActivePdfQuote] = useState<any>(null);
   const [responseValue, setResponseValue] = useState('');
+  const [responseDiscount, setResponseDiscount] = useState('0');
   const [isResponding, setIsResponding] = useState(false);
   const [step, setStep] = useState(1);
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
@@ -285,6 +276,19 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const [profile, setProfile] = useState<any>(null);
   const [realQuotations, setRealQuotations] = useState<any[]>([]);
   const user = auth.currentUser;
+
+  useEffect(() => {
+    if (user) {
+      const docRef = doc(db, 'users', user.uid);
+      getDoc(docRef).then(docSnap => {
+        if (docSnap.exists()) {
+          setProfile(docSnap.data());
+        }
+      }).catch(error => {
+        handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+      });
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -333,22 +337,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         fromCache: snapshot.metadata.fromCache
       }));
       
-      // Inject demo products for CONSTRUCENTER BEIRA (Supplier S1) to match the reference image exactly
-      const demoProds = [
-        { id: 'd1', supplierId: 'S1', name: 'Cimento CP IV', price: 818.50, category: 'Geral' },
-        { id: 'd2', supplierId: 'S1', name: 'Aço CA-50 12mm', price: 807.01, category: 'Geral' },
-        { id: 'd3', supplierId: 'S1', name: 'Tubo PVC 100mm', price: 411.50, category: 'Geral' },
-        { id: 'd4', supplierId: 'S1', name: 'Areia Média', price: 1272.00, category: 'Geral' },
-      ];
-      
-      const combined = [...prods];
-      demoProds.forEach(dp => {
-        if (!combined.some(p => p.name === dp.name && p.supplierId === dp.supplierId)) {
-          combined.push(dp);
-        }
-      });
-
-      setAllProducts(combined);
+      setAllProducts(prods);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'products');
     });
@@ -457,6 +446,22 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const [rows, setRows] = useState([
     { id: Date.now(), code: 'MAT-101', material: '', quantity: '1', unit: 'Unid.', price: '0', discCmr: '0', discFnc: '0', vat: '16', vatIncluded: true, subtotal: '0', date: new Date().toISOString().split('T')[0] }
   ]);
+
+  const filteredSuppliers = useMemo(() => {
+    return mergedSuppliers.filter(s => {
+      // Check if supplier has at least one product matching any requested material in rows
+      if (rows.length === 0 || (rows.length === 1 && !rows[0].material)) return true; // Show all if empty
+      
+      return rows.some(row => {
+        if (!row.material) return false;
+        return allProducts.some(p => 
+          p.supplierId === s.id && 
+          (p.name.toLowerCase().includes(row.material.toLowerCase()) || 
+           row.material.toLowerCase().includes(p.name.toLowerCase()))
+        );
+      });
+    });
+  }, [mergedSuppliers, rows, allProducts]);
 
   const updateSubtotal = (row: any) => {
     const qty = parseFloat(row.quantity) || 0;
@@ -740,27 +745,41 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const downloadPDF = async (response: SupplierResponse) => {
     if (!invoiceRef.current) return;
     
-    // Create a temporary container for the PDF content to ensure it looks like the user's image
+    // Create a temporary container for the PDF content
     const element = invoiceRef.current;
     try {
       const canvas = await html2canvas(element, {
-        scale: 1.2, // Slightly reduced for speed
+        scale: 2, 
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
-        imageTimeout: 10000,
+        imageTimeout: 15000,
         onclone: (clonedDoc) => {
           sanitizeDocumentColors(clonedDoc, false);
         }
       });
       
-      const imgData = canvas.toDataURL('image/jpeg', 0.7);
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const pdf = new jsPDF('p', 'mm', 'a4', true);
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= pageHeight;
+
+      // Add subsequent pages if content exceeds A4 height
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+        heightLeft -= pageHeight;
+      }
+      
       pdf.save(`Cotação_${response.name.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
     } catch (error) {
       console.error("PDF generator error:", error);
@@ -977,47 +996,100 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
   const t = language === 'PT' ? translations.PT : translations.EN;
 
-  const currentResponse = aiResponses[selectedResponseIndex];
-  const currentSupplier = mergedSuppliers.find(s => s.id === currentResponse?.supplierId);
-  
-  const quotationData = {
-    quoteNumber: 'PR-QT-2035/2026',
-    date: new Date().toLocaleDateString('pt-PT'),
-    validityDays: 15,
-    supplier: {
-      name: currentSupplier?.name || 'FORNECEDOR',
-      isVerified: true,
-      address: currentSupplier?.address || 'Maputo, Moçambique',
-      email: currentSupplier?.email || 'sales@' + (currentSupplier?.name?.toLowerCase().replace(/\s+/g, '') || 'supplier') + '.com',
-      phone: currentSupplier?.phone || '+258 84 000 0000',
-      nuit: currentSupplier?.nuit || '400' + Math.floor(Math.random() * 1000000),
-      license: (currentSupplier as any)?.license || '',
-      logoURL: currentSupplier?.photoURL || '',
-      bankAccounts: currentSupplier?.bankAccounts || [],
-      mobileWallets: currentSupplier?.mobileWallets || [],
-      signatureURL: currentSupplier?.signatureURL,
-      stampURL: currentSupplier?.stampURL
-    },
-    client: {
-      name: profile?.name || 'Cliente SupplyX',
-      nuit: profile?.nuit || '400377081',
-      address: profile?.address || 'NACALA - PORTO',
-      email: user?.email || 'cliente@supplyx.com',
-      phone: profile?.phone || '+258 84 ...'
-    },
-    items: rows.map((row, i) => {
-      const itemPrice = currentResponse?.itemPrices.find(ip => ip.material === row.material)?.price || 0;
-      
+  const quotationData = useMemo(() => {
+    // If responding to or viewing a specific real quotation
+    const targetQuote = activePdfQuote || respondingTo;
+    if (targetQuote) {
       return {
-        description: row.material,
-        quantity: parseFloat(row.quantity || '0'),
-        unit: row.unit,
-        unitPrice: itemPrice,
-        discount: 0,
-        vatPer: 16
+        quoteNumber: targetQuote.requestId || 'PR-QT-2035/2026',
+        date: targetQuote.createdAt?.toDate ? targetQuote.createdAt.toDate().toLocaleDateString('pt-PT') : new Date().toLocaleDateString('pt-PT'),
+        validityDays: 15,
+        supplier: {
+          name: targetQuote.supplierName || profile?.name || 'FORNECEDOR',
+          isVerified: true,
+          address: profile?.address || 'Maputo, Moçambique',
+          email: profile?.email || user?.email || '',
+          phone: profile?.phone || '',
+          nuit: profile?.nuit || '400' + Math.floor(Math.random() * 1000000),
+          logoURL: profile?.photoURL || '',
+          bankAccounts: profile?.bankAccounts || [],
+          mobileWallets: profile?.mobileWallets || [],
+          signatureURL: profile?.signatureURL,
+          stampURL: profile?.stampURL
+        },
+        client: {
+          name: targetQuote.buyerName || 'Cliente SupplyX',
+          nuit: '400377081',
+          address: 'NACALA - PORTO',
+          email: targetQuote.buyerEmail || 'cliente@supplyx.com',
+          phone: '+258 84 ...'
+        },
+        items: (targetQuote.items || []).map((row: any) => {
+          // If viewing an existing response, use its values. 
+          // If in modal (targetQuote is respondingTo), use modal values.
+          const isViewOnly = activePdfQuote && !respondingTo;
+          const currentTotal = isViewOnly ? targetQuote.responseValue : parseFloat(responseValue);
+          const currentDiscount = isViewOnly ? targetQuote.discountPercent : parseFloat(responseDiscount);
+
+          const totalItemsPreDiscount = currentTotal || 0;
+          const count = targetQuote.items.length || 1;
+          const estimatedUnitPrice = totalItemsPreDiscount / count;
+          
+          return {
+            description: row.material,
+            quantity: parseFloat(row.quantity || '0'),
+            unit: row.unit,
+            unitPrice: estimatedUnitPrice,
+            discount: parseFloat(currentDiscount as any) || 0,
+            vatPer: 16
+          };
+        })
       };
-    })
-  };
+    }
+
+    // Default for Comparison View (Step 3)
+    const currentResponse = aiResponses[selectedResponseIndex];
+    const currentSupplier = mergedSuppliers.find(s => s.id === currentResponse?.supplierId);
+    
+    return {
+      quoteNumber: 'PR-QT-2035/2026',
+      date: new Date().toLocaleDateString('pt-PT'),
+      validityDays: 15,
+      supplier: {
+        name: currentSupplier?.name || 'FORNECEDOR',
+        isVerified: true,
+        address: currentSupplier?.address || 'Maputo, Moçambique',
+        email: currentSupplier?.email || 'sales@' + (currentSupplier?.name?.toLowerCase().replace(/\s+/g, '') || 'supplier') + '.com',
+        phone: currentSupplier?.phone || '+258 84 000 0000',
+        nuit: currentSupplier?.nuit || '400' + Math.floor(Math.random() * 1000000),
+        license: (currentSupplier as any)?.license || '',
+        logoURL: currentSupplier?.photoURL || '',
+        bankAccounts: currentSupplier?.bankAccounts || [],
+        mobileWallets: currentSupplier?.mobileWallets || [],
+        signatureURL: currentSupplier?.signatureURL,
+        stampURL: currentSupplier?.stampURL
+      },
+      client: {
+        name: profile?.name || 'Cliente SupplyX',
+        nuit: profile?.nuit || '400377081',
+        address: profile?.address || 'NACALA - PORTO',
+        email: user?.email || 'cliente@supplyx.com',
+        phone: profile?.phone || '+258 84 ...'
+      },
+      items: rows.map((row, i) => {
+        const itemPrice = currentResponse?.itemPrices.find(ip => ip.material === row.material)?.price || 0;
+        
+        return {
+          description: row.material,
+          quantity: parseFloat(row.quantity || '0'),
+          unit: row.unit,
+          unitPrice: itemPrice,
+          discount: 0,
+          vatPer: 16
+        };
+      })
+    };
+  }, [respondingTo, responseValue, responseDiscount, aiResponses, selectedResponseIndex, mergedSuppliers, profile, user, rows]);
 
   const invoiceTemplate = (
     <div className="fixed -left-[2000px] top-0 pointer-events-none z-[-100]">
@@ -1147,7 +1219,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                 <div>
                   <h3 className={`text-xl font-bold mb-6 italic uppercase tracking-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.step2}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {mergedSuppliers.map(s => (
+                    {filteredSuppliers.map(s => (
                       <div 
                         key={s.id} onClick={() => toggleSupplier(s.id)}
                         className={`p-5 rounded-3xl border-2 transition-all cursor-pointer relative group
@@ -1606,25 +1678,20 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                         // Download PDF logic for real quotations
                         setDownloadingOrderId(order.id);
                         try {
-                           const items = (order.items || []).map((it: any) => ({
-                             description: it.material,
-                             quantity: parseFloat(it.quantity || '0'),
-                             unit: it.unit,
-                             unitPrice: 0, // In responded status, use response values
-                             discount: 0,
-                             vatPer: 16
-                           }));
-
+                           setActivePdfQuote(order);
+                           // Wait for useMemo/DOM to update
+                           await new Promise(resolve => setTimeout(resolve, 500));
+                           
                            const mockRes: SupplierResponse = {
                               supplierId: order.supplierId,
                               name: order.supplierName,
                               price: order.totalAmount || 0,
                               timeToDeliver: '2 dias',
                               confidence: order.confidence || 0,
-                              itemPrices: items.map((it: any) => ({ material: it.description, price: it.unitPrice }))
+                              itemPrices: []
                            };
-                           setSelectedResponseIndex(0);
                            await downloadPDF(mockRes);
+                           setActivePdfQuote(null);
                         } finally {
                           setDownloadingOrderId(null);
                         }
@@ -1831,17 +1898,35 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.yourProposal}</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand font-black italic">MT</span>
-                    <input 
-                      type="number"
-                      value={responseValue}
-                      onChange={(e) => setResponseValue(e.target.value)}
-                      className={`w-full pl-12 pr-4 py-4 rounded-2xl text-lg font-black italic outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand' : 'bg-white border-zinc-100 focus:border-brand shadow-inner'}`}
-                      placeholder="0.00"
-                    />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.yourProposal}</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand font-black italic">MT</span>
+                      <input 
+                        type="number"
+                        value={responseValue}
+                        onChange={(e) => setResponseValue(e.target.value)}
+                        className={`w-full pl-12 pr-4 py-4 rounded-2xl text-lg font-black italic outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand' : 'bg-white border-zinc-100 focus:border-brand shadow-inner'}`}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.discount}</label>
+                    <div className="relative">
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">%</span>
+                      <input 
+                        type="number"
+                        value={responseDiscount}
+                        onChange={(e) => setResponseDiscount(e.target.value)}
+                        className={`w-full pl-6 pr-10 py-4 rounded-2xl text-lg font-black italic outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand' : 'bg-white border-zinc-100 focus:border-brand shadow-inner'}`}
+                        placeholder="0"
+                        min="0"
+                        max="100"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1860,11 +1945,16 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                     setIsResponding(true);
                     try {
                       // Update Firestore document
+                      const val = parseFloat(responseValue) || 0;
+                      const disc = parseFloat(responseDiscount) || 0;
+                      const finalVal = val * (1 - disc / 100);
+
                       await updateDoc(doc(db, 'quotations', respondingTo.id), {
                         status: 'responded',
-                        responseValue: parseFloat(responseValue),
+                        responseValue: val,
+                        discountPercent: disc,
                         respondedAt: serverTimestamp(),
-                        totalAmount: parseFloat(responseValue)
+                        totalAmount: finalVal
                       });
 
                       // Notify buyer
@@ -1884,6 +1974,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
                       setRespondingTo(null);
                       setResponseValue('');
+                      setResponseDiscount('0');
                       alert(t.successProposal);
                     } catch (err) {
                       console.error('Error responding to quote:', err);

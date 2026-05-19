@@ -167,20 +167,33 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <SupplyXLogo size="md" />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
           <div style={{ 
-            fontSize: '10px', 
+            width: '80px', 
+            height: '80px', 
+            borderRadius: '16px', 
+            overflow: 'hidden',
+            border: `1px solid ${COLORS.borderGray}`,
+            backgroundColor: COLORS.lightGray,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            marginBottom: '5px'
+          }}>
+            <SupplyXLogo size="lg" showText={false} />
+          </div>
+          <div style={{ 
+            fontSize: '9px', 
             color: COLORS.textMuted, 
             textAlign: 'right', 
-            marginTop: '8px',
-            fontWeight: 500
+            fontWeight: 700,
+            lineHeight: '1.3'
           }}>
-            Manhate Link África, Lda<br />
-            Nuit: 400123456 | Maputo, Moçambique<br />
-            SupplyX Platform Business Document<br />
-            Digital Validation Certified & Secured<br />
-            www.supplyx.co.mz
+            SupplyX Digital Global Platform<br />
+            Business Documentation Official ID<br />
+            Certified by Manhate Link África, Lda<br />
+            Valid within the SupplyX Ecosystem
           </div>
         </div>
       </div>

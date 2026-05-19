@@ -246,6 +246,46 @@ export default function SettingsView({
     }
   }[language];
 
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
+
+  const handleCleanupUsers = async () => {
+    const targetName = 'junior manhate';
+    if (!window.confirm(language === 'PT' 
+      ? `Tem certeza que deseja remover todos os usuários com o nome "${targetName}"? Esta operação é irreversível.` 
+      : `Are you sure you want to remove all users with name "${targetName}"? This is irreversible.`)) return;
+
+    setIsCleaningUp(true);
+    try {
+      const q = query(collection(db, 'users'), where('name', '==', 'Junior Manhate'));
+      const q2 = query(collection(db, 'users'), where('name', '==', 'junior manhate'));
+      
+      const snapshots = await Promise.all([getDocs(q), getDocs(q2)]);
+      const docsToDelete: string[] = [];
+      
+      snapshots.forEach(snapshot => {
+        snapshot.forEach(d => {
+          if (d.id !== auth.currentUser?.uid) { // Don't delete self
+            docsToDelete.push(d.id);
+          }
+        });
+      });
+
+      if (docsToDelete.length === 0) {
+        alert(language === 'PT' ? 'Nenhum usuário encontrado com este nome.' : 'No users found with this name.');
+        return;
+      }
+
+      await Promise.all(docsToDelete.map(id => deleteDoc(doc(db, 'users', id))));
+      alert(language === 'PT' ? `${docsToDelete.length} usuários removidos com sucesso.` : `${docsToDelete.length} users removed successfully.`);
+      await refreshProfile();
+    } catch (err) {
+      console.error('Cleanup error:', err);
+      alert(language === 'PT' ? 'Erro ao realizar limpeza. Verifique se você tem permissões de admin.' : 'Cleanup error. Check if you have admin permissions.');
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+
   const sections = [
     { id: 'profile', title: t.profileTitle, desc: t.profileDesc, icon: User, color: 'text-blue-500', bg: 'bg-blue-500/10' },
     { id: 'notifs', title: t.notifs, desc: t.notifsDesc, icon: Bell, color: 'text-amber-500', bg: 'bg-amber-500/10' },
@@ -327,28 +367,54 @@ export default function SettingsView({
           
           {/* Admin Section (only if isAdmin) */}
           {(profile as any)?.role === 'admin' || (profile as any)?.role === 'superadmin' ? (
-            <button 
-              className={`p-6 rounded-3xl border text-left transition-all hover:scale-[1.02] active:scale-98 relative overflow-hidden group ${
-                isDarkMode ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800' : 'bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
-              }`}
-            >
-               <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                 <Shield className="w-16 h-16 text-red-500" />
-               </div>
-               <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-red-500/20`}>
-                  <Shield className="w-7 h-7 text-red-500" />
+            <div className="space-y-4">
+              <button 
+                onClick={() => {
+                  // This could navigate to a more complex admin page, 
+                  // but for now we just show it's active
+                }}
+                className={`w-full p-6 rounded-3xl border text-left transition-all hover:scale-[1.02] active:scale-98 relative overflow-hidden group ${
+                  isDarkMode ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800' : 'bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
+                }`}
+              >
+                 <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                   <Shield className="w-16 h-16 text-red-500" />
+                 </div>
+                 <div className="flex items-center gap-4">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-red-500/20`}>
+                    <Shield className="w-7 h-7 text-red-500" />
+                  </div>
+                  <div>
+                    <h3 className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                      {language === 'PT' ? 'PAINEL ADMINISTRATIVO' : 'ADMIN DASHBOARD'}
+                    </h3>
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">
+                      {language === 'PT' ? 'Gerencie usuários, cargos e logs.' : 'Manage users, roles and logs.'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-                    {language === 'PT' ? 'PAINEL ADMINISTRATIVO' : 'ADMIN DASHBOARD'}
-                  </h3>
-                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">
-                    {language === 'PT' ? 'Gerencie usuários, cargos e logs.' : 'Manage users, roles and logs.'}
-                  </p>
+              </button>
+
+              <button 
+                onClick={handleCleanupUsers}
+                disabled={isCleaningUp}
+                className={`w-full p-6 rounded-3xl border text-left transition-all hover:scale-[1.02] active:scale-98 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 ${isCleaningUp ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-red-500/20">
+                    {isCleaningUp ? <Loader2 className="w-7 h-7 text-red-500 animate-spin" /> : <X className="w-7 h-7 text-red-500" />}
+                  </div>
+                  <div>
+                    <h3 className={`text-sm font-black uppercase italic tracking-tighter text-red-500`}>
+                      {language === 'PT' ? 'LIMPEZA: Remover "Junior Manhate"' : 'CLEANUP: Remove "Junior Manhate"'}
+                    </h3>
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">
+                      {language === 'PT' ? 'Remove permanentemente perfis com este nome (exceto você).' : 'Permanently remove profiles with this name (except self).'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </button>
+              </button>
+            </div>
           ) : null}
         </div>
       ) : (

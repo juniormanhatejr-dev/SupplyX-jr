@@ -54,6 +54,8 @@ interface SupplierResponse {
   timeToDeliver: string;
   confidence: number;
   itemPrices: { material: string; price: number }[];
+  phone?: string;
+  email?: string;
 }
 
 interface MaterialComboBoxProps {
@@ -377,7 +379,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     try {
       setIsLoading(true);
       const otherId = userType === 'supplier' ? 'buyer_demo_uid' : 'supplier_demo_uid'; // In real app, use IDs from order
-      const otherName = userType === 'supplier' ? 'Junior Manhate' : order.supplier;
+      const otherName = userType === 'supplier' ? 'Cliente SupplyX' : order.supplier;
 
       // Check if room exists
       const roomsRef = collection(db, 'chats');
@@ -615,7 +617,9 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             ? (language === 'PT' ? '2 dias' : '2 days') 
             : (language === 'PT' ? '4-5 dias (Sob consulta)' : '4-5 days (Pending quote)'),
           confidence: Math.round((itemsFound / rows.length) * 100),
-          itemPrices
+          itemPrices,
+          phone: s?.phone,
+          email: s?.email
         };
       }));
 
@@ -753,12 +757,12 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       const originalStyle = element.style.display;
       
       const canvas = await html2canvas(element, {
-        scale: 2.5, 
+        scale: 3, // Higher scale for better quality
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        imageTimeout: 20000,
+        imageTimeout: 30000,
         onclone: (clonedDoc) => {
           const clonedElement = clonedDoc.getElementById('quotation-document');
           if (clonedElement) {
@@ -766,12 +770,13 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             clonedElement.style.left = '0';
             clonedElement.style.top = '0';
             clonedElement.style.margin = '0';
+            clonedElement.style.display = 'block';
+            clonedElement.style.visibility = 'visible';
           }
-          sanitizeDocumentColors(clonedDoc, false);
         }
       });
       
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const imgData = canvas.toDataURL('image/png', 1.0); // PNG for better text quality
       const pdf = new jsPDF('p', 'mm', 'a4', true);
       
       const imgWidth = 210; 
@@ -781,13 +786,23 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       let position = 0;
 
       const addFooter = (doc: any, pageNum: number) => {
-        doc.setFontSize(8);
-        doc.setTextColor(150);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Powered by Manhate Link África - SupplyX Ecosystem v2.0', 105, 285, { align: 'center' });
-        doc.setFont('helvetica', 'normal');
+        const footerY = 282;
+        doc.setDrawColor(217, 225, 229); // COLORS.borderGray
+        doc.line(20, footerY - 5, 190, footerY - 5);
+        
         doc.setFontSize(7);
-        doc.text(`Documento Gerado Eletronicamente | Página ${pageNum}`, 105, 290, { align: 'center' });
+        doc.setTextColor(113, 128, 150); // COLORS.textMuted
+        doc.setFont('helvetica', 'normal');
+        
+        const supplierInfo = `${response.name} | Tel: ${response.phone || '---'} | Email: ${response.email || '---'}`;
+        doc.text(supplierInfo, 20, footerY);
+        
+        doc.setFontSize(6);
+        doc.text('Gestão Documental & Intermediação: Manhate Link África, Lda - Registada em Moçambique sob Nuit 400123456', 20, footerY + 3.5);
+        doc.text('Este documento possui validade jurídica para efeitos de cotação oficial no Ecossistema SupplyX.', 20, footerY + 6.5);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Powered by Manhate Link África | Página ${pageNum}`, 190, footerY + 6.5, { align: 'right' });
       };
 
       let pageCount = 1;

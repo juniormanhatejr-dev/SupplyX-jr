@@ -104,7 +104,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
         left: 0,
         right: 0,
         bottom: 0,
-        opacity: 0.03,
+        opacity: 0.05,
         zIndex: 0,
         pointerEvents: 'none',
         display: 'flex',
@@ -117,26 +117,29 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
           src="/src/assets/images/supplyx_logo_v2_1779179688631.png" 
           alt="Watermark" 
           style={{ 
-            width: '140%', 
-            height: '140%', 
+            width: '180%', 
+            height: '180%', 
             objectFit: 'contain',
             filter: 'grayscale(1) contrast(1.1) brightness(1.2)',
-            transform: 'rotate(-20deg)',
-            opacity: 0.7
+            transform: 'rotate(-25deg)',
+            opacity: 0.6
           }}
           referrerPolicy="no-referrer"
           crossOrigin="anonymous"
         />
         <div style={{
-          fontSize: '56px',
+          position: 'absolute',
+          bottom: '20%',
+          fontSize: '64px',
           fontWeight: 900,
           color: '#000',
           textTransform: 'uppercase',
-          letterSpacing: '0.5em',
+          letterSpacing: '0.4em',
           textAlign: 'center',
-          width: '100%',
+          width: '150%',
           fontFamily: 'serif',
-          opacity: 0.8
+          opacity: 0.5,
+          transform: 'rotate(-25deg)'
         }}>
           Powered by Manhate Link África
         </div>

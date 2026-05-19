@@ -48,7 +48,7 @@ const SupplyXLogo: React.FC<SupplyXLogoProps> = ({
       </div>
       
       {size !== 'sm' && (
-        <span className="text-[7px] font-black tracking-[0.2em] text-zinc-500 uppercase mt-0.5 text-center leading-none">
+        <span className={`${size === 'lg' || size === 'xl' ? 'text-[10px]' : 'text-[7px]'} font-black tracking-[0.2em] text-supplyx-blue/70 uppercase mt-1 text-center leading-none`}>
           Powered by Manhate Link África
         </span>
       )}

@@ -4,7 +4,7 @@ import { OptimizedImage } from './ui/OptimizedImage';
 import UserPresenceIndicator from './UserPresenceIndicator';
 import { useState, useEffect, useMemo } from 'react';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, query, where, getDocs, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, addDoc, serverTimestamp, getDoc, doc } from 'firebase/firestore';
 import { rankSuppliers, PROVINCE_COORDINATES } from '../services/supplierRankingService';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
@@ -438,14 +438,30 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
                         return;
                       }
                 
+                      // Get real names if possible from users collection
+                      let currentUserName = auth.currentUser.displayName || 'User';
+                      try {
+                        const currentUserDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                        if (currentUserDoc.exists()) {
+                          currentUserName = currentUserDoc.data().name || currentUserName;
+                        }
+                      } catch (err) {
+                        console.warn('Error fetching current user name:', err);
+                      }
+
                       // Create new room
                       await addDoc(collection(db, 'chats'), {
                         participants: [auth.currentUser.uid, s.uid],
                         lastMessage: 'Início da conversa',
+                        lastMessageSenderId: auth.currentUser.uid,
+                        unreadCount: {
+                          [auth.currentUser.uid]: 0,
+                          [s.uid]: 1
+                        },
                         createdAt: serverTimestamp(),
                         updatedAt: serverTimestamp(),
                         participantNames: {
-                          [auth.currentUser.uid]: auth.currentUser.displayName || 'User',
+                          [auth.currentUser.uid]: currentUserName,
                           [s.uid]: s.name
                         }
                       });

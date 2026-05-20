@@ -359,9 +359,11 @@ export default function App() {
                       isDarkMode ? 'bg-supplyx-dark border-white/5 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
                     }`}
                   >
-                    <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    <MessageSquare className={`w-5 h-5 group-hover:scale-110 transition-transform ${unreadMessages > 0 ? 'text-red-500' : ''}`} />
                     {unreadMessages > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-black flex items-center justify-center rounded-full border-2 border-supplyx-deep animate-bounce shadow-lg shadow-red-500/20">
+                      <span className={`absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 animate-bounce shadow-lg shadow-red-500/20 ${
+                        isDarkMode ? 'border-supplyx-deep' : 'border-white'
+                      }`}>
                         {unreadMessages}
                       </span>
                     )}

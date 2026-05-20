@@ -38,6 +38,7 @@
         "lastMessage": { "type": "string" },
         "lastMessageSenderId": { "type": "string" },
         "participantNames": { "type": "object" },
+        "unreadCount": { "type": "object" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },

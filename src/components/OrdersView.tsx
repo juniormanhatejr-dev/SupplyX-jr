@@ -408,15 +408,42 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         return;
       }
 
+      // Get real names if possible from users collection
+      let senderName = auth.currentUser.displayName || (userType === 'supplier' ? t.supplier : t.buyer);
+      let recipientName = otherName;
+
+      try {
+        const otherDoc = await getDoc(doc(db, 'users', otherId));
+        if (otherDoc.exists()) {
+          recipientName = otherDoc.data().name || recipientName;
+        }
+      } catch (err) {
+        console.warn('Error fetching other user name:', err);
+      }
+
+      try {
+        const currentUserDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (currentUserDoc.exists()) {
+          senderName = currentUserDoc.data().name || senderName;
+        }
+      } catch (err) {
+        console.warn('Error fetching current user name:', err);
+      }
+
       // Create new room
       await addDoc(collection(db, 'chats'), {
         participants: [auth.currentUser.uid, otherId],
         lastMessage: `${t.interestInOrder}: ${order.requestId || order.id}`,
+        lastMessageSenderId: auth.currentUser.uid,
+        unreadCount: {
+          [auth.currentUser.uid]: 0,
+          [otherId]: 1
+        },
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         participantNames: {
-          [auth.currentUser.uid]: auth.currentUser.displayName || (userType === 'supplier' ? t.supplier : t.buyer),
-          [otherId]: otherName
+          [auth.currentUser.uid]: senderName,
+          [otherId]: recipientName
         }
       });
 

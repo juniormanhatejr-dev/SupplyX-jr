@@ -33,6 +33,7 @@ import {
   serverTimestamp,
   limit,
   getDocs,
+  getDoc,
   increment
 } from 'firebase/firestore';
 
@@ -79,6 +80,45 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
       }
     }
   }, [initialRecipientId, rooms]);
+  const [resolvedNames, setResolvedNames] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (rooms.length === 0) return;
+
+    rooms.forEach(room => {
+      room.participants.forEach(uid => {
+        if (uid !== auth.currentUser?.uid) {
+          const storedName = room.participantNames[uid];
+          // Check if name is simple placeholder fallback
+          const isGeneric = !storedName || 
+                            storedName === 'Fornecedor' || 
+                            storedName === 'Supplier' || 
+                            storedName === 'User' || 
+                            storedName === 'Me' || 
+                            storedName === 'Cliente' || 
+                            storedName === 'Buyer';
+          
+          if (isGeneric && !resolvedNames[uid]) {
+            // Fetch real name
+            getDoc(doc(db, 'users', uid)).then(userDoc => {
+              if (userDoc.exists()) {
+                const name = userDoc.data().name;
+                if (name) {
+                  setResolvedNames(prev => ({
+                    ...prev,
+                    [uid]: name
+                  }));
+                }
+              }
+            }).catch(err => {
+              console.warn('Error fetching real name in background:', err);
+            });
+          }
+        }
+      });
+    });
+  }, [rooms, resolvedNames]);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -132,11 +172,25 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     }
 
     try {
+      let currentUserName = auth.currentUser.displayName || 'Me';
+      try {
+        const currentUserDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (currentUserDoc.exists()) {
+          currentUserName = currentUserDoc.data().name || currentUserName;
+        }
+      } catch (err) {
+        console.warn('Error fetching current user name:', err);
+      }
+
       const chatData = {
         participants: [auth.currentUser.uid, user.uid],
         participantNames: {
-          [auth.currentUser.uid]: auth.currentUser.displayName || 'Me',
+          [auth.currentUser.uid]: currentUserName,
           [user.uid]: user.name
+        },
+        unreadCount: {
+          [auth.currentUser.uid]: 0,
+          [user.uid]: 1
         },
         lastMessage: 'Nova conversa iniciada',
         lastMessageSenderId: auth.currentUser.uid,
@@ -335,7 +389,8 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
 
   const getOtherParticipantName = (room: ChatRoom) => {
     const otherId = room.participants.find(id => id !== auth.currentUser?.uid);
-    return room.participantNames[otherId || ''] || t.user;
+    if (!otherId) return t.user;
+    return resolvedNames[otherId] || room.participantNames[otherId] || t.user;
   };
 
   const getOtherParticipantId = (room: ChatRoom) => {

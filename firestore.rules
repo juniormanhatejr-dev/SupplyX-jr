@@ -60,14 +60,15 @@ service cloud.firestore {
     function isValidChat(data) {
       return data.keys().hasAll(['participants']) &&
              data.participants is list && data.participants.size() >= 2 && data.participants.size() <= 10 &&
-             request.auth.uid in data.participants &&
+             data.participants.hasAny([request.auth.uid]) &&
              (data.get('createdAt', null) == request.time || data.get('updatedAt', null) == request.time);
     }
 
     function isValidMessage(data) {
       return data.keys().hasAll(['senderId', 'participants', 'text']) &&
              data.senderId == request.auth.uid &&
-             request.auth.uid in data.participants &&
+             data.participants is list &&
+             data.participants.hasAny([request.auth.uid]) &&
              data.text is string && data.text.size() <= 5000 &&
              (data.get('createdAt', null) == request.time || data.get('updatedAt', null) == request.time);
     }
@@ -134,16 +135,16 @@ service cloud.firestore {
 
     // CHATS: (Pillar 1 - Relational Sync)
     match /chats/{chatId} {
-      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
-      allow get: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow list: if isSignedIn() && resource.data.participants.hasAny([request.auth.uid]);
+      allow get: if isSignedIn() && resource.data.participants.hasAny([request.auth.uid]);
       allow create: if isVerified() && isValidChat(incoming());
-      allow update: if isVerified() && request.auth.uid in existing().participants && (
-         incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastMessageSenderId', 'updatedAt', 'participantNames'])
+      allow update: if isVerified() && existing().participants.hasAny([request.auth.uid]) && (
+         incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastMessageSenderId', 'updatedAt', 'participantNames', 'unreadCount'])
       ) || isAdmin();
 
       match /messages/{messageId} {
-        allow list: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-        allow create: if isVerified() && isValidMessage(incoming()) && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow list: if isSignedIn() && get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
+        allow create: if isVerified() && isValidMessage(incoming()) && get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
         allow delete: if isVerified() && request.auth.uid == existing().senderId;
       }
     }

@@ -324,15 +324,42 @@ export default function ProductsView({
         return;
       }
 
+      // Get real names if possible from users collection
+      let supplierName = product.supplierName || t.supplier;
+      let currentUserName = auth.currentUser.displayName || t.buyer;
+
+      try {
+        const supplierDoc = await getDoc(doc(db, 'users', product.supplierId));
+        if (supplierDoc.exists()) {
+          supplierName = supplierDoc.data().name || supplierName;
+        }
+      } catch (err) {
+        console.warn('Error fetching supplier name:', err);
+      }
+
+      try {
+        const currentUserDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (currentUserDoc.exists()) {
+          currentUserName = currentUserDoc.data().name || currentUserName;
+        }
+      } catch (err) {
+        console.warn('Error fetching current user name:', err);
+      }
+
       // Create new room
       await addDoc(collection(db, 'chats'), {
         participants: [auth.currentUser.uid, product.supplierId],
         lastMessage: `${t.interestIn}: ${product.name}`,
+        lastMessageSenderId: auth.currentUser.uid,
+        unreadCount: {
+          [auth.currentUser.uid]: 0,
+          [product.supplierId]: 1
+        },
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         participantNames: {
-          [auth.currentUser.uid]: auth.currentUser.displayName || t.buyer,
-          [product.supplierId]: product.supplierName || t.supplier
+          [auth.currentUser.uid]: currentUserName,
+          [product.supplierId]: supplierName
         }
       });
 

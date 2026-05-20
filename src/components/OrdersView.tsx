@@ -1083,8 +1083,12 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           // If viewing an existing response, use its values. 
           // If in modal (targetQuote is respondingTo), use modal values.
           const isViewOnly = activePdfQuote && !respondingTo;
-          const currentTotal = isViewOnly ? targetQuote.responseValue : parseFloat(responseValue);
-          const currentDiscount = isViewOnly ? targetQuote.discountPercent : parseFloat(responseDiscount);
+          const currentTotal = isViewOnly 
+            ? (targetQuote.responseValue || targetQuote.totalAmount || 0) 
+            : (parseFloat(responseValue) || targetQuote.totalAmount || 0);
+          const currentDiscount = isViewOnly 
+            ? (targetQuote.discountPercent || 0) 
+            : (parseFloat(responseDiscount) || 0);
 
           const totalItemsPreDiscount = currentTotal || 0;
           const count = targetQuote.items.length || 1;
@@ -1093,7 +1097,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           return {
             description: row.material,
             quantity: parseFloat(row.quantity || '0'),
-            unit: row.unit,
+            unit: row.unit || 'un',
             unitPrice: estimatedUnitPrice,
             discount: parseFloat(currentDiscount as any) || 0,
             vatPer: 16

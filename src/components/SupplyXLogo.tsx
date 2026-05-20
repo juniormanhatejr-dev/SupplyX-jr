@@ -23,6 +23,14 @@ const SupplyXLogo: React.FC<SupplyXLogoProps> = ({
     xl: 'w-28 h-28 rounded-3xl'
   };
 
+  const pixelSizes = {
+    xs: 20,
+    sm: 28,
+    md: 44,
+    lg: 80,
+    xl: 112
+  };
+
   const textSizes = {
     xs: 'text-xs',
     sm: 'text-sm',
@@ -31,15 +39,27 @@ const SupplyXLogo: React.FC<SupplyXLogoProps> = ({
     xl: 'text-5xl'
   };
 
+  const widthHeightStyle = {
+    width: `${pixelSizes[size]}px`,
+    height: `${pixelSizes[size]}px`,
+    minWidth: `${pixelSizes[size]}px`,
+    minHeight: `${pixelSizes[size]}px`,
+    flexShrink: 0,
+    aspectRatio: '1 / 1'
+  };
+
   return (
     <div className={`flex flex-col items-center justify-center text-center ${className}`}>
       <div className="flex items-center gap-3">
         {/* Glow-enhanced 3D app icon container */}
-        <div className={`${sizes[size]} relative flex items-center justify-center overflow-hidden shadow-xl border border-cyan-500/20 bg-slate-950 transition-all duration-300 group-hover:scale-105`}>
+        <div 
+          className={`${sizes[size]} relative flex items-center justify-center overflow-hidden shadow-xl border border-cyan-500/20 bg-slate-950 transition-all duration-300 group-hover:scale-105`}
+          style={widthHeightStyle}
+        >
           <img 
             src={logoImg} 
             alt="SupplyX Logo Icon" 
-            className="w-full h-full object-cover"
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             id="supplyx-logo-img"
             referrerPolicy="no-referrer"
           />

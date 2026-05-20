@@ -378,8 +378,17 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
     try {
       setIsLoading(true);
-      const otherId = userType === 'supplier' ? 'buyer_demo_uid' : 'supplier_demo_uid'; // In real app, use IDs from order
-      const otherName = userType === 'supplier' ? 'Cliente SupplyX' : order.supplier;
+      
+      let otherId = '';
+      let otherName = '';
+      
+      if (userType === 'supplier') {
+        otherId = order.buyerId || 'buyer_demo_uid';
+        otherName = order.buyerName || 'Cliente';
+      } else {
+        otherId = order.supplierId || 'supplier_demo_uid';
+        otherName = order.supplierName || order.supplier || 'Fornecedor';
+      }
 
       // Check if room exists
       const roomsRef = collection(db, 'chats');
@@ -402,7 +411,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       // Create new room
       await addDoc(collection(db, 'chats'), {
         participants: [auth.currentUser.uid, otherId],
-        lastMessage: `${t.interestInOrder}: ${order.id}`,
+        lastMessage: `${t.interestInOrder}: ${order.requestId || order.id}`,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         participantNames: {
@@ -1055,30 +1064,56 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     // If responding to or viewing a specific real quotation
     const targetQuote = activePdfQuote || respondingTo;
     if (targetQuote) {
+      const quoteSupplierId = targetQuote.supplierId;
+      const dbSupplier = mergedSuppliers.find(s => s.id === quoteSupplierId);
+      const isSupplierUser = userType === 'supplier';
+
+      const sInfo = isSupplierUser ? {
+        name: profile?.name || targetQuote.supplierName || 'FORNECEDOR',
+        isVerified: true,
+        address: profile?.address || 'Maputo, Moçambique',
+        email: profile?.email || user?.email || '',
+        phone: profile?.phone || '',
+        nuit: profile?.nuit || '400' + Math.floor(Math.random() * 1000000),
+        logoURL: profile?.photoURL || '',
+        bankAccounts: profile?.bankAccounts || [],
+        mobileWallets: profile?.mobileWallets || [],
+        signatureURL: profile?.signatureURL,
+        stampURL: profile?.stampURL
+      } : {
+        name: dbSupplier?.name || targetQuote.supplierName || 'FORNECEDOR',
+        isVerified: true,
+        address: dbSupplier?.address || 'Maputo, Moçambique',
+        email: dbSupplier?.email || 'sales@supplier.com',
+        phone: dbSupplier?.phone || '',
+        nuit: dbSupplier?.nuit || '400' + Math.floor(Math.random() * 1000000),
+        logoURL: dbSupplier?.photoURL || '',
+        bankAccounts: dbSupplier?.bankAccounts || [],
+        mobileWallets: dbSupplier?.mobileWallets || [],
+        signatureURL: dbSupplier?.signatureURL,
+        stampURL: dbSupplier?.stampURL
+      };
+
+      const cInfo = isSupplierUser ? {
+        name: targetQuote.buyerName || 'Cliente SupplyX',
+        nuit: '400377081',
+        address: 'NACALA - PORTO',
+        email: targetQuote.buyerEmail || 'cliente@supplyx.com',
+        phone: '+258 84 ...'
+      } : {
+        name: profile?.name || targetQuote.buyerName || 'Cliente SupplyX',
+        nuit: profile?.nuit || '400377081',
+        address: profile?.address || 'NACALA - PORTO',
+        email: profile?.email || user?.email || 'cliente@supplyx.com',
+        phone: profile?.phone || '+258 84 ...'
+      };
+
       return {
         quoteNumber: targetQuote.requestId || 'PR-QT-2035/2026',
         date: targetQuote.createdAt?.toDate ? targetQuote.createdAt.toDate().toLocaleDateString('pt-PT') : new Date().toLocaleDateString('pt-PT'),
         validityDays: 15,
-        supplier: {
-          name: targetQuote.supplierName || profile?.name || 'FORNECEDOR',
-          isVerified: true,
-          address: profile?.address || 'Maputo, Moçambique',
-          email: profile?.email || user?.email || '',
-          phone: profile?.phone || '',
-          nuit: profile?.nuit || '400' + Math.floor(Math.random() * 1000000),
-          logoURL: profile?.photoURL || '',
-          bankAccounts: profile?.bankAccounts || [],
-          mobileWallets: profile?.mobileWallets || [],
-          signatureURL: profile?.signatureURL,
-          stampURL: profile?.stampURL
-        },
-        client: {
-          name: targetQuote.buyerName || 'Cliente SupplyX',
-          nuit: '400377081',
-          address: 'NACALA - PORTO',
-          email: targetQuote.buyerEmail || 'cliente@supplyx.com',
-          phone: '+258 84 ...'
-        },
+        supplier: sInfo,
+        client: cInfo,
         items: (targetQuote.items || []).map((row: any) => {
           // If viewing an existing response, use its values. 
           // If in modal (targetQuote is respondingTo), use modal values.

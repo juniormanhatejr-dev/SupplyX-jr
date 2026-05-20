@@ -32,7 +32,8 @@ import {
   deleteDoc,
   serverTimestamp,
   limit,
-  getDocs
+  getDocs,
+  increment
 } from 'firebase/firestore';
 
 interface ChatRoom {
@@ -42,6 +43,7 @@ interface ChatRoom {
   lastMessageSenderId?: string;
   updatedAt: any;
   participantNames: Record<string, string>;
+  unreadCount?: Record<string, number>;
 }
 
 interface Message {
@@ -244,6 +246,19 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     return () => unsubscribe();
   }, [activeRoom]);
 
+  useEffect(() => {
+    if (!activeRoom || !auth.currentUser) return;
+    const currentUserId = auth.currentUser.uid;
+    const currentUnread = (activeRoom as any).unreadCount?.[currentUserId] || 0;
+    if (currentUnread > 0) {
+      updateDoc(doc(db, 'chats', activeRoom.id), {
+        [`unreadCount.${currentUserId}`]: 0
+      }).catch(err => {
+        console.error('Error clearing unreadCount:', err);
+      });
+    }
+  }, [activeRoom, auth.currentUser]);
+
   const handleDeleteMessage = async (messageId: string) => {
     if (!activeRoom || !auth.currentUser) return;
     try {
@@ -268,10 +283,12 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
         createdAt: serverTimestamp()
       });
 
+      const otherId = activeRoom.participants.find(id => id !== auth.currentUser?.uid);
       await updateDoc(doc(db, 'chats', activeRoom.id), {
         lastMessage: text,
         lastMessageSenderId: auth.currentUser.uid,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        [`unreadCount.${otherId}`]: increment(1)
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `chats/${activeRoom.id}/messages`);
@@ -300,10 +317,12 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
         createdAt: serverTimestamp()
       });
 
+      const otherId = activeRoom.participants.find(id => id !== auth.currentUser?.uid);
       await updateDoc(doc(db, 'chats', activeRoom.id), {
         lastMessage: isImage ? '📷 Imagem' : '📎 Arquivo',
         lastMessageSenderId: auth.currentUser.uid,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        [`unreadCount.${otherId}`]: increment(1)
       });
     } catch (err) {
       console.error('Error uploading file:', err);
@@ -418,7 +437,16 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                     />
                   </div>
                 </div>
-                <p className="text-xs text-zinc-500 truncate">{room.lastMessage || t.startChat}</p>
+                <div className="flex justify-between items-center gap-2">
+                  <p className={`text-xs truncate ${room.unreadCount?.[auth.currentUser?.uid || ''] ? 'text-teal-400 font-bold' : 'text-zinc-500'}`}>
+                    {room.lastMessage || t.startChat}
+                  </p>
+                  {(room.unreadCount?.[auth.currentUser?.uid || ''] || 0) > 0 && (
+                    <span className="shrink-0 px-1.5 py-0.5 bg-teal-400 text-slate-950 text-[9px] font-black rounded-full min-w-4 text-center animate-pulse">
+                      {room.unreadCount?.[auth.currentUser?.uid || '']}
+                    </span>
+                  )}
+                </div>
               </div>
             </button>
           )) : (

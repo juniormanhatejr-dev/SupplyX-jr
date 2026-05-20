@@ -609,13 +609,15 @@ export default function ProductsView({
   };
 
   const [isClassifying, setIsClassifying] = useState(false);
+  const [lastClassifiedName, setLastClassifiedName] = useState('');
 
-  const handleAIClassification = async () => {
-    if (!editingProduct?.name) return;
+  const handleAIClassification = async (customName?: string) => {
+    const targetName = customName || editingProduct?.name;
+    if (!targetName) return;
     
     setIsClassifying(true);
     try {
-      const result = await classifyProduct(editingProduct.name, editingProduct.description || '');
+      const result = await classifyProduct(targetName, editingProduct?.description || '');
       setEditingProduct(prev => ({
         ...prev!,
         category: result.category,
@@ -624,6 +626,7 @@ export default function ProductsView({
         synonyms: Array.from(new Set([...(prev?.synonyms || []), ...result.synonyms])),
         normalizedName: result.normalizedName
       }));
+      setLastClassifiedName(targetName);
     } catch (error) {
       console.error("AI Classification failed", error);
     } finally {
@@ -925,7 +928,7 @@ export default function ProductsView({
                   <div className="flex justify-between items-center px-1">
                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.productName}</label>
                     <button 
-                      onClick={handleAIClassification}
+                      onClick={() => handleAIClassification()}
                       disabled={isClassifying || !editingProduct?.name}
                       className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${
                         isClassifying ? 'bg-brand/10 text-brand animate-pulse' : 'bg-brand/10 text-brand hover:bg-brand/20'
@@ -939,9 +942,15 @@ export default function ProductsView({
                     type="text"
                     value={editingProduct?.name || ''}
                     onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                    onBlur={() => {
+                      if (editingProduct?.name && editingProduct.name.trim().length > 2 && editingProduct.name !== lastClassifiedName) {
+                        handleAIClassification(editingProduct.name);
+                      }
+                    }}
                     className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
                     placeholder={t.placeholderProduct}
                   />
+                  <p className="text-[9px] text-zinc-400 font-bold uppercase ml-1 italic">{language === 'PT' ? '* A IA classificará automaticamente ao sair do campo' : '* AI will classify automatically upon leaving field'}</p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -949,6 +958,11 @@ export default function ProductsView({
                   <textarea 
                     value={editingProduct?.description || ''}
                     onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
+                    onBlur={() => {
+                      if (editingProduct?.name && (!editingProduct.category || !editingProduct.subcategory)) {
+                        handleAIClassification(editingProduct.name);
+                      }
+                    }}
                     rows={3}
                     placeholder="Ex: Cimento de alta resistência, ideal para lages e vigas..."
                     className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all resize-none ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
@@ -966,24 +980,30 @@ export default function ProductsView({
                 )}
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.category}</label>
+                  <div className="space-y-1.5 opacity-90">
+                    <div className="flex justify-between items-center px-1">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.category}</label>
+                      <span className="text-[8px] font-bold text-teal-400 uppercase tracking-widest">Definido por IA ✨</span>
+                    </div>
                     <select 
                       value={editingProduct?.category || 'Básicos'}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
-                      className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 appearance-none transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
+                      disabled={true}
+                      className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 appearance-none transition-all cursor-not-allowed ${isDarkMode ? 'bg-zinc-950/40 border-zinc-800 text-zinc-400' : 'bg-zinc-50/50 border-zinc-100 text-zinc-500'}`}
                     >
                       {categories.filter(c => c.PT !== 'Tudo').map(c => <option key={c.PT} value={c.PT}>{language === 'PT' ? c.PT : c.EN}</option>)}
                     </select>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{language === 'PT' ? 'Subcategoria' : 'Subcategory'}</label>
+                  <div className="space-y-1.5 opacity-90">
+                    <div className="flex justify-between items-center px-1">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{language === 'PT' ? 'Subcategoria' : 'Subcategory'}</label>
+                      <span className="text-[8px] font-bold text-teal-400 uppercase tracking-widest">Definido por IA ✨</span>
+                    </div>
                     <input 
                       type="text"
                       value={editingProduct?.subcategory || ''}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, subcategory: e.target.value })}
-                      placeholder="Ex: Aço, Tubulação..."
-                      className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
+                      readOnly={true}
+                      placeholder={isClassifying ? "Analisando..." : "Classificação Automática..."}
+                      className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all cursor-not-allowed ${isDarkMode ? 'bg-zinc-950/40 border-zinc-800 text-zinc-400' : 'bg-zinc-50/50 border-zinc-100 text-zinc-500'}`}
                     />
                   </div>
                 </div>
@@ -1129,18 +1149,38 @@ export default function ProductsView({
                     setIsLoading(true);
                     const now = serverTimestamp();
                     
+                    let finalCategory = editingProduct.category;
+                    let finalSubcategory = editingProduct.subcategory;
+                    let finalTags = editingProduct.tags || [];
+                    let finalSynonyms = editingProduct.synonyms || [];
+                    let finalNormalizedName = editingProduct.normalizedName || editingProduct.name;
+
+                    // If not classified yet, classify immediately before saving
+                    if (!finalCategory || !finalSubcategory) {
+                      try {
+                        const result = await classifyProduct(editingProduct.name, editingProduct.description || '');
+                        finalCategory = result.category;
+                        finalSubcategory = result.subcategory;
+                        finalTags = Array.from(new Set([...finalTags, ...result.tags]));
+                        finalSynonyms = Array.from(new Set([...finalSynonyms, ...result.synonyms]));
+                        finalNormalizedName = result.normalizedName;
+                      } catch (err) {
+                        console.error("Auto classification before save failed", err);
+                      }
+                    }
+
                     // Pre-process for intelligent search
-                    const normalizedName = normalizeText(editingProduct.name);
-                    const baseTokens = generateSearchTokens(editingProduct.name);
-                    const catalogMatch = getProductMetadata(editingProduct.name);
+                    const normalizedName = normalizeText(finalNormalizedName);
+                    const baseTokens = generateSearchTokens(finalNormalizedName);
+                    const catalogMatch = getProductMetadata(finalNormalizedName);
                     
                     const searchIndex = Array.from(new Set([
                       ...baseTokens,
-                      ...(editingProduct.tags || []),
+                      ...finalTags,
                       ...(catalogMatch?.tags || []),
                       ...(catalogMatch?.sinonimos || []),
-                      editingProduct.category,
-                      editingProduct.subcategory || catalogMatch?.subcategoria || ''
+                      finalCategory || 'Básicos',
+                      finalSubcategory || catalogMatch?.subcategoria || 'Geral'
                     ])).map(t => normalizeText(t)).filter(t => t.length > 1);
 
                     try {
@@ -1148,6 +1188,10 @@ export default function ProductsView({
                         const { id, createdAt, ...rest } = editingProduct;
                         await updateDoc(doc(db, 'products', id as string), {
                           ...rest,
+                          category: finalCategory || 'Básicos',
+                          subcategory: finalSubcategory || 'Geral',
+                          tags: finalTags,
+                          synonyms: finalSynonyms,
                           normalizedName,
                           searchIndex,
                           supplierId: auth.currentUser.uid,
@@ -1156,6 +1200,10 @@ export default function ProductsView({
                       } else {
                         const data = {
                           ...editingProduct,
+                          category: finalCategory || 'Básicos',
+                          subcategory: finalSubcategory || 'Geral',
+                          tags: finalTags,
+                          synonyms: finalSynonyms,
                           normalizedName,
                           searchIndex,
                           supplierId: auth.currentUser.uid,

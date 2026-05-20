@@ -527,10 +527,22 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
           <div style={{ marginTop: '20px', textAlign: 'center', position: 'relative' }}>
             <div style={{ height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: `1px solid ${COLORS.borderGray}`, marginBottom: '10px' }}>
               {data.supplier.signatureURL && (
-                <img src={data.supplier.signatureURL} alt="Signature" style={{ maxHeight: '60px' }} />
+                <img 
+                  src={data.supplier.signatureURL} 
+                  alt="Signature" 
+                  style={{ maxHeight: '60px' }} 
+                  crossOrigin="anonymous"
+                  referrerPolicy="no-referrer"
+                />
               )}
               {data.supplier.stampURL && (
-                <img src={data.supplier.stampURL} alt="Stamp" style={{ maxHeight: '60px', opacity: 0.8, marginLeft: '20px' }} />
+                <img 
+                  src={data.supplier.stampURL} 
+                  alt="Stamp" 
+                  style={{ maxHeight: '60px', opacity: 0.8, marginLeft: '20px' }} 
+                  crossOrigin="anonymous"
+                  referrerPolicy="no-referrer"
+                />
               )}
             </div>
             <p style={{ fontSize: '9px', fontWeight: 800, margin: 0, color: COLORS.textMuted, textTransform: 'uppercase' }}>Assinatura & Carimbo Eletrónico</p>

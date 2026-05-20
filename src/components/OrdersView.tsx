@@ -753,17 +753,25 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     try {
       const element = invoiceRef.current;
       
-      // Ensure element is visible enough for html2canvas
-      const originalStyle = element.style.display;
-      
       const canvas = await html2canvas(element, {
-        scale: 3, // Higher scale for better quality
+        scale: 2, // High resolution yet optimal performance
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false, // Disabling taint prevents DOMException on toDataURL
         backgroundColor: '#ffffff',
         logging: false,
         imageTimeout: 30000,
         onclone: (clonedDoc) => {
+          // Reset the absolute offscreen positions so html2canvas renders perfectly in layout bounds
+          const container = clonedDoc.getElementById('pdf-template-container');
+          if (container) {
+            container.style.position = 'relative';
+            container.style.left = '0';
+            container.style.top = '0';
+            container.style.width = '210mm';
+            container.style.height = 'auto';
+            container.style.zIndex = '9999';
+            container.style.pointerEvents = 'auto';
+          }
           const clonedElement = clonedDoc.getElementById('quotation-document');
           if (clonedElement) {
             clonedElement.style.position = 'relative';
@@ -773,10 +781,11 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             clonedElement.style.display = 'block';
             clonedElement.style.visibility = 'visible';
           }
+          sanitizeDocumentColors(clonedDoc, false);
         }
       });
       
-      const imgData = canvas.toDataURL('image/png', 1.0); // PNG for better text quality
+      const imgData = canvas.toDataURL('image/jpeg', 0.95); // JPEG prevents browser lockups from massive payloads
       const pdf = new jsPDF('p', 'mm', 'a4', true);
       
       const imgWidth = 210; 
@@ -1134,7 +1143,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   }, [respondingTo, responseValue, responseDiscount, aiResponses, selectedResponseIndex, mergedSuppliers, profile, user, rows]);
 
   const invoiceTemplate = (
-    <div style={{ position: 'fixed', left: '-5000px', top: 0, width: '210mm', pointerEvents: 'none', zIndex: -100 }}>
+    <div id="pdf-template-container" style={{ position: 'fixed', left: '-5000px', top: 0, width: '210mm', pointerEvents: 'none', zIndex: -100 }}>
       <QuotationDocument data={quotationData} innerRef={invoiceRef} />
     </div>
   );

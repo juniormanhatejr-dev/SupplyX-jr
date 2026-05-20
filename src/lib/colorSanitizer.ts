@@ -7,14 +7,19 @@ export const sanitizeCSSColors = (cssText: string, isDarkMode: boolean = false):
   if (!cssText || typeof cssText !== 'string') return cssText;
   
   const lower = cssText.toLowerCase();
-  if (!lower.includes('okl') && !lower.includes('lab') && !lower.includes('lch') && !lower.includes('p3')) {
+  if (!lower.includes('okl') && !lower.includes('lab') && !lower.includes('lch') && !lower.includes('p3') && !lower.includes('color-mix')) {
     return cssText;
   }
 
-  // More aggressive regex to match any of these functions and their arguments
-  const colorRegex = /(?:(?:okl|l)ab|oklch|lch|color-mix|color\s*\(\s*display-p3)\s*\([^;}]+\)/gi;
+  // Handle nested color-mix first
+  const colorMixRegex = /color-mix\s*\((?:[^()]+|\([^()]*\))*\)/gi;
+  let sanitized = cssText.replace(colorMixRegex, () => {
+    return isDarkMode ? '#1f1f1f' : '#f0f0f0';
+  });
 
-  return cssText.replace(colorRegex, (match) => {
+  // Handle oklch, oklab, lch, lab, display-p3
+  const colorRegex = /(?:(?:okl|l)ab|oklch|lch|color\s*\(\s*display-p3)\s*\((?:[^()]+|\([^()]*\))*\)/gi;
+  sanitized = sanitized.replace(colorRegex, (match) => {
     const m = match.toLowerCase();
     
     // Handle transparency/alpha
@@ -60,12 +65,67 @@ export const sanitizeCSSColors = (cssText: string, isDarkMode: boolean = false):
     // Generic safe fallback
     return isDarkMode ? '#ffffff' : '#18181b';
   });
+
+  return sanitized;
+};
+
+/**
+ * Creates a proxy wrapper around a CSSStyleDeclaration to intercept property lookups
+ * and automatically sanitize all style colors on access.
+ */
+const wrapStyleDeclaration = (style: CSSStyleDeclaration, isDarkMode: boolean): CSSStyleDeclaration => {
+  return new Proxy(style, {
+    get(target, prop, receiver) {
+      if (prop === 'getPropertyValue') {
+        return (propertyName: string) => {
+          const val = target.getPropertyValue(propertyName);
+          return typeof val === 'string' ? sanitizeCSSColors(val, isDarkMode) : val;
+        };
+      }
+      
+      const val = Reflect.get(target, prop, receiver);
+      if (typeof val === 'function') {
+        return val.bind(target);
+      }
+      
+      if (typeof val === 'string' && typeof prop === 'string') {
+        const lowerProp = prop.toLowerCase();
+        if (
+          prop === 'cssText' ||
+          lowerProp.includes('color') || 
+          lowerProp.includes('fill') || 
+          lowerProp.includes('stroke') ||
+          lowerProp.includes('background') ||
+          lowerProp.includes('bg') ||
+          lowerProp.includes('border') ||
+          lowerProp.includes('shadow') ||
+          lowerProp.includes('outline')
+        ) {
+          return sanitizeCSSColors(val, isDarkMode);
+        }
+      }
+      return val;
+    }
+  });
 };
 
 /**
  * Applies color sanitization to a document clone, typically used with html2canvas onclone callback.
  */
 export const sanitizeDocumentColors = (clonedDoc: Document, isDarkMode: boolean = false) => {
+  // Overwrite getComputedStyle of the cloned document's window
+  if (clonedDoc.defaultView) {
+    try {
+      const originalGetComputedStyle = clonedDoc.defaultView.getComputedStyle;
+      clonedDoc.defaultView.getComputedStyle = function(el: Element, pseudoElt?: string | null) {
+        const style = originalGetComputedStyle.call(this, el, pseudoElt);
+        return wrapStyleDeclaration(style, isDarkMode);
+      };
+    } catch (e) {
+      console.error('Failed to override getComputedStyle in cloned window:', e);
+    }
+  }
+
   // 0. Use a very blunt approach for the head to catch anything in style tags or hidden attributes
   try {
     const headElements = Array.from(clonedDoc.head.querySelectorAll('style, link'));

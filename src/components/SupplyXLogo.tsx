@@ -1,4 +1,5 @@
 import React from 'react';
+import logoImg from '../assets/images/supplyx_logo_v2_1779179688631.png';
 
 interface SupplyXLogoProps {
   className?: string;
@@ -32,7 +33,7 @@ const SupplyXLogo: React.FC<SupplyXLogoProps> = ({
       <div className="flex items-center gap-3">
         <div className={`${sizes[size]} relative flex items-center justify-center rounded-2xl overflow-hidden shadow-2xl group`}>
           <img 
-            src="/src/assets/images/supplyx_logo_v2_1779179688631.png" 
+            src={logoImg} 
             alt="SupplyX" 
             className="w-full h-full object-cover"
             id="supplyx-logo-img"

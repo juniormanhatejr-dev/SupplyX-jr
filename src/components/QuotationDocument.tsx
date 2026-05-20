@@ -1,6 +1,7 @@
 import React from 'react';
 import { CheckCircle2, ShieldCheck, QrCode } from 'lucide-react';
 import SupplyXLogo from './SupplyXLogo';
+import logoImg from '../assets/images/supplyx_logo_v2_1779179688631.png';
 
 interface QuotationItem {
   description: string;
@@ -104,7 +105,6 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
         left: 0,
         right: 0,
         bottom: 0,
-        opacity: 0.05,
         zIndex: 0,
         pointerEvents: 'none',
         display: 'flex',
@@ -114,32 +114,31 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
         overflow: 'hidden'
       }}>
         <img 
-          src="/src/assets/images/supplyx_logo_v2_1779179688631.png" 
+          src={logoImg} 
           alt="Watermark" 
           style={{ 
-            width: '180%', 
-            height: '180%', 
+            width: '280px', 
+            height: '280px', 
             objectFit: 'contain',
-            filter: 'grayscale(1) contrast(1.1) brightness(1.2)',
-            transform: 'rotate(-25deg)',
-            opacity: 0.6
+            transform: 'rotate(-10deg)',
+            opacity: 0.04
           }}
           referrerPolicy="no-referrer"
           crossOrigin="anonymous"
         />
         <div style={{
           position: 'absolute',
-          bottom: '20%',
-          fontSize: '64px',
-          fontWeight: 900,
-          color: '#000',
+          bottom: '18%',
+          fontSize: '12px',
+          fontWeight: 800,
+          color: '#1e3a8a',
           textTransform: 'uppercase',
-          letterSpacing: '0.4em',
+          letterSpacing: '0.25em',
           textAlign: 'center',
-          width: '150%',
-          fontFamily: 'serif',
-          opacity: 0.5,
-          transform: 'rotate(-25deg)'
+          width: '100%',
+          fontFamily: '"Inter", sans-serif',
+          opacity: 0.04,
+          transform: 'rotate(-10deg)'
         }}>
           Powered by Manhate Link África
         </div>

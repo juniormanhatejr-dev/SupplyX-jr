@@ -781,6 +781,10 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             clonedElement.style.display = 'block';
             clonedElement.style.visibility = 'visible';
           }
+          const htmlFooter = clonedDoc.getElementById('quotation-corporate-footer');
+          if (htmlFooter) {
+            htmlFooter.style.display = 'none';
+          }
           sanitizeDocumentColors(clonedDoc, false);
         }
       });

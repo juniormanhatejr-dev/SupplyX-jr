@@ -1,7 +1,7 @@
 import React from 'react';
 import { CheckCircle2, ShieldCheck, QrCode } from 'lucide-react';
 import SupplyXLogo from './SupplyXLogo';
-import logoImg from '../assets/images/supplyx_logo_v2_1779179688631.png';
+import logoImg from '../assets/images/supplyx_icon_perfect_1779289258482.png';
 
 interface QuotationItem {
   description: string;
@@ -105,7 +105,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
         left: 0,
         right: 0,
         bottom: 0,
-        zIndex: 0,
+        zIndex: 1,
         pointerEvents: 'none',
         display: 'flex',
         flexDirection: 'column',
@@ -145,7 +145,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
       </div>
 
       {/* Top Branding Section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px', alignItems: 'flex-start' }}>
+      <div style={{ position: 'relative', zIndex: 10, pointerEvents: 'auto', display: 'flex', justifyContent: 'space-between', marginBottom: '30px', alignItems: 'flex-start' }}>
         <div style={{ display: 'flex', gap: '20px', flex: 1 }}>
           {data.supplier.logoURL && (
             <div style={{ 
@@ -245,10 +245,10 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
         </div>
       </div>
 
-      <div style={{ height: '1px', backgroundColor: COLORS.borderGray, width: '100%', marginBottom: '25px' }}></div>
+      <div style={{ position: 'relative', zIndex: 10, pointerEvents: 'auto', height: '1px', backgroundColor: COLORS.borderGray, width: '100%', marginBottom: '25px' }}></div>
 
       {/* Quotation Header Details */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '25px' }}>
+      <div style={{ position: 'relative', zIndex: 10, pointerEvents: 'auto', display: 'flex', gap: '10px', marginBottom: '25px' }}>
         <div style={{ 
           backgroundColor: COLORS.teal, 
           color: COLORS.white, 
@@ -277,7 +277,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
       </div>
 
       {/* Client & Contact Info Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '10px', marginBottom: '30px' }}>
+      <div style={{ position: 'relative', zIndex: 10, pointerEvents: 'auto', display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '10px', marginBottom: '30px' }}>
         <div>
           <div style={{ 
             backgroundColor: COLORS.teal, 
@@ -363,7 +363,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
         </div>
       </div>
 
-      <div style={{ marginBottom: '20px' }}>
+      <div style={{ position: 'relative', zIndex: 10, pointerEvents: 'auto', marginBottom: '20px' }}>
         <p style={{ 
           fontSize: '11px', 
           fontWeight: 900, 
@@ -377,7 +377,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
       </div>
 
       {/* Products Table */}
-      <div style={{ marginBottom: '30px' }}>
+      <div style={{ position: 'relative', zIndex: 10, pointerEvents: 'auto', marginBottom: '30px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', borderRadius: '8px', overflow: 'hidden' }}>
           <thead>
             <tr style={{ backgroundColor: COLORS.darkBlue, color: COLORS.white }}>
@@ -410,7 +410,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
       </div>
 
       {/* Summary and Footer Info */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '30px', alignItems: 'start' }}>
+      <div style={{ position: 'relative', zIndex: 10, pointerEvents: 'auto', display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '30px', alignItems: 'start' }}>
         <div style={{ spaceY: '20px' }}>
           {/* Notes Box */}
           <div style={{ 
@@ -551,17 +551,22 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
       </div>
 
       {/* Corporate Footer */}
-      <div style={{ 
-        position: 'absolute', 
-        bottom: '20mm', 
-        left: '20mm', 
-        right: '20mm',
-        borderTop: `1px solid ${COLORS.borderGray}`,
-        paddingTop: '15px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
+      <div 
+        id="quotation-corporate-footer"
+        style={{ 
+          position: 'absolute', 
+          zIndex: 10,
+          pointerEvents: 'auto',
+          bottom: '20mm', 
+          left: '20mm', 
+          right: '20mm',
+          borderTop: `1px solid ${COLORS.borderGray}`,
+          paddingTop: '15px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}
+      >
         <div style={{ fontSize: '9px', color: COLORS.textMuted, fontWeight: 700 }}>
           {data.supplier.address} | Tel: {data.supplier.phone} | Email: {data.supplier.email}<br />
           <span style={{ fontSize: '8px', opacity: 0.8 }}>Gestão Documental & Intermediação: Manhate Link África, Lda - Registada em Moçambique sob Nuit 400123456</span><br />

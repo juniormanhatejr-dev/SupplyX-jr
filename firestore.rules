@@ -22,8 +22,20 @@ service cloud.firestore {
     // We use get() for role lookups. Note: get() costs 1 read.
     function getUserData(uid) { return get(/databases/$(database)/documents/users/$(uid)).data; }
     function getAdminRole() { return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role; }
-    function isAdmin() { return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
-    function isSuperAdmin() { return isAdmin() && getAdminRole() == 'superadmin'; }
+    function isAdmin() { 
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
+        ('email' in request.auth.token && request.auth.token.email.lower() == 'juniormanhate2@gmail.com') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData(request.auth.uid).get('role', 'user') in ['admin', 'superadmin'])
+      ); 
+    }
+    function isSuperAdmin() { 
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && getAdminRole() == 'superadmin') || 
+        ('email' in request.auth.token && request.auth.token.email.lower() == 'juniormanhate2@gmail.com') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData(request.auth.uid).get('role', 'user') == 'superadmin')
+      ); 
+    }
 
     // ---------------------------------------------------------
     // 2. VALIDATION BLUEPRINTS (Pillar 2)
@@ -31,7 +43,7 @@ service cloud.firestore {
     
     function isValidUser(data, isUpdate) {
       return (!('uid' in data) || data.uid == request.auth.uid) &&
-             (!('email' in data) || data.email == request.auth.token.email) &&
+             (!('email' in data) || data.email.lower() == request.auth.token.email.lower()) &&
              (!('name' in data) || (data.name is string && data.name.size() <= 256)) &&
              (!('userName' in data) || (data.userName is string && data.userName.size() <= 256)) &&
              (!('nuit' in data) || (data.nuit is string && data.nuit.size() <= 40)) &&
@@ -135,17 +147,18 @@ service cloud.firestore {
 
     // CHATS: (Pillar 1 - Relational Sync)
     match /chats/{chatId} {
-      allow list: if isSignedIn() && resource.data.participants.hasAny([request.auth.uid]);
-      allow get: if isSignedIn() && resource.data.participants.hasAny([request.auth.uid]);
+      allow list: if isSignedIn() && (resource.data.participants.hasAny([request.auth.uid]) || isAdmin());
+      allow get: if isSignedIn() && (resource.data.participants.hasAny([request.auth.uid]) || isAdmin());
       allow create: if isVerified() && isValidChat(incoming());
-      allow update: if isVerified() && existing().participants.hasAny([request.auth.uid]) && (
+      allow update: if isVerified() && (existing().participants.hasAny([request.auth.uid]) || isAdmin()) && (
          incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastMessageSenderId', 'updatedAt', 'participantNames', 'unreadCount'])
-      ) || isAdmin();
+      );
+      allow delete: if isVerified() && (existing().participants.hasAny([request.auth.uid]) || isAdmin());
 
       match /messages/{messageId} {
-        allow list: if isSignedIn() && get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
-        allow create: if isVerified() && isValidMessage(incoming()) && get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
-        allow delete: if isVerified() && request.auth.uid == existing().senderId;
+        allow list: if isSignedIn() && (get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) || isAdmin());
+        allow create: if isVerified() && isValidMessage(incoming()) && (get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) || isAdmin());
+        allow delete: if isVerified() && (request.auth.uid == existing().senderId || isAdmin());
       }
     }
 
@@ -160,7 +173,7 @@ service cloud.firestore {
 
     // TRUCKS:
     match /trucks/{truckId} {
-      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
       allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
       allow create: if isVerified() && isValidId(truckId) && isValidTruck(incoming());
       allow update: if isVerified() && (existing().ownerId == request.auth.uid || isAdmin()) && (
@@ -177,11 +190,12 @@ service cloud.firestore {
       allow update: if isVerified() && (existing().carrierId == request.auth.uid || isAdmin()) && (
         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'truckId', 'updatedAt'])
       );
+      allow delete: if isVerified() && (existing().carrierId == request.auth.uid || isAdmin());
     }
 
     // NOTIFICATIONS:
     match /notifications/{notificationId} {
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isVerified() && isValidNotification(incoming());
       allow update: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin()) && (
         incoming().diff(existing()).affectedKeys().hasOnly(['read'])
@@ -195,7 +209,7 @@ service cloud.firestore {
       allow get: if isSignedIn() && (resource.data.buyerId == request.auth.uid || resource.data.supplierId == request.auth.uid || isAdmin());
       allow create: if isVerified() && isValidQuotation(incoming());
       allow update: if isVerified() && (existing().buyerId == request.auth.uid || existing().supplierId == request.auth.uid || isAdmin());
-      allow delete: if isAdmin();
+      allow delete: if isVerified() && (existing().buyerId == request.auth.uid || existing().supplierId == request.auth.uid || isAdmin());
     }
   }
 }

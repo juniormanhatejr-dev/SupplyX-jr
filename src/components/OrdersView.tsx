@@ -274,9 +274,43 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
   const [downloadingOrderId, setDownloadingOrderId] = useState<string | null>(null);
-  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [rawAllProducts, setAllProducts] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
   const [realQuotations, setRealQuotations] = useState<any[]>([]);
+  
+  const [dbUsers, setDbUsers] = useState<any[]>([]);
+  
+  useEffect(() => {
+    const q = query(collection(db, 'users'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({
+        id: doc.id,
+        uid: doc.id,
+        ...doc.data()
+      }));
+      setDbUsers(fetched);
+    }, (error) => {
+      console.error('Error listening to all users:', error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const allProducts = useMemo(() => {
+    if (dbUsers.length === 0 && rawAllProducts.length > 0) return rawAllProducts;
+    const userIds = new Set(dbUsers.map(u => u.id));
+    return rawAllProducts.filter(p => !p.supplierId || userIds.has(p.supplierId));
+  }, [rawAllProducts, dbUsers]);
+
+  const displayedQuotations = useMemo(() => {
+    if (dbUsers.length === 0 && realQuotations.length > 0) return realQuotations;
+    const userIds = new Set(dbUsers.map(u => u.id));
+    return realQuotations.filter(qObj => {
+      const hasBuyer = qObj.buyerId ? userIds.has(qObj.buyerId) : true;
+      const hasSupplier = qObj.supplierId ? userIds.has(qObj.supplierId) : true;
+      return hasBuyer && hasSupplier;
+    });
+  }, [realQuotations, dbUsers]);
+
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -1714,7 +1748,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
-          {realQuotations.map((order) => (
+          {displayedQuotations.map((order) => (
             <motion.div 
               key={order.id} 
               whileHover={{ y: -4 }}

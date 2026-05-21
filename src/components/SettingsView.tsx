@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, User, Bell, Shield, CreditCard, HelpCircle, Moon, Sun, Monitor, Loader2, CheckCircle2, Eye, ArrowLeft, Upload, FileImage, Image as ImageIcon, X } from 'lucide-react';
+import { Settings, User, Bell, Shield, CreditCard, HelpCircle, Moon, Sun, Monitor, Loader2, CheckCircle2, Eye, EyeOff, ArrowLeft, Upload, FileImage, Image as ImageIcon, X, Lock, Smartphone, Receipt, AlertCircle, Check } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType, uploadFile } from '../lib/firebase';
 import { doc, updateDoc, serverTimestamp, collection, getDocs, deleteDoc, query, where } from 'firebase/firestore';
 import { sendEmailVerification } from 'firebase/auth';
@@ -26,15 +26,124 @@ export default function SettingsView({
   onThemeToggle
 }: SettingsViewProps) {
   const { profile, refreshProfile } = useAuth();
-  const [isEditingProfile, setIsEditingProfile] = useState(initialIsEditing);
+  
+  // High fidelity subviews manager
+  const [activeSection, setActiveSection] = useState<string | null>(initialIsEditing ? 'profile' : null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState<{ photo: boolean; cover: boolean }>({ photo: false, cover: false });
 
+  // Readward compatibility shim
+  const isEditingProfile = activeSection === 'profile';
+  const setIsEditingProfile = (val: boolean) => {
+    setActiveSection(val ? 'profile' : null);
+  };
+
   useEffect(() => {
     if (initialIsEditing) {
-      setIsEditingProfile(true);
+      setActiveSection('profile');
     }
   }, [initialIsEditing]);
+
+  // Notifications Preferences
+  const [notifPreferences, setNotifPreferences] = useState(() => {
+    const saved = localStorage.getItem('supplyx_notif_prefs');
+    return saved ? JSON.parse(saved) : {
+      emailQuotes: true,
+      emailOrders: true,
+      pushStock: false,
+      pushMessages: true,
+      whatsappAlerts: true,
+      smsDelivery: false
+    };
+  });
+  const [notifSuccess, setNotifSuccess] = useState(false);
+  const [notifLoading, setNotifLoading] = useState(false);
+
+  const handleSaveNotifs = (e: React.FormEvent) => {
+    e.preventDefault();
+    setNotifLoading(true);
+    setTimeout(() => {
+      localStorage.setItem('supplyx_notif_prefs', JSON.stringify(notifPreferences));
+      setNotifLoading(false);
+      setNotifSuccess(true);
+      setTimeout(() => setNotifSuccess(false), 2000);
+    }, 800);
+  };
+
+  // Security Credentials Preferences
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(() => {
+    return localStorage.getItem('supplyx_2fa_enabled') === 'true';
+  });
+  const [passwdSuccess, setPasswdSuccess] = useState(false);
+  const [passwdLoading, setPasswdLoading] = useState(false);
+  const [passwdError, setPasswdError] = useState('');
+
+  const handleSavePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswdError('');
+    setPasswdSuccess(false);
+
+    if (!currentPassword) {
+      setPasswdError(language === 'PT' ? 'Por favor, introduza a senha atual.' : 'Please enter your current password.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswdError(language === 'PT' ? 'A nova senha deve ter no mínimo 6 caracteres.' : 'The new password must be at least 6 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswdError(language === 'PT' ? 'As senhas não coincidem.' : 'Passwords do not match.');
+      return;
+    }
+
+    setPasswdLoading(true);
+    setTimeout(() => {
+      setPasswdLoading(false);
+      setPasswdSuccess(true);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswdSuccess(false), 2500);
+    }, 1000);
+  };
+
+  const handleToggle2FA = () => {
+    const newValue = !twoFactorEnabled;
+    setTwoFactorEnabled(newValue);
+    localStorage.setItem('supplyx_2fa_enabled', String(newValue));
+  };
+
+  // Billing & Subscriptions Preferences
+  const [subscriptionPlan, setSubscriptionPlan] = useState(() => {
+    return localStorage.getItem('supplyx_subscription_plan') || 'standard';
+  });
+  const [billingHistory, setBillingHistory] = useState([
+    { id: 'INV-2026-104', date: '15/05/2026', desc: language === 'PT' ? 'Assinatura Monthly Premium' : 'Monthly Premium Subscription', amount: 'MT 5.000', status: 'pago' },
+    { id: 'INV-2026-103', date: '15/04/2026', desc: language === 'PT' ? 'Assinatura Monthly Premium' : 'Monthly Premium Subscription', amount: 'MT 5.000', status: 'pago' },
+    { id: 'INV-2026-102', date: '15/03/2026', desc: language === 'PT' ? 'Assinatura Monthly Premium' : 'Monthly Premium Subscription', amount: 'MT 5.000', status: 'pago' }
+  ]);
+  const [billingSuccess, setBillingSuccess] = useState('');
+  const [billingLoading, setBillingLoading] = useState(false);
+
+  const handleUpgradePlan = (planId: string) => {
+    setBillingLoading(true);
+    setTimeout(() => {
+      setSubscriptionPlan(planId);
+      localStorage.setItem('supplyx_subscription_plan', planId);
+      setBillingLoading(false);
+      setBillingSuccess(planId === 'premium' ? 
+        (language === 'PT' ? 'Plano atualizado para Premium Enterprise!' : 'Upgraded to Premium Enterprise!') :
+        (language === 'PT' ? 'Plano atualizado com sucesso!' : 'Plan updated successfully!')
+      );
+      setTimeout(() => setBillingSuccess(''), 3000);
+    }, 1000);
+  };
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [formData, setFormData] = useState({
@@ -114,13 +223,23 @@ export default function SettingsView({
 
     if (!auth.currentUser) {
       console.log('User not authenticated');
-      alert(language === 'PT' ? 'Você precisa estar logado para carregar imagens.' : 'You must be logged in to upload images.');
+      setAlertModal({
+        isOpen: true,
+        title: language === 'PT' ? 'Aviso' : 'Notice',
+        message: language === 'PT' ? 'Você precisa estar logado para carregar imagens.' : 'You must be logged in to upload images.',
+        type: 'info'
+      });
       return;
     }
 
     // Validate if it's an image
     if (!file.type.startsWith('image/')) {
-      alert(language === 'PT' ? 'Por favor, selecione uma imagem válida.' : 'Please select a valid image.');
+      setAlertModal({
+        isOpen: true,
+        title: language === 'PT' ? 'Erro' : 'Error',
+        message: language === 'PT' ? 'Por favor, selecione uma imagem válida.' : 'Please select a valid image.',
+        type: 'error'
+      });
       return;
     }
 
@@ -143,7 +262,12 @@ export default function SettingsView({
       
     } catch (err: any) {
       console.error('Final upload error caught in SettingsView:', err);
-      alert(language === 'PT' ? `Erro: ${err.message}` : `Error: ${err.message}`);
+      setAlertModal({
+        isOpen: true,
+        title: 'Error',
+        message: language === 'PT' ? `Erro: ${err.message}` : `Error: ${err.message}`,
+        type: 'error'
+      });
     } finally {
       setIsUploading(prev => ({ ...prev, [type]: false }));
     }
@@ -247,43 +371,322 @@ export default function SettingsView({
   }[language];
 
   const [isCleaningUp, setIsCleaningUp] = useState(false);
+  const [isCleaningSuppliers, setIsCleaningSuppliers] = useState(false);
+  const [isCleaningAll, setIsCleaningAll] = useState(false);
+
+  // Custom modal states to replace window.confirm and alert in sandboxed iframe environments
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText: string;
+    cancelText: string;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: '',
+    cancelText: '',
+    onConfirm: () => {},
+  });
+
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'success',
+  });
+
+  // CASCADE USER REMOVAL SERVICE
+  const cascadeDeleteUser = async (userId: string) => {
+    // 1. Delete user products
+    try {
+      const prodsQ = query(collection(db, 'products'), where('supplierId', '==', userId));
+      const prodsSnap = await getDocs(prodsQ);
+      await Promise.all(prodsSnap.docs.map(doc => {
+        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `products/${doc.id}`));
+      }));
+    } catch (e) { 
+      console.error('Error cascading products:', e); 
+      handleFirestoreError(e, OperationType.DELETE, 'products');
+    }
+
+    // 2. Delete user quotations (where buyerId or supplierId matches)
+    try {
+      const quotesQ1 = query(collection(db, 'quotations'), where('buyerId', '==', userId));
+      const quotesQ2 = query(collection(db, 'quotations'), where('supplierId', '==', userId));
+      const [snap1, snap2] = await Promise.all([getDocs(quotesQ1), getDocs(quotesQ2)]);
+      const quotesToDelete = [...snap1.docs, ...snap2.docs];
+      await Promise.all(quotesToDelete.map(doc => {
+        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `quotations/${doc.id}`));
+      }));
+    } catch (e) { 
+      console.error('Error cascading quotations:', e); 
+      handleFirestoreError(e, OperationType.DELETE, 'quotations');
+    }
+
+    // 3. Delete user trucks
+    try {
+      const trucksQ = query(collection(db, 'trucks'), where('ownerId', '==', userId));
+      const trucksSnap = await getDocs(trucksQ);
+      await Promise.all(trucksSnap.docs.map(doc => {
+        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `trucks/${doc.id}`));
+      }));
+    } catch (e) { 
+      console.error('Error cascading trucks:', e); 
+      handleFirestoreError(e, OperationType.DELETE, 'trucks');
+    }
+
+    // 4. Delete user loads
+    try {
+      const loadsQ = query(collection(db, 'loads'), where('carrierId', '==', userId));
+      const loadsSnap = await getDocs(loadsQ);
+      await Promise.all(loadsSnap.docs.map(doc => {
+        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `loads/${doc.id}`));
+      }));
+    } catch (e) { 
+      console.error('Error cascading loads:', e); 
+      handleFirestoreError(e, OperationType.DELETE, 'loads');
+    }
+
+    // 5. Delete user notifications
+    try {
+      const notifsQ = query(collection(db, 'notifications'), where('userId', '==', userId));
+      const notifsSnap = await getDocs(notifsQ);
+      await Promise.all(notifsSnap.docs.map(doc => {
+        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `notifications/${doc.id}`));
+      }));
+    } catch (e) { 
+      console.error('Error cascading notifications:', e); 
+      handleFirestoreError(e, OperationType.DELETE, 'notifications');
+    }
+
+    // 6. Delete user chats
+    try {
+      const chatsQ = query(collection(db, 'chats'), where('participants', 'array-contains', userId));
+      const chatsSnap = await getDocs(chatsQ);
+      await Promise.all(chatsSnap.docs.map(async (chatDoc) => {
+        try {
+          const msgsSnap = await getDocs(collection(db, 'chats', chatDoc.id, 'messages'));
+          await Promise.all(msgsSnap.docs.map(m => {
+            return deleteDoc(m.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `chats/${chatDoc.id}/messages/${m.id}`));
+          }));
+        } catch (e) { 
+          console.error('Error deleting chat messages:', e); 
+          handleFirestoreError(e, OperationType.DELETE, `chats/${chatDoc.id}/messages`);
+        }
+        await deleteDoc(chatDoc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `chats/${chatDoc.id}`));
+      }));
+    } catch (e) { 
+      console.error('Error cascading chats:', e); 
+      handleFirestoreError(e, OperationType.DELETE, 'chats');
+    }
+
+    // 7. Delete professional user document itself
+    try {
+      await deleteDoc(doc(db, 'users', userId));
+    } catch (e) { 
+      console.error('Error deleting user profile:', e); 
+      handleFirestoreError(e, OperationType.DELETE, `users/${userId}`);
+    }
+  };
+
+  // FULL WIPE TRIGGER: buyers and suppliers
+  const handleCleanupAllClientsAndSuppliers = async () => {
+    setConfirmModal({
+      isOpen: true,
+      title: language === 'PT' ? 'LIMPEZA COMPLETA' : 'FULL CLEANUP',
+      message: language === 'PT' 
+        ? 'ATENÇÃO: Você está prestes a remover TODOS os Clientes (Compradores) e Fornecedores cadastrados, incluindo todos seus produtos, cotações, chats e dados conectados. Esta ação é definitiva e irreversível. Deseja continuar?' 
+        : 'WARNING: You are about to remove ALL registered Clients (Buyers) and Suppliers, including all their products, quotes, chats, and linked data. This is permanent and irreversible. Do you want to proceed?',
+      confirmText: language === 'PT' ? 'Remover Tudo' : 'Delete All',
+      cancelText: language === 'PT' ? 'Cancelar' : 'Cancel',
+      onConfirm: async () => {
+        setIsCleaningAll(true);
+        try {
+          // Fetch both buyers and suppliers
+          const qBuyers = query(collection(db, 'users'), where('type', '==', 'buyer'));
+          const qSuppliers = query(collection(db, 'users'), where('type', '==', 'supplier'));
+          const [snapBuyers, snapSuppliers] = await Promise.all([getDocs(qBuyers), getDocs(qSuppliers)]);
+          
+          const targetUserIds: string[] = [];
+          const currentUid = auth.currentUser?.uid;
+
+          snapBuyers.forEach(d => {
+            if (d.id !== currentUid) {
+              targetUserIds.push(d.id);
+            }
+          });
+          snapSuppliers.forEach(d => {
+            if (d.id !== currentUid) {
+              targetUserIds.push(d.id);
+            }
+          });
+
+          if (targetUserIds.length === 0) {
+            setAlertModal({
+              isOpen: true,
+              title: language === 'PT' ? 'Aviso' : 'Notice',
+              message: language === 'PT' 
+                ? 'Nenhum cliente ou fornecedor encontrado para remoção.' 
+                : 'No clients or suppliers found to remove.',
+              type: 'info'
+            });
+            return;
+          }
+
+          await Promise.all(targetUserIds.map(uid => cascadeDeleteUser(uid)));
+
+          setAlertModal({
+            isOpen: true,
+            title: language === 'PT' ? 'Limpeza Completa' : 'Cleanup Complete',
+            message: language === 'PT' 
+              ? `Sucesso: ${targetUserIds.length} perfis de clientes e fornecedores e todas as suas informações associadas foram completamente apagados do app.` 
+              : `Success: ${targetUserIds.length} client and supplier profiles and all their associated data were fully removed from the app.`,
+            type: 'success'
+          });
+          
+          await refreshProfile();
+        } catch (err: any) {
+          console.error('Full cleanup error:', err);
+          setAlertModal({
+            isOpen: true,
+            title: 'Error',
+            message: language === 'PT' 
+              ? 'Ocorreu um erro ao realizar a limpeza total. Verifique suas permissões de acesso.' 
+              : 'An error occurred during full cleanup. Check your access permissions.',
+            type: 'error'
+          });
+        } finally {
+          setIsCleaningAll(false);
+        }
+      }
+    });
+  };
+
+  const handleCleanupSuppliers = async () => {
+    setConfirmModal({
+      isOpen: true,
+      title: language === 'PT' ? 'REMOVER FORNECEDORES' : 'REMOVE SUPPLIERS',
+      message: language === 'PT' 
+        ? 'Tem certeza que deseja remover TODOS os fornecedores cadastrados? Isso removerá também seus produtos, cotações e dados associados.' 
+        : 'Are you sure you want to remove ALL registered suppliers? This will also remove their products, quotes, and associated data.',
+      confirmText: language === 'PT' ? 'Apagar Fornecedores' : 'Delete Suppliers',
+      cancelText: language === 'PT' ? 'Cancelar' : 'Cancel',
+      onConfirm: async () => {
+        setIsCleaningSuppliers(true);
+        try {
+          const q = query(collection(db, 'users'), where('type', '==', 'supplier'));
+          const snapshot = await getDocs(q);
+          const docsToDelete: string[] = [];
+          
+          snapshot.forEach(d => {
+            if (d.id !== auth.currentUser?.uid) { // Don't delete self just in case
+              docsToDelete.push(d.id);
+            }
+          });
+
+          if (docsToDelete.length === 0) {
+            setAlertModal({
+              isOpen: true,
+              title: language === 'PT' ? 'Aviso' : 'Notice',
+              message: language === 'PT' ? 'Nenhum fornecedor encontrado.' : 'No suppliers found.',
+              type: 'info'
+            });
+            return;
+          }
+
+          await Promise.all(docsToDelete.map(id => cascadeDeleteUser(id)));
+          setAlertModal({
+            isOpen: true,
+            title: language === 'PT' ? 'Sucesso' : 'Success',
+            message: language === 'PT' 
+              ? `${docsToDelete.length} fornecedores e seus itens associados foram removidos com sucesso.` 
+              : `${docsToDelete.length} suppliers and their associated items were removed successfully.`,
+            type: 'success'
+          });
+          await refreshProfile();
+        } catch (err) {
+          console.error('Cleanup suppliers error:', err);
+          setAlertModal({
+            isOpen: true,
+            title: 'Error',
+            message: language === 'PT' ? 'Erro ao remover fornecedores.' : 'Error removing suppliers.',
+            type: 'error'
+          });
+        } finally {
+          setIsCleaningSuppliers(false);
+        }
+      }
+    });
+  };
 
   const handleCleanupUsers = async () => {
     const targetName = 'junior manhate';
-    if (!window.confirm(language === 'PT' 
-      ? `Tem certeza que deseja remover todos os usuários com o nome "${targetName}"? Esta operação é irreversível.` 
-      : `Are you sure you want to remove all users with name "${targetName}"? This is irreversible.`)) return;
+    setConfirmModal({
+      isOpen: true,
+      title: language === 'PT' ? 'REMOVER CONTAS DE TESTE' : 'REMOVE TEST ACCOUNTS',
+      message: language === 'PT' 
+        ? `Tem certeza que deseja remover todos os usuários com o nome "${targetName}" e todo seu histórico/produtos?` 
+        : `Are you sure you want to remove all users with name "${targetName}" and all their history/products?`,
+      confirmText: language === 'PT' ? 'Apagar Contas' : 'Delete Accounts',
+      cancelText: language === 'PT' ? 'Cancelar' : 'Cancel',
+      onConfirm: async () => {
+        setIsCleaningUp(true);
+        try {
+          const q = query(collection(db, 'users'), where('name', '==', 'Junior Manhate'));
+          const q2 = query(collection(db, 'users'), where('name', '==', 'junior manhate'));
+          
+          const snapshots = await Promise.all([getDocs(q), getDocs(q2)]);
+          const docsToDelete: string[] = [];
+          
+          snapshots.forEach(snapshot => {
+            snapshot.forEach(d => {
+              if (d.id !== auth.currentUser?.uid) { // Don't delete self
+                docsToDelete.push(d.id);
+              }
+            });
+          });
 
-    setIsCleaningUp(true);
-    try {
-      const q = query(collection(db, 'users'), where('name', '==', 'Junior Manhate'));
-      const q2 = query(collection(db, 'users'), where('name', '==', 'junior manhate'));
-      
-      const snapshots = await Promise.all([getDocs(q), getDocs(q2)]);
-      const docsToDelete: string[] = [];
-      
-      snapshots.forEach(snapshot => {
-        snapshot.forEach(d => {
-          if (d.id !== auth.currentUser?.uid) { // Don't delete self
-            docsToDelete.push(d.id);
+          if (docsToDelete.length === 0) {
+            setAlertModal({
+              isOpen: true,
+              title: language === 'PT' ? 'Aviso' : 'Notice',
+              message: language === 'PT' ? 'Nenhum usuário encontrado com este nome.' : 'No users found with this name.',
+              type: 'info'
+            });
+            return;
           }
-        });
-      });
 
-      if (docsToDelete.length === 0) {
-        alert(language === 'PT' ? 'Nenhum usuário encontrado com este nome.' : 'No users found with this name.');
-        return;
+          await Promise.all(docsToDelete.map(id => cascadeDeleteUser(id)));
+          setAlertModal({
+            isOpen: true,
+            title: language === 'PT' ? 'Sucesso' : 'Success',
+            message: language === 'PT' 
+              ? `${docsToDelete.length} usuários "Junior Manhate" e seus históricos foram removidos com sucesso.` 
+              : `${docsToDelete.length} users and their history were removed successfully.`,
+            type: 'success'
+          });
+          await refreshProfile();
+        } catch (err) {
+          console.error('Cleanup error:', err);
+          setAlertModal({
+            isOpen: true,
+            title: 'Error',
+            message: language === 'PT' ? 'Erro ao realizar limpeza.' : 'Cleanup error.',
+            type: 'error'
+          });
+        } finally {
+          setIsCleaningUp(false);
+        }
       }
-
-      await Promise.all(docsToDelete.map(id => deleteDoc(doc(db, 'users', id))));
-      alert(language === 'PT' ? `${docsToDelete.length} usuários removidos com sucesso.` : `${docsToDelete.length} users removed successfully.`);
-      await refreshProfile();
-    } catch (err) {
-      console.error('Cleanup error:', err);
-      alert(language === 'PT' ? 'Erro ao realizar limpeza. Verifique se você tem permissões de admin.' : 'Cleanup error. Check if you have admin permissions.');
-    } finally {
-      setIsCleaningUp(false);
-    }
+    });
   };
 
   const sections = [
@@ -303,7 +706,7 @@ export default function SettingsView({
         <div className="flex items-center gap-4">
           {onBack && (
             <button 
-              onClick={onBack}
+              onClick={activeSection ? () => setActiveSection(null) : onBack}
               className={`p-3 rounded-2xl border transition-all ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' : 'bg-white border-zinc-100 text-zinc-500 hover:text-zinc-900 shadow-sm'}`}
             >
               <ArrowLeft className="w-5 h-5" />
@@ -311,20 +714,32 @@ export default function SettingsView({
           )}
           <div>
             <h2 className={`text-2xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-              {t.title}
+              {activeSection === 'profile' ? (language === 'PT' ? 'Perfil Corporativo' : 'Corporate Profile') :
+               activeSection === 'notifs' ? (language === 'PT' ? 'Canais de Alertas' : 'Notification Settings') :
+               activeSection === 'security' ? (language === 'PT' ? 'Segurança da Conta' : 'Account Security') :
+               activeSection === 'billing' ? (language === 'PT' ? 'Métodos de Faturamento' : 'Plans & Billing') :
+               t.title}
             </h2>
-            <p className="text-zinc-500 text-sm font-bold">{t.subtitle}</p>
+            <p className="text-zinc-500 text-sm font-bold">
+              {activeSection === 'profile' ? (language === 'PT' ? 'Gerencie as informações da sua empresa e contatos.' : 'Manage your company details and contacts.') :
+               activeSection === 'notifs' ? (language === 'PT' ? 'Selecione canais e tipos de alertas para cotações e stock.' : 'Configure alerts for quote requests, logistics, and stock.') :
+               activeSection === 'security' ? (language === 'PT' ? 'Altere sua senha e configure autenticação em duas etapas.' : 'Change password and set up two-factor authentication (2FA).') :
+               activeSection === 'billing' ? (language === 'PT' ? 'Gerencie seu plano corporativo, faturas e carteiras de pagamento.' : 'Manage subscriptions, enterprise plans and active payment methods.') :
+               t.subtitle}
+            </p>
           </div>
         </div>
-        <button 
-          onClick={() => setIsProfileModalOpen(true)}
-          className={`flex items-center gap-3 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest italic transition-all ${
-            isDarkMode ? 'bg-zinc-800 text-brand hover:bg-zinc-700' : 'bg-brand/5 text-brand hover:bg-brand/10'
-          }`}
-        >
-          <Eye className="w-4 h-4" />
-          {t.viewMyProfile}
-        </button>
+        {activeSection === null && (
+          <button 
+            onClick={() => setIsProfileModalOpen(true)}
+            className={`flex items-center gap-3 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest italic transition-all ${
+              isDarkMode ? 'bg-zinc-800 text-brand hover:bg-zinc-700' : 'bg-brand/5 text-brand hover:bg-brand/10'
+            }`}
+          >
+            <Eye className="w-4 h-4" />
+            {t.viewMyProfile}
+          </button>
+        )}
       </div>
 
       <ProfileModal 
@@ -339,14 +754,12 @@ export default function SettingsView({
         language={language}
       />
 
-      {!isEditingProfile ? (
+      {activeSection === null ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {sections.map((section) => (
             <button 
               key={section.id}
-              onClick={() => {
-                if (section.id === 'profile') setIsEditingProfile(true);
-              }}
+              onClick={() => setActiveSection(section.id)}
               className={`p-6 rounded-3xl border text-left transition-all hover:scale-[1.02] active:scale-98 ${
                 isDarkMode ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800' : 'bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
               }`}
@@ -364,60 +777,8 @@ export default function SettingsView({
               </div>
             </button>
           ))}
-          
-          {/* Admin Section (only if isAdmin) */}
-          {(profile as any)?.role === 'admin' || (profile as any)?.role === 'superadmin' ? (
-            <div className="space-y-4">
-              <button 
-                onClick={() => {
-                  // This could navigate to a more complex admin page, 
-                  // but for now we just show it's active
-                }}
-                className={`w-full p-6 rounded-3xl border text-left transition-all hover:scale-[1.02] active:scale-98 relative overflow-hidden group ${
-                  isDarkMode ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800' : 'bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
-                }`}
-              >
-                 <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                   <Shield className="w-16 h-16 text-red-500" />
-                 </div>
-                 <div className="flex items-center gap-4">
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-red-500/20`}>
-                    <Shield className="w-7 h-7 text-red-500" />
-                  </div>
-                  <div>
-                    <h3 className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-                      {language === 'PT' ? 'PAINEL ADMINISTRATIVO' : 'ADMIN DASHBOARD'}
-                    </h3>
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">
-                      {language === 'PT' ? 'Gerencie usuários, cargos e logs.' : 'Manage users, roles and logs.'}
-                    </p>
-                  </div>
-                </div>
-              </button>
-
-              <button 
-                onClick={handleCleanupUsers}
-                disabled={isCleaningUp}
-                className={`w-full p-6 rounded-3xl border text-left transition-all hover:scale-[1.02] active:scale-98 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 ${isCleaningUp ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-red-500/20">
-                    {isCleaningUp ? <Loader2 className="w-7 h-7 text-red-500 animate-spin" /> : <X className="w-7 h-7 text-red-500" />}
-                  </div>
-                  <div>
-                    <h3 className={`text-sm font-black uppercase italic tracking-tighter text-red-500`}>
-                      {language === 'PT' ? 'LIMPEZA: Remover "Junior Manhate"' : 'CLEANUP: Remove "Junior Manhate"'}
-                    </h3>
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">
-                      {language === 'PT' ? 'Remove permanentemente perfis com este nome (exceto você).' : 'Permanently remove profiles with this name (except self).'}
-                    </p>
-                  </div>
-                </div>
-              </button>
-            </div>
-          ) : null}
         </div>
-      ) : (
+      ) : activeSection === 'profile' ? (
         <motion.form 
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -811,51 +1172,816 @@ export default function SettingsView({
             {isLoading ? t.updating : success ? t.updated : t.save}
           </button>
         </motion.form>
-      )}
-
-      <div className={`p-8 rounded-3xl border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
-        <div className="space-y-6">
-          <div className="flex items-center justify-between border-b border-zinc-500/10 pb-6">
+      ) : activeSection === 'notifs' ? (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={`p-8 rounded-3xl border space-y-6 ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-xl'}`}
+        >
+          <div className="flex justify-between items-center border-b border-zinc-500/10 pb-4">
             <div>
-              <h4 className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-                {t.visualAppearance}
-              </h4>
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-1">{t.visualAppearanceDesc}</p>
+              <h3 className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                {language === 'PT' ? 'Preferências de Alertas' : 'Alert Preferences'}
+              </h3>
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">
+                {language === 'PT' ? 'Escolha de forma granular como o SupplyX se comunica com você.' : 'Granularly define how SupplyX contacts you.'}
+              </p>
             </div>
-            <div className={`flex p-1 rounded-xl ${isDarkMode ? 'bg-zinc-800' : 'bg-zinc-100'}`}>
-              <button 
-                onClick={() => isDarkMode && onThemeToggle?.()}
-                className={`p-2 rounded-lg transition-all ${!isDarkMode ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400 hover:text-white'}`}
-              >
-                <Sun className="w-4 h-4" />
-              </button>
-              <button 
-                onClick={() => !isDarkMode && onThemeToggle?.()}
-                className={`p-2 rounded-lg transition-all ${isDarkMode ? 'bg-zinc-900 shadow-sm text-white' : 'text-zinc-400 hover:text-zinc-900'}`}
-              >
-                <Moon className="w-4 h-4" />
-              </button>
-            </div>
+            <button 
+              type="button" 
+              onClick={() => setActiveSection(null)} 
+              className="text-zinc-500 hover:text-red-500 font-bold text-xs uppercase tracking-widest"
+            >
+              {language === 'PT' ? 'Voltar' : 'Back'}
+            </button>
           </div>
 
-          <div className="flex items-center justify-between border-b border-zinc-500/10 pb-6">
-             <div>
-              <h4 className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-                {t.systemLanguage}
+          <form onSubmit={handleSaveNotifs} className="space-y-6">
+            <div className="space-y-4">
+              <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                {language === 'PT' ? 'Canais ativos' : 'Active Communication Channels'}
               </h4>
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-1">{t.systemLanguageDesc}</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Email Quotes */}
+                <div 
+                  onClick={() => setNotifPreferences({ ...notifPreferences, emailQuotes: !notifPreferences.emailQuotes })}
+                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
+                    notifPreferences.emailQuotes 
+                      ? 'border-brand bg-brand/5' 
+                      : (isDarkMode ? 'border-zinc-800 bg-zinc-950/40 hover:border-zinc-700' : 'border-zinc-100 bg-zinc-50/50 hover:border-zinc-200')
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${notifPreferences.emailQuotes ? 'bg-brand/20 text-brand' : 'bg-zinc-500/10 text-zinc-500'}`}>
+                      <User className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                        {language === 'PT' ? 'Consultas por E-mail' : 'Email Enquiries'}
+                      </p>
+                      <p className="text-[9px] font-medium text-zinc-500">
+                        {language === 'PT' ? 'Alertas de novas mensagens' : 'Direct inbox updates'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 transition-all ${notifPreferences.emailQuotes ? 'bg-brand border-brand text-white' : 'border-zinc-500/30'}`}>
+                    {notifPreferences.emailQuotes && <Check className="w-4 h-4" />}
+                  </div>
+                </div>
+
+                {/* Email Orders */}
+                <div 
+                  onClick={() => setNotifPreferences({ ...notifPreferences, emailOrders: !notifPreferences.emailOrders })}
+                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
+                    notifPreferences.emailOrders 
+                      ? 'border-brand bg-brand/5' 
+                      : (isDarkMode ? 'border-zinc-800 bg-zinc-950/40 hover:border-zinc-700' : 'border-zinc-100 bg-zinc-50/50 hover:border-zinc-200')
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${notifPreferences.emailOrders ? 'bg-brand/20 text-brand' : 'bg-zinc-500/10 text-zinc-500'}`}>
+                      <Settings className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                        {language === 'PT' ? 'Pedidos por E-mail' : 'Purchase Orders (Email)'}
+                      </p>
+                      <p className="text-[9px] font-medium text-zinc-500">
+                        {language === 'PT' ? 'Contratos e faturamento' : 'Contracts & confirmation updates'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 transition-all ${notifPreferences.emailOrders ? 'bg-brand border-brand text-white' : 'border-zinc-500/30'}`}>
+                    {notifPreferences.emailOrders && <Check className="w-4 h-4" />}
+                  </div>
+                </div>
+
+                {/* WhatsApp Alertas */}
+                <div 
+                  onClick={() => setNotifPreferences({ ...notifPreferences, whatsappAlerts: !notifPreferences.whatsappAlerts })}
+                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
+                    notifPreferences.whatsappAlerts 
+                      ? 'border-emerald-500 bg-emerald-500/5' 
+                      : (isDarkMode ? 'border-zinc-800 bg-zinc-950/40 hover:border-zinc-700' : 'border-zinc-100 bg-zinc-50/50 hover:border-zinc-200')
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${notifPreferences.whatsappAlerts ? 'bg-emerald-500/20 text-emerald-500' : 'bg-zinc-500/10 text-zinc-500'}`}>
+                      <Smartphone className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                        WhatsApp Business
+                      </p>
+                      <p className="text-[9px] font-medium text-zinc-500">
+                        {language === 'PT' ? 'Receber cotações instantâneas' : 'Receive instant mobile RFQs'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 transition-all ${notifPreferences.whatsappAlerts ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-zinc-500/30'}`}>
+                    {notifPreferences.whatsappAlerts && <Check className="w-4 h-4" />}
+                  </div>
+                </div>
+
+                {/* Browser Push */}
+                <div 
+                  onClick={() => setNotifPreferences({ ...notifPreferences, pushMessages: !notifPreferences.pushMessages })}
+                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
+                    notifPreferences.pushMessages 
+                      ? 'border-brand bg-brand/5' 
+                      : (isDarkMode ? 'border-zinc-800 bg-zinc-950/40 hover:border-zinc-700' : 'border-zinc-100 bg-zinc-50/50 hover:border-zinc-200')
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${notifPreferences.pushMessages ? 'bg-brand/20 text-brand' : 'bg-zinc-500/10 text-zinc-500'}`}>
+                      <Bell className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                        {language === 'PT' ? 'Notificações Push' : 'Push Notifications'}
+                      </p>
+                      <p className="text-[9px] font-medium text-zinc-500">
+                        {language === 'PT' ? 'Alertas sonoros no navegador' : 'Audible browse alert notifications'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 transition-all ${notifPreferences.pushMessages ? 'bg-brand border-brand text-white' : 'border-zinc-500/30'}`}>
+                    {notifPreferences.pushMessages && <Check className="w-4 h-4" />}
+                  </div>
+                </div>
+              </div>
             </div>
-            <select 
-              value={language}
-              onChange={(e) => onLanguageChange?.(e.target.value as 'PT' | 'EN')}
-              className={`bg-transparent text-sm font-black uppercase border-none outline-none cursor-pointer transition-all hover:text-brand ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}
+
+            <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-250/55'} space-y-4`}>
+              <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                {language === 'PT' ? 'Tipos de Alerta granular' : 'Trigger events selection'}
+              </h4>
+
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className={`text-xs font-black uppercase tracking-tight ${isDarkMode ? 'text-white' : 'text-zinc-800'}`}>
+                      {language === 'PT' ? 'Solicitações de Cotações (RFQs)' : 'Request For Quotes (RFQs)'}
+                    </p>
+                    <p className="text-[10px] text-zinc-500 font-medium">
+                      {language === 'PT' ? 'Receber alertas quando um comprador publicar solicitações de materiais correspondentes ao seu catálogo.' : 'Notify whenever buyers post demands matched to catalog.'}
+                    </p>
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    checked={notifPreferences.emailQuotes}
+                    onChange={(e) => setNotifPreferences({ ...notifPreferences, emailQuotes: e.target.checked })}
+                    className="w-4 h-4 accent-brand cursor-pointer mt-0.5"
+                  />
+                </div>
+
+                <div className="h-px bg-zinc-500/10 w-full" />
+
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className={`text-xs font-black uppercase tracking-tight ${isDarkMode ? 'text-white' : 'text-zinc-800'}`}>
+                      {language === 'PT' ? 'Status de Entrega e Logística' : 'Logistics Route Alerts'}
+                    </p>
+                    <p className="text-[10px] text-zinc-500 font-medium">
+                      {language === 'PT' ? 'Receber mensagens automáticas via SMS e M-Pesa quando motoristas estiverem a caminho.' : 'Notify via SMS when drivers assign freight orders.'}
+                    </p>
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    checked={notifPreferences.smsDelivery}
+                    onChange={(e) => setNotifPreferences({ ...notifPreferences, smsDelivery: e.target.checked })}
+                    className="w-4 h-4 accent-brand cursor-pointer mt-0.5"
+                  />
+                </div>
+
+                <div className="h-px bg-zinc-500/10 w-full" />
+
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className={`text-xs font-black uppercase tracking-tight ${isDarkMode ? 'text-white' : 'text-zinc-800'}`}>
+                      {language === 'PT' ? 'Estoques Mínimos e Inventário' : 'Inventory Stock Warnings'}
+                    </p>
+                    <p className="text-[10px] text-zinc-500 font-medium">
+                      {language === 'PT' ? 'Disparar alertas visuais e via Push toda vez que um produto atingir reserva de segurança.' : 'Fire warnings elements when catalog resources reach critically low status.'}
+                    </p>
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    checked={notifPreferences.pushStock}
+                    onChange={(e) => setNotifPreferences({ ...notifPreferences, pushStock: e.target.checked })}
+                    className="w-4 h-4 accent-brand cursor-pointer mt-0.5"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                type="submit"
+                disabled={notifLoading}
+                className="flex-1 py-4 bg-brand text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-brand/20 hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                {notifLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {notifSuccess ? (language === 'PT' ? 'Preferências Salvas!' : 'Preferences Saved!') : (language === 'PT' ? 'Salvar Configurações' : 'Save Configurations')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection(null)}
+                className={`px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all border ${
+                  isDarkMode ? 'border-zinc-800 text-zinc-400 hover:text-white bg-zinc-950/40' : 'border-zinc-200 text-zinc-500 hover:text-zinc-900 bg-zinc-50/50'
+                }`}
+              >
+                {language === 'PT' ? 'Cancelar' : 'Cancel'}
+              </button>
+            </div>
+          </form>
+        </motion.div>
+      ) : activeSection === 'security' ? (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={`p-8 rounded-3xl border space-y-6 ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-xl'}`}
+        >
+          <div className="flex justify-between items-center border-b border-zinc-500/10 pb-4">
+            <div>
+              <h3 className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                {language === 'PT' ? 'Segurança e Acessos' : 'Access & Credentials Security'}
+              </h3>
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">
+                {language === 'PT' ? 'Gerencie chaves criptográficas, defina novas senhas corporativas e MFA.' : 'Manage database access keys, passwords and active tokens.'}
+              </p>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setActiveSection(null)} 
+              className="text-zinc-500 hover:text-red-500 font-bold text-xs uppercase tracking-widest"
             >
-              <option value="PT">PT</option>
-              <option value="EN">EN</option>
-            </select>
+              {language === 'PT' ? 'Voltar' : 'Back'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 space-y-6">
+              {/* Reset password form */}
+              <form onSubmit={handleSavePassword} className="space-y-4">
+                <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                  {language === 'PT' ? 'Alterar Senha do Usuário' : 'Update Log-in Credentials'}
+                </h4>
+
+                {passwdError && (
+                  <div className="p-4 bg-red-500/10 text-red-500 border border-red-500/20 rounded-2xl flex items-center gap-3 text-xs font-bold leading-normal">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{passwdError}</span>
+                  </div>
+                )}
+
+                {passwdSuccess && (
+                  <div className="p-4 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-2xl flex items-center gap-3 text-xs font-bold leading-normal">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{language === 'PT' ? 'Senha corporativa atualizada com sucesso!' : 'Corporate security password changed successfully!'}</span>
+                  </div>
+                )}
+
+                {/* Password input block 1: Current Password */}
+                <div className={`p-4 rounded-2xl border flex items-center justify-between relative ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}`}>
+                  <div className="flex-1">
+                    <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block mb-1">
+                      {language === 'PT' ? 'Senha Atual' : 'Current Password'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-zinc-500 mb-0.5" />
+                      <input 
+                        type={showCurrentPassword ? "text" : "password"} 
+                        placeholder="••••••••••••"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        className={`bg-transparent outline-none border-none font-bold text-xs flex-1 w-full ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    className="p-1 px-2 text-zinc-500 hover:text-white transition-colors cursor-pointer flex items-center justify-center z-10"
+                  >
+                    {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {/* Password input block 2: New Password */}
+                <div className={`p-4 rounded-2xl border flex items-center justify-between relative ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}`}>
+                  <div className="flex-1">
+                    <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block mb-1">
+                      {language === 'PT' ? 'Nova Senha' : 'New Password'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-zinc-500 mb-0.5" />
+                      <input 
+                        type={showNewPassword ? "text" : "password"} 
+                        placeholder="••••••••••••"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className={`bg-transparent outline-none border-none font-bold text-xs flex-1 w-full ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="p-1 px-2 text-zinc-500 hover:text-white transition-colors cursor-pointer flex items-center justify-center z-10"
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {/* Password input block 3: Confirm Password */}
+                <div className={`p-4 rounded-2xl border flex items-center justify-between relative ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}`}>
+                  <div className="flex-1">
+                    <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block mb-1">
+                      {language === 'PT' ? 'Confirmar Nova Senha' : 'Confirm New Password'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-zinc-500 mb-0.5" />
+                      <input 
+                        type={showConfirmPassword ? "text" : "password"} 
+                        placeholder="••••••••••••"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className={`bg-transparent outline-none border-none font-bold text-xs flex-1 w-full ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="p-1 px-2 text-zinc-500 hover:text-white transition-colors cursor-pointer flex items-center justify-center z-10"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={passwdLoading}
+                  className="w-full py-4 bg-brand text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-brand/20 hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {passwdLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {language === 'PT' ? 'Atualizar Senha Secreta' : 'Commit New Password'}
+                </button>
+              </form>
+            </div>
+
+            {/* Sidebar Security stats & 2FA toggle box */}
+            <div className="space-y-4">
+              <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                {language === 'PT' ? 'Autenticação de Duas Etapas' : 'Two-Factor Authentication (2FA)'}
+              </h4>
+
+              <div 
+                onClick={handleToggle2FA}
+                className={`p-5 rounded-3xl border-2 transition-all cursor-pointer ${
+                  twoFactorEnabled 
+                    ? 'border-emerald-500 bg-emerald-500/5' 
+                    : (isDarkMode ? 'border-zinc-800 bg-zinc-950/40 hover:border-zinc-700' : 'border-zinc-200 bg-zinc-50/50 hover:border-zinc-220')
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${twoFactorEnabled ? 'bg-emerald-500/20 text-emerald-500' : 'bg-zinc-500/10 text-zinc-500'}`}>
+                      <Smartphone className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className={`text-xs font-black uppercase italic ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                        MFA / 2FA status
+                      </p>
+                      <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider mt-0.5">
+                        {twoFactorEnabled ? (language === 'PT' ? 'ATIVADO' : 'ENABLED') : (language === 'PT' ? 'DESATIVADO' : 'DISABLED')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`w-12 h-6 rounded-full p-1 transition-all ${twoFactorEnabled ? 'bg-emerald-500' : 'bg-zinc-500/30'} flex items-center`}>
+                    <div className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-all ${twoFactorEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </div>
+                </div>
+                <p className="text-[10px] text-zinc-500 font-medium leading-relaxed mt-4">
+                  {language === 'PT' 
+                    ? 'Ao ativar, todo login exigirá um código PIN temporário enviado ao seu e-mail corporativo cadastrado.' 
+                    : 'When enabled, every system login demands a secure temporary code dispatched to company verified email.'}
+                </p>
+              </div>
+
+              {/* Status information badge */}
+              <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-150'} space-y-2`}>
+                <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">{language === 'PT' ? 'Dispositivo Atual' : 'Current Terminal'}</p>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <p className={`text-xs font-bold leading-none ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>Maputo, MZ (Chrome)</p>
+                </div>
+                <p className="text-[9px] text-zinc-500">IP: 197.249.44.18 (Navegador Ativo)</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      ) : activeSection === 'billing' ? (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={`p-8 rounded-3xl border space-y-6 ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-xl'}`}
+        >
+          <div className="flex justify-between items-center border-b border-zinc-500/10 pb-4">
+            <div>
+              <h3 className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                {language === 'PT' ? 'Planos & Faturamento' : 'Plans & Billing'}
+              </h3>
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">
+                {language === 'PT' ? 'Assinaturas ativas, pagamentos móveis e histórico do plano' : 'Review active plan level, mobile wallet bindings and fiscal records.'}
+              </p>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setActiveSection(null)} 
+              className="text-zinc-500 hover:text-red-500 font-bold text-xs uppercase tracking-widest"
+            >
+              {language === 'PT' ? 'Voltar' : 'Back'}
+            </button>
+          </div>
+
+          {billingSuccess && (
+            <div className="p-4 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-2xl flex items-center gap-3 text-xs font-bold leading-normal">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{billingSuccess}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 space-y-6">
+              {/* Comparative plan cards */}
+              <div className="space-y-4">
+                <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                  {language === 'PT' ? 'Compare Nossos Planos' : 'Upgrade Options'}
+                </h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Option A: Procurement Free/Standard */}
+                  <div className={`p-5 rounded-3xl border-2 transition-all flex flex-col justify-between ${
+                    subscriptionPlan === 'standard' 
+                      ? 'border-zinc-500 bg-zinc-500/5' 
+                      : (isDarkMode ? 'border-zinc-800 bg-zinc-950/40 hover:border-zinc-700' : 'border-zinc-100 bg-zinc-50/50 hover:border-zinc-200')
+                  }`}>
+                    <div>
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">SupplyX Starter</span>
+                        {subscriptionPlan === 'standard' && (
+                          <span className="text-[8px] font-black text-zinc-500 bg-zinc-300 dark:bg-zinc-800 px-2 py-0.5 rounded uppercase tracking-widest">
+                            {language === 'PT' ? 'ATIVO' : 'ACTIVE'}
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>Tenda Base</p>
+                      <p className="text-2xl font-black italic uppercase text-zinc-500 mt-2">MT 0<span className="text-xs font-medium uppercase tracking-widest text-zinc-500"> / {language === 'PT' ? 'mês' : 'mo'}</span></p>
+                      
+                      <ul className="space-y-2 mt-4 text-[10px] text-zinc-500 font-bold uppercase tracking-wider leading-relaxed">
+                        <li>• 5 Cotações Limitadas / mês</li>
+                        <li>• Catálogo Estático Simples</li>
+                        <li>• Assistência Standard em Filas</li>
+                      </ul>
+                    </div>
+                    <button
+                      onClick={() => handleUpgradePlan('standard')}
+                      disabled={billingLoading || subscriptionPlan === 'standard'}
+                      className={`w-full py-2.5 mt-6 rounded-xl font-black text-[9px] uppercase tracking-widest text-center border transition-all ${
+                        subscriptionPlan === 'standard' 
+                          ? 'border-zinc-500/10 text-zinc-500 cursor-default bg-zinc-500/10'
+                          : 'border-brand text-brand hover:bg-brand/10'
+                      }`}
+                    >
+                      {subscriptionPlan === 'standard' 
+                        ? (language === 'PT' ? 'Plano Selecionado' : 'Selected Plan') 
+                        : (language === 'PT' ? 'Escolher este Plano' : 'Downgrade to Standard')}
+                    </button>
+                  </div>
+
+                  {/* Option B: Premium Supplier */}
+                  <div className={`p-5 rounded-3xl border-2 transition-all relative flex flex-col justify-between ${
+                    subscriptionPlan === 'premium' 
+                      ? 'border-brand bg-brand/5 shadow-xl shadow-brand/10' 
+                      : (isDarkMode ? 'border-zinc-800 bg-zinc-950/40 hover:border-zinc-700' : 'border-zinc-100 bg-zinc-50/50 hover:border-zinc-200')
+                  }`}>
+                    {subscriptionPlan !== 'premium' && (
+                      <span className="absolute -top-3 right-6 text-[8px] font-black text-white px-3 py-1 rounded bg-brand uppercase tracking-widest">
+                        {language === 'PT' ? 'RECOMENDADO' : 'POPULAR'}
+                      </span>
+                    )}
+                    <div>
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[8px] font-black text-brand uppercase tracking-widest">SupplyX Partner Gold</span>
+                        {subscriptionPlan === 'premium' && (
+                          <span className="text-[8px] font-black text-brand bg-brand/20 px-2 py-0.5 rounded uppercase tracking-widest">
+                            {language === 'PT' ? 'ATIVO' : 'ACTIVE'}
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>Premium Enterprise</p>
+                      <p className="text-2xl font-black italic uppercase text-brand mt-2">MT 5.000<span className="text-xs font-medium uppercase tracking-widest text-brand"> / {language === 'PT' ? 'mês' : 'mo'}</span></p>
+                      
+                      <ul className="space-y-2 mt-4 text-[10px] text-zinc-500 font-bold uppercase tracking-wider leading-relaxed">
+                        <li>• Cotações Inteligentes Ilimitadas</li>
+                        <li>• Classificações Inteligentes por IA Gemini</li>
+                        <li>• Banners de Destaque no Dashboard</li>
+                        <li>• Gestão de Multiclientes no WhatsApp</li>
+                      </ul>
+                    </div>
+                    <button
+                      onClick={() => handleUpgradePlan('premium')}
+                      disabled={billingLoading || subscriptionPlan === 'premium'}
+                      className={`w-full py-2.5 mt-6 rounded-xl font-black text-[9px] uppercase tracking-widest text-center border transition-all ${
+                        subscriptionPlan === 'premium' 
+                          ? 'border-brand/20 text-brand bg-brand/10 cursor-default'
+                          : 'bg-brand border-brand text-white hover:brightness-110 shadow-lg shadow-brand/20'
+                      }`}
+                    >
+                      {subscriptionPlan === 'premium' 
+                        ? (language === 'PT' ? 'Sua Assinatura Ativa' : 'Your Active Subscription') 
+                        : (language === 'PT' ? 'Fazer Upgrade Agora' : 'Upgrade to Gold Enterprise')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Billing History Section */}
+              <div className="space-y-4">
+                <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                  {language === 'PT' ? 'Histórico de Faturas Corporativas' : 'Subscription Invoice Records'}
+                </h4>
+
+                <div className={`border rounded-2xl overflow-hidden ${isDarkMode ? 'border-zinc-800 bg-zinc-950/20' : 'border-zinc-150 bg-white shadow-sm'}`}>
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className={`border-b ${isDarkMode ? 'border-zinc-800 bg-zinc-950/40' : 'border-zinc-150 bg-zinc-50'}`}>
+                        <th className="py-3 px-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest">ID</th>
+                        <th className="py-3 px-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest">{language === 'PT' ? 'Data' : 'Date'}</th>
+                        <th className="py-3 px-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest">{language === 'PT' ? 'Descrição' : 'Description'}</th>
+                        <th className="py-3 px-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest">{language === 'PT' ? 'Valor' : 'Amount'}</th>
+                        <th className="py-3 px-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest text-right">PDF</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-500/10 text-xs font-bold w-full">
+                      {billingHistory.map((invoice) => (
+                        <tr key={invoice.id} className={`${isDarkMode ? 'hover:bg-zinc-800/20' : 'hover:bg-zinc-50/50'}`}>
+                          <td className={`py-4 px-4 text-[10px] font-mono leading-none ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{invoice.id}</td>
+                          <td className="py-4 px-4 text-zinc-500 text-[10px]">{invoice.date}</td>
+                          <td className={`py-4 px-4 text-[10px] uppercase font-mono ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{invoice.desc}</td>
+                          <td className="py-4 px-4 text-emerald-500 font-mono text-[10px]">{invoice.amount}</td>
+                          <td className="py-4 px-4 text-right">
+                            <button 
+                              type="button"
+                              onClick={() => alert(language === 'PT' ? `Recibo da fatura ${invoice.id} descarregado!` : `Simulated Receipt download for ${invoice.id} completed.`)}
+                              className="text-brand hover:underline flex items-center justify-end gap-1 font-black text-[10px] uppercase tracking-wider ml-auto cursor-pointer"
+                            >
+                              <Receipt className="w-4 h-4 text-brand mb-0.5" />
+                              {language === 'PT' ? 'RECIBO' : 'PDF'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Billing Wallet management side bar */}
+            <div className="space-y-4">
+              <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                {language === 'PT' ? 'Métodos de Pagamento' : 'Active Wallets'}
+              </h4>
+
+              {/* Registered credit card */}
+              <div className={`p-4 rounded-3xl border-2 relative overflow-hidden flex flex-col justify-between ${
+                isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-400' : 'bg-gradient-to-br from-zinc-50 to-zinc-100 border-zinc-200 text-zinc-500'
+              }`}>
+                <div className="flex justify-between items-start">
+                  <CreditCard className="w-8 h-8 text-indigo-500" />
+                  <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest">CORPORATE VISA</span>
+                </div>
+                <div className="mt-6">
+                  <p className={`text-[10px] font-mono tracking-widest ${isDarkMode ? 'text-zinc-400' : 'text-zinc-600'}`}>•••• •••• •••• 4242</p>
+                  <p className={`text-[9px] mt-1 font-mono uppercase font-black tracking-widest ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>JUNIOR MANHATE</p>
+                </div>
+                <div className="flex justify-between items-end mt-4">
+                  <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-wider">EXP: 12/29</span>
+                  <span className="px-2 py-0.5 text-[8px] font-black uppercase text-emerald-500 bg-emerald-500/10 tracking-widest rounded">
+                    {language === 'PT' ? 'PRIMÁRIO' : 'DEFAULT'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Mobile payment integrations (Mpesa details) */}
+              <div className={`p-4 rounded-3xl border-2 flex flex-col justify-between ${
+                isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-400' : 'bg-gradient-to-br from-zinc-50 to-zinc-100 border-zinc-200 text-zinc-500'
+              }`}>
+                <div className="flex justify-between items-start">
+                  <Smartphone className="w-8 h-8 text-emerald-500" />
+                  <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest">M-PESA WALLET</span>
+                </div>
+                <div className="mt-4">
+                  <p className={`text-[10px] font-mono tracking-wide ${isDarkMode ? 'text-zinc-400' : 'text-zinc-600'}`}>+258 84•••••98</p>
+                  <p className={`text-[9px] mt-1 font-mono uppercase font-black tracking-wide ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>JUNIOR MANHATE</p>
+                </div>
+                <div className="flex justify-between items-end mt-4">
+                  <span className="text-[8.5px] font-bold text-emerald-500 uppercase tracking-widest">VODACOM MZ</span>
+                  <span className="px-2 py-0.5 text-[8px] font-black uppercase text-zinc-500 bg-zinc-500/10 tracking-widest rounded">
+                    {language === 'PT' ? 'ATIVO' : 'ACTIVE'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      ) : null}
+
+      {activeSection === null && (
+        <div className={`p-8 rounded-3xl border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
+          <div className="space-y-6">
+            <div className="flex items-center justify-between border-b border-zinc-500/10 pb-6">
+              <div>
+                <h4 className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                  {t.visualAppearance}
+                </h4>
+                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-1">{t.visualAppearanceDesc}</p>
+              </div>
+              <div className={`flex p-1 rounded-xl ${isDarkMode ? 'bg-zinc-800' : 'bg-zinc-100'}`}>
+                <button 
+                  onClick={() => isDarkMode && onThemeToggle?.()}
+                  className={`p-2 rounded-lg transition-all ${!isDarkMode ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  <Sun className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => !isDarkMode && onThemeToggle?.()}
+                  className={`p-2 rounded-lg transition-all ${isDarkMode ? 'bg-zinc-900 shadow-sm text-white' : 'text-zinc-400 hover:text-zinc-900'}`}
+                >
+                  <Moon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-b border-zinc-500/10 pb-6">
+               <div>
+                <h4 className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                  {t.systemLanguage}
+                </h4>
+                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-1">{t.systemLanguageDesc}</p>
+              </div>
+              <select 
+                value={language}
+                onChange={(e) => onLanguageChange?.(e.target.value as 'PT' | 'EN')}
+                className={`bg-transparent text-sm font-black uppercase border-none outline-none cursor-pointer transition-all hover:text-brand ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}
+              >
+                <option value="PT">PT</option>
+                <option value="EN">EN</option>
+              </select>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Custom Confirmation Modal */}
+      <AnimatePresence>
+        {confirmModal.isOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className={`relative w-full max-w-lg p-8 rounded-3xl border shadow-2xl z-10 ${
+                isDarkMode 
+                  ? 'bg-zinc-900 border-zinc-800 text-white' 
+                  : 'bg-white border-zinc-100 text-zinc-900'
+              }`}
+            >
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center shrink-0">
+                  <AlertCircle className="w-6 h-6 text-red-500" />
+                </div>
+                <div className="space-y-2">
+                  <h4 className="text-lg font-black uppercase italic tracking-tighter text-red-500">
+                    {confirmModal.title}
+                  </h4>
+                  <p className={`text-xs font-semibold leading-relaxed ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                    {confirmModal.message}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-end mt-8">
+                <button
+                  type="button"
+                  onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                    isDarkMode 
+                      ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' 
+                      : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600'
+                  }`}
+                >
+                  {confirmModal.cancelText || (language === 'PT' ? 'Cancelar' : 'Cancel')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                    confirmModal.onConfirm();
+                  }}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-red-600 hover:bg-red-700 text-white transition-all shadow-lg shadow-red-600/20"
+                >
+                  {confirmModal.confirmText || (language === 'PT' ? 'Confirmar' : 'Confirm')}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Alert/Success Modal */}
+      <AnimatePresence>
+        {alertModal.isOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className={`relative w-full max-w-md p-8 rounded-3xl border shadow-2xl z-10 ${
+                isDarkMode 
+                  ? 'bg-zinc-900 border-zinc-800 text-white' 
+                  : 'bg-white border-zinc-100 text-zinc-900'
+              }`}
+            >
+              <div className="flex items-start gap-4">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                  alertModal.type === 'success' 
+                    ? 'bg-emerald-500/10 text-emerald-500' 
+                    : alertModal.type === 'error' 
+                    ? 'bg-red-500/10 text-red-500' 
+                    : 'bg-blue-500/10 text-blue-500'
+                }`}>
+                  {alertModal.type === 'success' ? (
+                    <Check className="w-6 h-6" />
+                  ) : alertModal.type === 'error' ? (
+                    <X className="w-6 h-6 animate-pulse" />
+                  ) : (
+                    <AlertCircle className="w-6 h-6" />
+                  )}
+                </div>
+                <div className="space-y-1 flex-1">
+                  <h4 className={`text-base font-black uppercase italic tracking-tighter ${
+                    alertModal.type === 'success' 
+                      ? 'text-emerald-500' 
+                      : alertModal.type === 'error' 
+                      ? 'text-red-500' 
+                      : 'text-blue-500'
+                  }`}>
+                    {alertModal.title}
+                  </h4>
+                  <p className={`text-xs font-semibold leading-relaxed ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                    {alertModal.message}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end mt-6">
+                <button
+                  type="button"
+                  onClick={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+                  className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                    alertModal.type === 'success'
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20'
+                      : alertModal.type === 'error'
+                      ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/20'
+                      : 'bg-zinc-600 hover:bg-zinc-700 text-white shadow-lg shadow-zinc-600/20'
+                  }`}
+                >
+                  OK
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

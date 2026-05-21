@@ -234,7 +234,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
 
     try {
       if (mode === 'register') {
-        const userCredential = await createUserWithEmailAndPassword(auth, formData.email.trim(), formData.password);
+        const userCredential = await createUserWithEmailAndPassword(auth, formData.email.trim().toLowerCase(), formData.password);
         const user = userCredential.user;
 
         await updateProfile(user, { displayName: formData.name });
@@ -251,7 +251,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
           nuit: formData.nuit,
           address: formData.address,
           phone: formData.phone,
-          email: formData.email.trim(),
+          email: formData.email.trim().toLowerCase(),
           type: type,
           sector: formData.sector,
           city: formData.city,
@@ -267,7 +267,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
           nuit: formData.nuit,
           address: formData.address,
           phone: formData.phone || onboardingUser.phoneNumber || '',
-          email: onboardingUser.email || '',
+          email: (onboardingUser.email || '').toLowerCase(),
           type: type,
           sector: formData.sector,
           city: formData.city,
@@ -277,7 +277,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
           mobileWallets: [],
         });
       } else {
-        const userCredential = await signInWithEmailAndPassword(auth, formData.email.trim(), formData.password);
+        const userCredential = await signInWithEmailAndPassword(auth, formData.email.trim().toLowerCase(), formData.password);
         const user = userCredential.user;
 
         if (!user.emailVerified) {

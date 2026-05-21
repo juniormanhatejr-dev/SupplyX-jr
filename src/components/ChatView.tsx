@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Send, 
@@ -71,21 +71,39 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null);
 
+  const [activeUserIds, setActiveUserIds] = useState<string[]>([]);
+  useEffect(() => {
+    const q = query(collection(db, 'users'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setActiveUserIds(snapshot.docs.map(doc => doc.id));
+    }, (err) => {
+      console.error('Error listening to user ids:', err);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const displayedRooms = useMemo(() => {
+    if (activeUserIds.length === 0 && rooms.length > 0) return rooms;
+    return rooms.filter(room => {
+      return room.participants.every(pId => pId === auth.currentUser?.uid || activeUserIds.includes(pId));
+    });
+  }, [rooms, activeUserIds]);
+
   // Automatically select room if initialRecipientId is provided
   useEffect(() => {
-    if (initialRecipientId && rooms.length > 0) {
-      const room = rooms.find(r => r.participants.includes(initialRecipientId));
+    if (initialRecipientId && displayedRooms.length > 0) {
+      const room = displayedRooms.find(r => r.participants.includes(initialRecipientId));
       if (room) {
         setActiveRoom(room);
       }
     }
-  }, [initialRecipientId, rooms]);
+  }, [initialRecipientId, displayedRooms]);
   const [resolvedNames, setResolvedNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (rooms.length === 0) return;
+    if (displayedRooms.length === 0) return;
 
-    rooms.forEach(room => {
+    displayedRooms.forEach(room => {
       room.participants.forEach(uid => {
         if (uid !== auth.currentUser?.uid && !resolvedNames[uid]) {
           // Fetch real name from database users collection
@@ -105,7 +123,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
         }
       });
     });
-  }, [rooms, resolvedNames]);
+  }, [displayedRooms, resolvedNames]);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -152,7 +170,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     if (!auth.currentUser) return;
     
     // Check if room already exists in state
-    const existing = rooms.find(r => r.participants.includes(user.uid));
+    const existing = displayedRooms.find(r => r.participants.includes(user.uid));
     if (existing) {
       setActiveRoom(existing);
       setSearchTerm('');
@@ -456,7 +474,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
         </div>
 
         <div className="flex-1 overflow-y-auto scrollbar-hide py-2">
-          {rooms.length > 0 ? rooms.map((room) => (
+          {displayedRooms.length > 0 ? displayedRooms.map((room) => (
             <button 
               key={room.id}
               onClick={() => setActiveRoom(room)}

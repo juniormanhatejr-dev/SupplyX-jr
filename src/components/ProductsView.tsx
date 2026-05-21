@@ -251,7 +251,47 @@ export default function ProductsView({
   const [activeCategory, setActiveCategory] = useState(initialCategory);
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [rawProducts, setProducts] = useState<Product[]>([]);
+  const [activeSuppliers, setActiveSuppliers] = useState<string[]>([]);
+  const [suppliersLoaded, setSuppliersLoaded] = useState(false);
+  
+  useEffect(() => {
+    const q = query(collection(db, 'users'), where('type', '==', 'supplier'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setActiveSuppliers(snapshot.docs.map(doc => doc.id));
+      setSuppliersLoaded(true);
+    }, (err) => {
+      console.error('Error listening to active suppliers:', err);
+      setSuppliersLoaded(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const products = useMemo(() => {
+    if (!suppliersLoaded) return rawProducts;
+    return rawProducts.filter(item => activeSuppliers.includes(item.supplierId));
+  }, [rawProducts, activeSuppliers, suppliersLoaded]);
+
+  // Auto-clean orphaned products (whose supplier is no longer registered in the users collection)
+  useEffect(() => {
+    if (suppliersLoaded && rawProducts.length > 0 && activeSuppliers.length >= 0) {
+      const currentUid = auth.currentUser?.uid;
+      const orphaned = rawProducts.filter(p => !activeSuppliers.includes(p.supplierId) && p.supplierId !== currentUid);
+      
+      if (orphaned.length > 0) {
+        console.log(`Cleaning up ${orphaned.length} orphaned products...`);
+        orphaned.forEach(async (p) => {
+          try {
+            await deleteDoc(doc(db, 'products', p.id));
+            console.log(`Successfully deleted orphaned product: ${p.id}`);
+          } catch (e) {
+            console.error(`Failed to delete orphaned product ${p.id}:`, e);
+          }
+        });
+      }
+    }
+  }, [suppliersLoaded, rawProducts, activeSuppliers]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);

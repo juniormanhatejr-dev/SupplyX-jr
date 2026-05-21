@@ -87,33 +87,21 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
 
     rooms.forEach(room => {
       room.participants.forEach(uid => {
-        if (uid !== auth.currentUser?.uid) {
-          const storedName = room.participantNames[uid];
-          // Check if name is simple placeholder fallback
-          const isGeneric = !storedName || 
-                            storedName === 'Fornecedor' || 
-                            storedName === 'Supplier' || 
-                            storedName === 'User' || 
-                            storedName === 'Me' || 
-                            storedName === 'Cliente' || 
-                            storedName === 'Buyer';
-          
-          if (isGeneric && !resolvedNames[uid]) {
-            // Fetch real name
-            getDoc(doc(db, 'users', uid)).then(userDoc => {
-              if (userDoc.exists()) {
-                const name = userDoc.data().name;
-                if (name) {
-                  setResolvedNames(prev => ({
-                    ...prev,
-                    [uid]: name
-                  }));
-                }
+        if (uid !== auth.currentUser?.uid && !resolvedNames[uid]) {
+          // Fetch real name from database users collection
+          getDoc(doc(db, 'users', uid)).then(userDoc => {
+            if (userDoc.exists()) {
+              const name = userDoc.data().name;
+              if (name) {
+                setResolvedNames(prev => ({
+                  ...prev,
+                  [uid]: name
+                }));
               }
-            }).catch(err => {
-              console.warn('Error fetching real name in background:', err);
-            });
-          }
+            }
+          }).catch(err => {
+            console.warn('Error fetching real name in background:', err);
+          });
         }
       });
     });

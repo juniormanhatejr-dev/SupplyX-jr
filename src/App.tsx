@@ -38,8 +38,27 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [showQuoteFormDirectly, setShowQuoteFormDirectly] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true); // Default to Dark Mode for premium feel
-  const [language, setLanguage] = useState<'PT' | 'EN'>('PT');
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('supplyx_theme');
+    return saved !== null ? saved === 'dark' : true; // Default to Dark Mode for premium feel
+  });
+  const [language, setLanguage] = useState<'PT' | 'EN'>(() => {
+    const saved = localStorage.getItem('supplyx_language');
+    return (saved === 'PT' || saved === 'EN') ? saved : 'PT';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('supplyx_theme', isDarkMode ? 'dark' : 'light');
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    localStorage.setItem('supplyx_language', language);
+  }, [language]);
   const [selectedCategory, setSelectedCategory] = useState('Tudo');
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -259,6 +278,8 @@ export default function App() {
             setActiveTab(profile?.type === 'supplier' ? 'Seller Central' : 'Dashboard');
           }} 
           onNavigate={handleNavigateWithPayload}
+          onThemeToggle={() => setIsDarkMode(!isDarkMode)}
+          onLanguageChange={setLanguage}
           {...commonProps} 
         />;
       default:

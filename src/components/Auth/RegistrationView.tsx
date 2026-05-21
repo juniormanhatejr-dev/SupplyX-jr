@@ -18,7 +18,9 @@ import {
   Package,
   Globe,
   Loader2,
-  Activity
+  Activity,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { auth, db, signInWithGoogle } from '../../lib/firebase';
 import { 
@@ -801,16 +803,18 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                   )}
 
                   {mode !== 'onboarding' && (
-                    <InputField 
-                      icon={Lock} 
-                      label={t.password} 
-                      placeholder={t.passwordPlaceholder} 
-                      isDarkMode={isDarkMode}
-                      type="password"
-                      badge={mode === 'register' ? t.taxIdBadge : undefined}
-                      value={formData.password}
-                      onChange={(v) => setFormData({...formData, password: v})}
-                    />
+                    <div className="grid grid-cols-1 gap-4">
+                      <InputField 
+                        icon={Lock} 
+                        label={t.password} 
+                        placeholder={t.passwordPlaceholder} 
+                        isDarkMode={isDarkMode}
+                        type="password"
+                        badge={mode === 'register' ? t.taxIdBadge : undefined}
+                        value={formData.password}
+                        onChange={(v) => setFormData({...formData, password: v})}
+                      />
+                    </div>
                   )}
 
                   {(mode === 'register' || mode === 'onboarding') && (
@@ -918,8 +922,12 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
 function InputField({ icon: Icon, label, placeholder, isDarkMode, type = 'text', badge, value, onChange }: { 
   icon: any, label: string, placeholder: string, isDarkMode: boolean, type?: string, badge?: string, value: string, onChange: (v: string) => void
 }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === 'password';
+  const currentType = isPassword ? (showPassword ? 'text' : 'password') : type;
+
   return (
-    <div className="space-y-1.5 flex-1">
+    <div className="space-y-1.5 flex-1 w-full">
       <div className="flex justify-between items-center px-1">
         <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{label}</label>
         {badge && <span className="text-[8px] font-black text-white px-2 py-0.5 rounded-md bg-orange-500 uppercase">{badge}</span>}
@@ -929,12 +937,21 @@ function InputField({ icon: Icon, label, placeholder, isDarkMode, type = 'text',
           <Icon className="w-5 h-5" />
         </div>
         <input 
-          type={type} 
+          type={currentType} 
           placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={`flex-1 bg-transparent border-none outline-none py-4 text-xs font-bold placeholder:text-zinc-500 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`} 
+          className={`flex-1 bg-transparent border-none outline-none py-4 text-xs font-bold placeholder:text-zinc-500 pr-12 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`} 
         />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-4 p-1 text-zinc-500 hover:text-white transition-colors cursor-pointer flex items-center justify-center z-10"
+          >
+            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        )}
       </div>
     </div>
   );

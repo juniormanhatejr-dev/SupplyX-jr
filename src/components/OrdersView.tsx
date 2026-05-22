@@ -630,11 +630,16 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
           if (match) {
             const price = match.price || 0;
-            calculatedTotal += price * parseFloat(row.quantity || '0');
+            const quantity = parseFloat(row.quantity || '0');
+            calculatedTotal += price * quantity;
             itemPrices.push({ material: row.material, price });
             itemsFound++;
           } else {
-            itemPrices.push({ material: row.material, price: 0 });
+            // Default fallback
+            const price = 0;
+            const quantity = parseFloat(row.quantity || '0');
+            calculatedTotal += price * quantity;
+            itemPrices.push({ material: row.material, price });
           }
         });
 
@@ -647,12 +652,24 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             buyerName: profile?.name || 'Cliente SupplyX',
             supplierId: sid,
             supplierName: s?.name || 'Fornecedor',
-            items: rows.map(r => ({
-              material: r.material,
-              quantity: r.quantity,
-              unit: r.unit,
-              requestedDate: r.date
-            })),
+            items: rows.map(r => {
+              const match = allProducts.find(p => 
+                p.supplierId === sid && 
+                (p.name.toLowerCase().includes(r.material.toLowerCase()) || 
+                 r.material.toLowerCase().includes(p.name.toLowerCase()))
+              );
+              const price = match ? (match.price || 0) : 0;
+              const vatRate = match ? (match.vatRate !== undefined ? match.vatRate : 16) : 16;
+              const preTaxPrice = price / (1 + vatRate / 100);
+              return {
+                material: r.material,
+                quantity: parseFloat(r.quantity || '0'),
+                unit: r.unit,
+                unitPrice: preTaxPrice,
+                vatUnitRate: vatRate,
+                requestedDate: r.date
+              };
+            }),
             status: 'pending',
             totalAmount: calculatedTotal,
             confidence: Math.round((itemsFound / rows.length) * 100),
@@ -1176,27 +1193,52 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         supplier: sInfo,
         client: cInfo,
         items: (targetQuote.items || []).map((row: any) => {
-          // If viewing an existing response, use its values. 
-          // If in modal (targetQuote is respondingTo), use modal values.
           const isViewOnly = activePdfQuote && !respondingTo;
+          
           const currentTotal = isViewOnly 
             ? (targetQuote.responseValue || targetQuote.totalAmount || 0) 
             : (parseFloat(responseValue) || targetQuote.totalAmount || 0);
+
           const currentDiscount = isViewOnly 
             ? (targetQuote.discountPercent || 0) 
             : (parseFloat(responseDiscount) || 0);
 
-          const totalItemsPreDiscount = currentTotal || 0;
-          const count = targetQuote.items.length || 1;
-          const estimatedUnitPrice = totalItemsPreDiscount / count;
+          let finalUnitPrice = row.unitPrice || 0;
+          
+          if (!isViewOnly) {
+            // Live-scaling in the modal
+            const originalTotalWithVat = (targetQuote.items || []).reduce((acc: number, it: any) => {
+              const qty = parseFloat(it.quantity || '0') || 0;
+              const unitPriceVal = parseFloat(it.unitPrice || '0') || 0;
+              const vat = it.vatUnitRate !== undefined ? it.vatUnitRate : 16;
+              return acc + (qty * unitPriceVal * (1 + vat / 100));
+            }, 0);
+            
+            if (originalTotalWithVat > 0) {
+              finalUnitPrice = (row.unitPrice || 0) * (currentTotal / originalTotalWithVat);
+            } else {
+              const count = targetQuote.items.length || 1;
+              const vat = row.vatUnitRate !== undefined ? row.vatUnitRate : 16;
+              finalUnitPrice = (currentTotal / (1 + vat / 100)) / count;
+            }
+          } else if (!finalUnitPrice) {
+            // Read-only but no unitPrice saved (older records)
+            const count = targetQuote.items.length || 1;
+            const vat = row.vatUnitRate !== undefined ? row.vatUnitRate : 16;
+            finalUnitPrice = (currentTotal / (1 + vat / 100)) / count;
+          }
+
+          const vatPerItem = row.vatUnitRate !== undefined 
+            ? row.vatUnitRate 
+            : (row.vatRate !== undefined ? row.vatRate : 16);
           
           return {
             description: row.material,
             quantity: parseFloat(row.quantity || '0'),
             unit: row.unit || 'un',
-            unitPrice: estimatedUnitPrice,
+            unitPrice: finalUnitPrice,
             discount: parseFloat(currentDiscount as any) || 0,
-            vatPer: 16
+            vatPer: vatPerItem
           };
         })
       };
@@ -1234,13 +1276,22 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       items: rows.map((row, i) => {
         const itemPrice = currentResponse?.itemPrices.find(ip => ip.material === row.material)?.price || 0;
         
+        // Find matching product from the selected supplier
+        const match = currentResponse ? allProducts.find(p => 
+          p.supplierId === currentResponse.supplierId && 
+          (p.name.toLowerCase().includes(row.material.toLowerCase()) || 
+           row.material.toLowerCase().includes(p.name.toLowerCase()))
+        ) : null;
+        
+        const itemVatRate = match ? (match.vatRate !== undefined ? match.vatRate : 16) : 16;
+        
         return {
           description: row.material,
           quantity: parseFloat(row.quantity || '0'),
           unit: row.unit,
-          unitPrice: itemPrice,
+          unitPrice: itemPrice / (1 + itemVatRate / 100),
           discount: 0,
-          vatPer: 16
+          vatPer: itemVatRate
         };
       })
     };
@@ -2105,14 +2156,43 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                         // Update Firestore document
                         const val = parseFloat(responseValue) || 0;
                         const disc = parseFloat(responseDiscount) || 0;
-                        const finalVal = val * (1 - disc / 100);
+
+                        const items = respondingTo.items || [];
+                        const originalTotalWithVat = items.reduce((acc: number, it: any) => {
+                          const qty = parseFloat(it.quantity || '0') || 0;
+                          const price = parseFloat(it.unitPrice || '0') || 0;
+                          const vat = it.vatUnitRate !== undefined ? it.vatUnitRate : 16;
+                          return acc + (qty * price * (1 + vat / 100));
+                        }, 0);
+
+                        const scaleFactor = originalTotalWithVat > 0 ? (val / originalTotalWithVat) : null;
+                        const count = items.length || 1;
+
+                        let calculatedTotalWithVat = 0;
+                        const updatedItemsList = items.map((it: any) => {
+                          const qty = parseFloat(it.quantity || '0') || 0;
+                          const vatRate = it.vatUnitRate !== undefined ? it.vatUnitRate : 16;
+                          const currentUnitPrice = scaleFactor !== null 
+                            ? (parseFloat(it.unitPrice || '0') * scaleFactor)
+                            : (val / (1 + vatRate / 100)) / count;
+                          
+                          const itemDiscounted = currentUnitPrice * (1 - disc / 100);
+                          calculatedTotalWithVat += qty * itemDiscounted * (1 + vatRate / 100);
+
+                          return {
+                            ...it,
+                            unitPrice: currentUnitPrice,
+                            vatUnitRate: vatRate
+                          };
+                        });
 
                         await updateDoc(doc(db, 'quotations', respondingTo.id), {
                           status: 'responded',
                           responseValue: val,
                           discountPercent: disc,
                           respondedAt: serverTimestamp(),
-                          totalAmount: finalVal
+                          totalAmount: calculatedTotalWithVat,
+                          items: updatedItemsList
                         });
 
                         // Notify buyer

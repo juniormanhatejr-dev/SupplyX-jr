@@ -19,6 +19,7 @@ import CartModal from './components/CartModal';
 import ProfileModal from './components/ProfileModal';
 import SupplyXLogo from './components/SupplyXLogo';
 import DiagnosticOverlay from './components/DiagnosticOverlay';
+import AboutView from './components/AboutView';
 import { OptimizedImage } from './components/ui/OptimizedImage';
 import { useAuth } from './contexts/AuthContext';
 import { useCart } from './contexts/CartContext';
@@ -138,7 +139,8 @@ export default function App() {
         'Notificações': 'Notificações',
         'Relatórios': 'Relatórios',
         'Mensagens': 'Mensagens',
-        'Ajustes': 'Ajustes'
+        'Ajustes': 'Ajustes',
+        'About': 'Sobre o SupplyX'
       }
     },
     EN: {
@@ -156,7 +158,8 @@ export default function App() {
         'Notificações': 'Notifications',
         'Relatórios': 'Reports',
         'Mensagens': 'Messages',
-        'Ajustes': 'Settings'
+        'Ajustes': 'Settings',
+        'About': 'About SupplyX'
       }
     }
   };
@@ -282,6 +285,8 @@ export default function App() {
           onLanguageChange={setLanguage}
           {...commonProps} 
         />;
+      case 'About':
+        return <AboutView onNavigate={handleNavigateWithPayload} {...commonProps} />;
       default:
         return <DashboardView onActivateIA={handleNewRequest} {...commonProps} />;
     }

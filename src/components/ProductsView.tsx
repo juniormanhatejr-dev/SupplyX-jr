@@ -48,6 +48,7 @@ interface Product {
   category: string;
   subcategory?: string;
   price: number;
+  vatRate?: number;
   onSale: boolean;
   salePrice: number;
   stock: number;
@@ -479,6 +480,7 @@ export default function ProductsView({
       category: 'Categoria',
       stock: 'Stock Disponível',
       price: 'Preço Normal (MT)',
+      vatRateLabel: 'Isenção de IVA',
       imageUrl: 'Imagem do Produto',
       imagePreview: 'Preview da Imagem',
       putOnSale: 'Colocar em Promoção',
@@ -546,6 +548,7 @@ export default function ProductsView({
       category: 'Category',
       stock: 'Stock Available',
       price: 'Normal Price (MT)',
+      vatRateLabel: 'VAT Exemption',
       imageUrl: 'Product Image',
       imagePreview: 'Image Preview',
       putOnSale: 'Put on Sale',
@@ -1075,7 +1078,7 @@ export default function ProductsView({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.stock}</label>
                     <input 
@@ -1099,6 +1102,39 @@ export default function ProductsView({
                       }}
                       className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
                     />
+                  </div>
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.vatRateLabel}</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const isCurrentlyExempt = (editingProduct?.vatRate === 0);
+                        setEditingProduct({ 
+                          ...editingProduct, 
+                          vatRate: isCurrentlyExempt ? 16 : 0 
+                        });
+                      }}
+                      className={`w-full p-4 h-[52px] rounded-2xl text-xs font-bold outline-none border-2 transition-all flex items-center justify-between ${
+                        (editingProduct?.vatRate === 0)
+                          ? 'border-brand bg-brand/5 text-brand' 
+                          : isDarkMode 
+                            ? 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700' 
+                            : 'bg-zinc-50 border-zinc-100 text-zinc-600 hover:border-zinc-200'
+                      }`}
+                    >
+                      <span className="truncate">
+                        {(editingProduct?.vatRate === 0) 
+                          ? (language === 'PT' ? 'Isento (0% IVA)' : 'Exempt (0% VAT)') 
+                          : (language === 'PT' ? 'Sujeito a IVA (16% Incluso)' : 'Subject to VAT (16% Incl.)')}
+                      </span>
+                      <div className={`w-8 h-4 rounded-full p-0.5 transition-colors duration-200 shrink-0 ${
+                        (editingProduct?.vatRate === 0) ? 'bg-brand' : 'bg-zinc-400'
+                      }`}>
+                        <div className={`w-3 h-3 rounded-full bg-white transition-transform duration-200 ${
+                          (editingProduct?.vatRate === 0) ? 'translate-x-4' : 'translate-x-0'
+                        }`} />
+                      </div>
+                    </button>
                   </div>
                 </div>
                   <div className="space-y-1.5">
@@ -1262,6 +1298,7 @@ export default function ProductsView({
                           normalizedName,
                           searchIndex,
                           supplierId: auth.currentUser.uid,
+                          vatRate: editingProduct.vatRate !== undefined ? editingProduct.vatRate : 16,
                           updatedAt: now
                         });
                       } else {
@@ -1274,6 +1311,7 @@ export default function ProductsView({
                           normalizedName,
                           searchIndex,
                           supplierId: auth.currentUser.uid,
+                          vatRate: editingProduct.vatRate !== undefined ? editingProduct.vatRate : 16,
                           createdAt: now,
                           updatedAt: now
                         };

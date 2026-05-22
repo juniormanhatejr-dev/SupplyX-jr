@@ -10,7 +10,8 @@ import {
   Bell,
   Truck,
   MessageSquare,
-  User
+  User,
+  Info
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -54,7 +55,8 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
       notifications: 'Notificações',
       settings: 'Ajustes',
       profile: 'Meu Perfil',
-      logout: 'Sair da conta'
+      logout: 'Sair da conta',
+      about: 'Sobre o SupplyX'
     },
     EN: {
       dashboard: 'Dashboard',
@@ -68,7 +70,8 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
       notifications: 'Notifications',
       settings: 'Settings',
       profile: 'My Profile',
-      logout: 'Logout'
+      logout: 'Logout',
+      about: 'About SupplyX'
     }
   };
 
@@ -86,6 +89,7 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
     { icon: Truck, label: nav.logistics, originalLabel: 'Logística' },
     { icon: Bell, label: nav.notifications, originalLabel: 'Notificações' },
     { icon: Settings, label: nav.settings, originalLabel: 'Ajustes' },
+    { icon: Info, label: nav.about, originalLabel: 'About' },
   ];
 
   const filteredItems = allItems.filter(item => {

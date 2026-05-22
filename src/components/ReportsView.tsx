@@ -89,14 +89,6 @@ export default function ReportsView({ isDarkMode, language }: ReportsViewProps) 
           <button className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400' : 'bg-white border-zinc-200 text-zinc-600'}`}>
             <Filter className="w-5 h-5" />
           </button>
-          <button 
-            onClick={downloadPDF}
-            disabled={isExporting}
-            className="bg-brand text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-brand/20 disabled:opacity-50 active:scale-95 transition-all"
-          >
-            {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            {t.export}
-          </button>
         </div>
       </div>
 

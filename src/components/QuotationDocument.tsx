@@ -73,6 +73,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
   const totalDiscount = calculateTotalDiscount();
   const totalVAT = calculateTotalVAT();
   const grandTotal = subtotal - totalDiscount + totalVAT;
+  const discountPercent = data.items[0]?.discount || 0;
 
   const formatCurrency = (value: number) => {
     if (value === 0) return 'Sob Consulta';
@@ -385,7 +386,6 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
               <th style={{ padding: '12px 10px', textAlign: 'center', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }}>Quant.</th>
               <th style={{ padding: '12px 10px', textAlign: 'center', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }}>Un.</th>
               <th style={{ padding: '12px 10px', textAlign: 'right', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }}>P. Unitário</th>
-              <th style={{ padding: '12px 10px', textAlign: 'center', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }}>Desc (%)</th>
               <th style={{ padding: '12px 10px', textAlign: 'center', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }}>IVA (%)</th>
               <th style={{ padding: '12px 10px', textAlign: 'right', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', backgroundColor: COLORS.teal }}>Total</th>
             </tr>
@@ -400,9 +400,8 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                 <td style={{ padding: '10px', textAlign: 'center', fontWeight: 700 }}>{item.quantity.toFixed(2)}</td>
                 <td style={{ padding: '10px', textAlign: 'center', fontWeight: 700, textTransform: 'uppercase', fontSize: '9px' }}>{item.unit}</td>
                 <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700 }}>{formatCurrency(item.unitPrice)}</td>
-                <td style={{ padding: '10px', textAlign: 'center', fontWeight: 600 }}>{item.discount.toFixed(2)}</td>
                 <td style={{ padding: '10px', textAlign: 'center', fontWeight: 600 }}>{item.vatPer.toFixed(2)}</td>
-                <td style={{ padding: '10px', textAlign: 'right', fontWeight: 900, color: COLORS.darkBlue }}>{formatCurrency(item.quantity * item.unitPrice * (1 - item.discount / 100) * (1 + item.vatPer / 100))}</td>
+                <td style={{ padding: '10px', textAlign: 'right', fontWeight: 900, color: COLORS.darkBlue }}>{formatCurrency(item.quantity * item.unitPrice * (1 + item.vatPer / 100))}</td>
               </tr>
             ))}
           </tbody>
@@ -501,7 +500,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                 <span>{formatCurrency(subtotal)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700, color: '#e53e3e', margin: '8px 0' }}>
-                <span>Desconto Total:</span>
+                <span>Desconto Total {discountPercent > 0 ? `(${discountPercent}%)` : ''}:</span>
                 <span>-{formatCurrency(totalDiscount)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700, color: COLORS.textDark }}>

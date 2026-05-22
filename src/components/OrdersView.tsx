@@ -1876,7 +1876,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                       'bg-indigo-500/10 text-indigo-500 border-indigo-500/10'}`}>
                     {order.status === 'pending' ? t.status.quote : (order.status === 'responded' ? t.status.waiting : order.status)}
                   </div>
-                  
                   <div className="flex items-center gap-1.5 sm:gap-2">
                     <button 
                       onClick={async (e) => {
@@ -1926,6 +1925,25 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                       className={`p-2 sm:p-2.5 rounded-xl transition-all active:scale-95 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-supplyx-blue' : 'bg-zinc-50 text-zinc-500 hover:text-supplyx-blue'}`}
                     >
                       <MessageSquare className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onNavigate) {
+                          onNavigate('Logística', {
+                            tipoCarga: order.materials?.map((m: any) => m.name || m).join(', ') || 'Cimento CP-IV',
+                            quantidade: `${order.materials?.length || 1} Lote`,
+                            peso: '18 Toneladas',
+                            volume: '30 m³',
+                            origem: order.supplierName || 'Porto de Maputo, Moçambique',
+                            destino: order.buyerName || 'Nampula, Moçambique',
+                            observacoes: 'Gerado a partir da Cotação ' + (order.id || '')
+                          });
+                        }
+                      }}
+                      className="px-4 py-2.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      {language === 'PT' ? 'Solicitar Logística' : 'Request Logistics'}
                     </button>
                   </div>
                 </div>

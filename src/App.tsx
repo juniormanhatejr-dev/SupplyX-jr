@@ -73,6 +73,7 @@ export default function App() {
   const [initialChatId, setInitialChatId] = useState<string | null>(null);
   const [prevTab, setPrevTab] = useState<string | null>(null);
   const [persistentSearchQuery, setPersistentSearchQuery] = useState('');
+  const [logisticsPayload, setLogisticsPayload] = useState<any>(null);
 
   useEffect(() => {
     const handleNavigate = (e: any) => {
@@ -209,6 +210,9 @@ export default function App() {
     if (tab === 'Produtos / Materiais' && payload?.searchQuery) {
       setPersistentSearchQuery(payload.searchQuery);
     }
+    if (tab === 'Logística') {
+      setLogisticsPayload(payload);
+    }
     
     if (tab !== activeTab) {
       setPrevTab(activeTab);
@@ -255,7 +259,7 @@ export default function App() {
           {...commonProps} 
         />;
       case 'Logística':
-        return <LogisticsView {...commonProps} />;
+        return <LogisticsView initialPayload={logisticsPayload} onNavigate={handleNavigateWithPayload} {...commonProps} />;
       case 'Seller Central':
         return <SupplierDashboard onNavigate={handleNavigateWithPayload} {...commonProps} />;
       case 'Notificações':

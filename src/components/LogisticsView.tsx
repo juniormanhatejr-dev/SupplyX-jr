@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { motion } from 'motion/react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Truck, 
   MapPin, 
@@ -20,23 +20,28 @@ import {
   Building2,
   Loader2,
   CheckCircle,
-  CreditCard,
   Download,
   X,
   PlusCircle,
   Map as MapIcon,
   TrendingUp,
-  MoreVertical
+  MoreVertical,
+  Paperclip,
+  Send,
+  FileText,
+  User,
+  ChevronRight,
+  Upload,
+  ArrowLeft,
+  ChevronDown
 } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { 
   collection, 
   addDoc, 
   query, 
-  where, 
   onSnapshot, 
   serverTimestamp, 
-  deleteDoc, 
   doc, 
   updateDoc 
 } from 'firebase/firestore';
@@ -45,1273 +50,1526 @@ interface LogisticsViewProps {
   isDarkMode: boolean;
   language: 'PT' | 'EN';
   userType?: string;
+  onNavigate?: (tab: string, payload?: any) => void;
+  initialPayload?: any;
 }
 
-export default function LogisticsView({ isDarkMode, language, userType }: LogisticsViewProps) {
-  if (userType === 'logistics') {
-    return <LogisticsPartnerDashboard isDarkMode={isDarkMode} language={language} />;
-  }
-  return <LogisticsTrackingView isDarkMode={isDarkMode} language={language} userType={userType} />;
-}
+export default function LogisticsView({ isDarkMode, language, userType, onNavigate, initialPayload }: LogisticsViewProps) {
+  // Navigation inside the logistics module: 'detailed_request' | 'create_request' | 'requests_list' | 'available_loads'
+  const [activeSubTab, setActiveSubTab] = useState<'detailed_request' | 'create_request' | 'requests_list' | 'available_loads'>('detailed_request');
+  const [selectedRequestId, setSelectedRequestId] = useState<string>('TR-2025-0001');
 
-function LogisticsTrackingView({ isDarkMode, language, userType }: LogisticsViewProps) {
-  const translations = useMemo(() => ({
-    PT: {
-      title: userType === 'logistics' ? 'Painel da Transportadora' : 'Controle Logístico',
-      subtitle: userType === 'logistics' ? 'Gestão operacional de frotas' : 'Gestão de frotas e suprimentos',
-      btnHire: userType === 'logistics' ? 'Nova Carga' : 'Contratar Transporte',
-      activeVehicles: 'Veículos em Rota',
-      completedDeliveries: 'Entregas Concluídas',
-      pendingCritical: 'Incidentes Críticos',
-      liveTracking: 'Rastreamento Live',
-      shipmentStatus: 'Status de Envios',
-      bookingTitle: 'Solicitar Cotação Inteligente',
-      bookingSubtitle: 'Preencha os dados para receber propostas de transportadoras verificadas.',
-      carriersTitle: 'Frotas Disponíveis',
-      searchPlaceholder: 'Pesquisar transportadora...',
-      step1: 'Tipo de Veículo',
-      step2: 'Rotas e Carga',
-      origin: 'Origem (Coleta)',
-      destination: 'Destino (Entrega)',
-      weight: 'Peso (Ton)',
-      date: 'Data Preferencial',
-      btnSubmit: 'Solicitar Orçamentos',
-      hiring: 'Contratando...',
-      hireNow: 'Contratar agora',
-      checkoutTitle: 'Check-out Seguro',
-      paymentMethod: 'Meio de Pagamento',
-      summary: 'Resumo da Reserva',
-      confirmPayment: 'Confirmar Pagamento',
-      success: 'Reserva Confirmada!',
-      transaction: 'Transação',
-      backToLogistics: 'Voltar para Logística',
-      searching: 'Pesquisando...',
-      transactionId: 'ID Transação',
-      requestQuotes: 'Solicitar Orçamentos',
-      notesPlaceholder: 'Observações adicionais...',
-      disclaimer: 'As transportadoras listadas são verificadas pela SupplyX Intelligence para garantir segurança e prazo.',
-      verified: 'VERIFICADO',
-      capacity: 'Capacidade',
-      requestByCategory: 'Solicitar por Categoria',
-      archived: 'Envios arquivados!',
-      archiveAction: '+ Arquivar envios finalizados',
-      statuses: {
-        transit: 'Em Trânsito',
-        loading: 'Carregando',
-        finished: 'Finalizado'
-      }
-    },
-    EN: {
-      title: userType === 'logistics' ? 'Carrier Dashboard' : 'Logistics Control',
-      subtitle: userType === 'logistics' ? 'Operational fleet management' : 'Fleet & supply management',
-      btnHire: userType === 'logistics' ? 'New Cargo' : 'Hire Transport',
-      activeVehicles: 'Vehicles in Route',
-      completedDeliveries: 'Completed Deliveries',
-      pendingCritical: 'Critical Incidents',
-      liveTracking: 'Live Tracking',
-      shipmentStatus: 'Shipment Status',
-      bookingTitle: 'Request Smart Quote',
-      bookingSubtitle: 'Fill in details to receive proposals from verified carriers.',
-      carriersTitle: 'Available Fleets',
-      searchPlaceholder: 'Search carriers...',
-      step1: 'Vehicle Type',
-      step2: 'Routes & Cargo',
-      origin: 'Pick-up Location',
-      destination: 'Drop-off Location',
-      weight: 'Weight (Ton)',
-      date: 'Preferred Date',
-      btnSubmit: 'Request Quotes',
-      hiring: 'Hiring...',
-      hireNow: 'Hire now',
-      checkoutTitle: 'Secure Checkout',
-      paymentMethod: 'Payment Method',
-      summary: 'Booking Summary',
-      confirmPayment: 'Confirm Payment',
-      success: 'Booking Confirmed!',
-      transaction: 'Transaction',
-      backToLogistics: 'Back to Logistics',
-      searching: 'Searching...',
-      transactionId: 'Transaction ID',
-      requestQuotes: 'Request Quotes',
-      notesPlaceholder: 'Additional notes...',
-      disclaimer: 'Carriers listed are verified by SupplyX Intelligence to ensure safety and lead time.',
-      verified: 'VERIFIED',
-      capacity: 'Capacity',
-      requestByCategory: 'Request by Category',
-      archived: 'Shipments archived!',
-      archiveAction: '+ Archive completed shipments',
-      statuses: {
-        transit: 'In Transit',
-        loading: 'Loading',
-        finished: 'Finished'
-      }
+  // Load state and custom created requests list (stored locally & firestore)
+  const [customRequests, setCustomRequests] = useState<any[]>(() => {
+    const saved = localStorage.getItem('supplyx_freight_requests');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // B2B Communication messages dictionary per request
+  const [chatMessages, setChatMessages] = useState<Record<string, Record<string, any[]>>>(() => {
+    const saved = localStorage.getItem('supplyx_freight_chats');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  // Store active chat partner per request (defaulting to Moz Logistics)
+  const [activeChatRoom, setActiveChatRoom] = useState<string>('Moz Logistics, Lda');
+
+  // active proposals state per request
+  const [selectedProposalIndex, setSelectedProposalIndex] = useState<number>(0);
+
+  // Map settings
+  const [mapZoom, setMapZoom] = useState<number>(1);
+  const [mapPosition, setMapPosition] = useState({ x: 0, y: 0 });
+
+  // Handle incoming payloads from elsewhere (like quotation details page 'Request Logistics' click)
+  useEffect(() => {
+    if (initialPayload?.tipoCarga) {
+      setActiveSubTab('create_request');
     }
-  }), []);
+  }, [initialPayload]);
 
-  const t = translations[language || 'PT'];
-
-  const initialShipments = useMemo(() => [
-    { id: 'LOG-001', material: language === 'PT' ? '200 Sacas de Cimento' : '200 Bags of Cement', status: t.statuses.transit, ETA: '14:30', origin: 'Porto de Maputo', destination: 'Obra Alvorada', progress: 65, carrier: 'Transportes Lalgy' },
-    { id: 'LOG-002', material: language === 'PT' ? 'Vergalhão CA-50' : 'CA-50 Rebar', status: t.statuses.loading, ETA: language === 'PT' ? 'Amanhã' : 'Tomorrow', origin: 'Matola Logística', destination: 'Obra Central', progress: 15, carrier: 'Entreposto Moz' },
-    { id: 'LOG-003', material: language === 'PT' ? 'Areia e Brita' : 'Sand and Gravel', status: t.statuses.finished, ETA: language === 'PT' ? 'Entregue' : 'Delivered', origin: 'Pedreira de Boane', destination: 'Moamba Park', progress: 100, carrier: 'J&J Transport' },
-  ], [language, t]);
-
-  const carriers = useMemo(() => [
-    { id: '1', name: 'Transportes Lalgy', type: language === 'PT' ? 'Pesado' : 'Heavy', rating: 4.8, fleetSize: 1500, coverage: language === 'PT' ? 'Nacional' : 'National', pricePerKm: 'MT 45,00', verified: true, basePrice: 12500 },
-    { id: '2', name: 'Entreposto Moz', type: language === 'PT' ? 'Logística' : 'Logistics', rating: 4.9, fleetSize: 120, coverage: language === 'PT' ? 'Sul/Centro' : 'South/Central', pricePerKm: 'MT 55,00', verified: true, basePrice: 8900 },
-    { id: '3', name: 'J&J Transport', type: language === 'PT' ? 'Portuário' : 'Port', rating: 4.5, fleetSize: 500, coverage: language === 'PT' ? 'Beira/Tete' : 'Beira/Tete', pricePerKm: 'MT 42,00', verified: true, basePrice: 15750 },
-    { id: '4', name: 'Zitamar Logística', type: language === 'PT' ? 'Urbano' : 'Urban', rating: 4.6, fleetSize: 45, coverage: language === 'PT' ? 'Maputo/Matola' : 'Maputo/Matola', pricePerKm: 'MT 60,00', verified: true, basePrice: 5500 },
-  ], [language]);
-
-  const truckTypes = useMemo(() => [
-    { id: 'vuc', name: 'VUC', capacity: '3t', icon: Truck, description: language === 'PT' ? 'Ideal para Matola e Maputo' : 'Ideal for Matola and Maputo' },
-    { id: 'toco', name: 'Toco', capacity: '6t', icon: Truck, description: language === 'PT' ? 'Cargas médias inter-provinciais' : 'Medium inter-provincial loads' },
-    { id: 'truck', name: 'Truck', capacity: '12-14t', icon: Truck, description: language === 'PT' ? 'Cargas pesadas nacionais' : 'National heavy loads' },
-    { id: 'carreta', name: 'Carreta', capacity: '25-30t', icon: Truck, description: language === 'PT' ? 'Corredor da Beira / Nacala' : 'Beira / Nacala Corridor' },
-  ], [language]);
-
-  const [allShipments, setAllShipments] = useState(initialShipments);
-  const [showBooking, setShowBooking] = useState(false);
-  const [showArchiveSuccess, setShowArchiveSuccess] = useState(false);
-  const [selectedShipment, setSelectedShipment] = useState<any>(initialShipments[0]);
-
-  const timelineSteps = [
-    { label: language === 'PT' ? 'Saída do Depósito' : 'Warehouse Exit', status: 'completed', time: '08:00', location: 'Porto de Maputo' },
-    { label: language === 'PT' ? 'Posto de Controle A1' : 'Checkpoint A1', status: 'completed', time: '10:30', location: 'Estrada Circular' },
-    { label: language === 'PT' ? 'Em Trânsito' : 'In Transit', status: 'current', time: '12:45', location: 'Cruzando Boane' },
-    { label: language === 'PT' ? 'Entrega Estimada' : 'Estimated Delivery', status: 'pending', time: '14:30', location: 'Matola Hub' },
-  ];
-
-  const archiveCompleted = () => {
-    const finishedStatus = t.statuses.finished;
-    const completedCount = allShipments.filter(s => s.status === finishedStatus).length;
-    if (completedCount === 0) return;
-    
-    setAllShipments(prev => prev.filter(s => s.status !== finishedStatus));
-    setShowArchiveSuccess(true);
-    setTimeout(() => setShowArchiveSuccess(false), 3000);
-  };
-
-  const [selectedTruck, setSelectedTruck] = useState('');
-  const [bookingStep, setBookingStep] = useState(1); // 1: Form, 2: Payment, 3: Success
-  const [selectedCarrier, setSelectedCarrier] = useState<any | null>(null);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
-  const [isPaying, setIsPaying] = useState(false);
-
-  const paymentMethods = [
-    { id: 'bim', name: 'Millennium BIM', type: 'Bank', color: 'bg-[#002d72]' },
-    { id: 'bci', name: 'BCI', type: 'Bank', color: 'bg-[#e30613]' },
-    { id: 'standard', name: 'Standard Bank', type: 'Bank', color: 'bg-[#0033a1]' },
-    { id: 'mpesa', name: 'M-Pesa', type: 'Mobile', color: 'bg-[#e60000]' },
-    { id: 'emola', name: 'e-Mola', type: 'Mobile', color: 'bg-[#ffca05]' },
-  ];
-
-  const handleBookingSubmit = () => {
-    // In a real app we would search, here we just show the carriers
-    // This is already handled by showBooking state toggle
-  };
-
-  const handleConfirmCarrier = (carrier: any) => {
-    setSelectedCarrier(carrier);
-    setBookingStep(2);
-  };
-
-  const exportBookingToExcel = () => {
-    if (!selectedCarrier) return;
-    const data = [
-      [t.origin, t.origin], // Simplified for example
-      [t.destination, t.destination],
-      [t.weight, '10t'],
-      [t.status, t.statuses.finished],
-      [t.date, new Date().toLocaleDateString()],
-      [t.transactionId, `#LX-${Math.random().toString(36).substring(7).toUpperCase()}`]
-    ];
-    const csvContent = "data:text/csv;charset=utf-8," + data.map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `reserva_logistica_${selectedCarrier.name.replace(/\s/g, '_')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handlePayment = () => {
-    if (!selectedPaymentMethod) return;
-    setIsPaying(true);
-    setTimeout(() => {
-      setIsPaying(false);
-      setBookingStep(3);
-    }, 2000);
-  };
-
-  if (showBooking) {
-    return (
-      <motion.div 
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="space-y-8"
-      >
-        <div className="flex items-center justify-between">
-          <button 
-            onClick={() => {
-              if (bookingStep > 1) {
-                setBookingStep(bookingStep - 1);
-              } else {
-                setShowBooking(false);
-              }
-            }}
-            className={`flex items-center gap-2 text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-zinc-500 hover:text-white' : 'text-zinc-400 hover:text-zinc-900'}`}
+  return (
+    <div className={`w-full max-w-[1440px] mx-auto min-h-screen pb-16 ${isDarkMode ? 'text-zinc-100' : 'text-zinc-800'}`}>
+      
+      {/* Dynamic Sub-header Navigation aligned directly with the visual constraints */}
+      <div className={`mb-8 p-4 rounded-3xl border flex flex-col md:flex-row items-center justify-between gap-4 ${
+        isDarkMode ? 'bg-zinc-900/40 border-white/5 backdrop-blur-md' : 'bg-white border-zinc-100 shadow-sm'
+      }`}>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setActiveSubTab('detailed_request')}
+            className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              activeSubTab === 'detailed_request'
+                ? 'bg-supplyx-blue text-white shadow-lg shadow-supplyx-blue/20'
+                : isDarkMode ? 'text-zinc-400 hover:bg-white/5' : 'text-zinc-600 hover:bg-zinc-50'
+            }`}
           >
-            ← {language === 'PT' ? 'Voltar' : 'Back'}
+            📋 {language === 'PT' ? 'Detalhes do Frete' : 'Freight Details'}
+          </button>
+          <button
+            onClick={() => setActiveSubTab('create_request')}
+            className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              activeSubTab === 'create_request'
+                ? 'bg-supplyx-blue text-white shadow-lg shadow-supplyx-blue/20'
+                : isDarkMode ? 'text-zinc-400 hover:bg-white/5' : 'text-zinc-600 hover:bg-zinc-50'
+            }`}
+          >
+            🚚 {language === 'PT' ? 'Solicitar Transporte' : 'Request Logistics'}
+          </button>
+          <button
+            onClick={() => setActiveSubTab('requests_list')}
+            className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              activeSubTab === 'requests_list'
+                ? 'bg-supplyx-blue text-white shadow-lg shadow-supplyx-blue/20'
+                : isDarkMode ? 'text-zinc-400 hover:bg-white/5' : 'text-zinc-600 hover:bg-zinc-50'
+            }`}
+          >
+            📦 {language === 'PT' ? 'Minhas Solicitações' : 'My Requests'}
+          </button>
+          <button
+            onClick={() => setActiveSubTab('available_loads')}
+            className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              activeSubTab === 'available_loads'
+                ? 'bg-supplyx-blue text-white shadow-lg shadow-supplyx-blue/20'
+                : isDarkMode ? 'text-zinc-400 hover:bg-white/5' : 'text-zinc-600 hover:bg-zinc-50'
+            }`}
+          >
+            🛣️ {language === 'PT' ? 'Quadro de Cargas Libres' : 'Available Loads'}
           </button>
         </div>
 
-        {bookingStep === 1 && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className={`lg:col-span-2 p-8 rounded-3xl border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
-              <div className="mb-8">
-                <h2 className={`text-2xl font-black italic tracking-tighter uppercase mb-2 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.bookingTitle}</h2>
-                <p className="text-zinc-500 text-sm font-bold">{t.bookingSubtitle}</p>
-              </div>
+        {/* Info panel / Mode selection simulation to test customer, supplier, carriers views */}
+        <div className="flex items-center gap-3">
+          <span className="text-[9px] font-black text-zinc-500 uppercase tracking-wider">
+            {language === 'PT' ? 'Mapeamento Geral' : 'Logistics Role'}:
+          </span>
+          <span className="px-3.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 text-[9px] font-black uppercase tracking-[0.1em]">
+            {userType === 'logistics' ? (language === 'PT' ? 'Transportadora' : 'Carrier') : 
+             userType === 'supplier' ? (language === 'PT' ? 'Fornecedor' : 'Supplier') : (language === 'PT' ? 'Cliente' : 'Client')}
+          </span>
+        </div>
+      </div>
 
-              <div className="space-y-8">
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black text-brand uppercase tracking-widest">{t.step1}</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {truckTypes.map((type) => (
-                      <button 
-                        key={type.id}
-                        onClick={() => setSelectedTruck(type.id)}
-                        className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${
-                          selectedTruck === type.id 
-                            ? 'border-brand bg-brand/5 shadow-lg shadow-brand/10' 
-                            : isDarkMode ? 'border-zinc-800 hover:border-zinc-700' : 'border-zinc-50 hover:border-zinc-200'
-                        }`}
-                      >
-                        <type.icon className={`w-6 h-6 ${selectedTruck === type.id ? 'text-brand' : 'text-zinc-500'}`} />
-                        <span className={`text-[10px] font-black uppercase text-center ${selectedTruck === type.id ? 'text-zinc-900 dark:text-white' : 'text-zinc-500'}`}>{type.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-black text-brand uppercase tracking-widest">{t.step2}</label>
-                    <div className="space-y-3">
-                      <div className="relative">
-                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                        <input 
-                          type="text" 
-                          placeholder={t.origin}
-                          className={`w-full pl-10 pr-4 py-3 border rounded-xl text-xs font-bold outline-none transition-all ${
-                            isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white placeholder-zinc-500' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
-                          }`}
-                        />
-                      </div>
-                      <div className="relative">
-                        <Navigation2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand" />
-                        <input 
-                          type="text" 
-                          placeholder={t.destination}
-                          className={`w-full pl-10 pr-4 py-3 border rounded-xl text-xs font-bold outline-none transition-all ${
-                            isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white placeholder-zinc-500' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
-                          }`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest opacity-0 invisible">Details</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="relative">
-                        <Weight className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                        <input 
-                          type="number" 
-                          placeholder={t.weight}
-                          className={`w-full pl-10 pr-4 py-3 border rounded-xl text-xs font-bold outline-none transition-all ${
-                            isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white placeholder-zinc-500' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
-                          }`}
-                        />
-                      </div>
-                      <div className="relative">
-                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                        <input 
-                          type="text" 
-                          placeholder={t.date}
-                          className={`w-full pl-10 pr-4 py-3 border rounded-xl text-xs font-bold outline-none transition-all ${
-                            isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white placeholder-zinc-500' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
-                          }`}
-                        />
-                      </div>
-                    </div>
-                    <textarea 
-                      placeholder={language === 'PT' ? 'Observações adicionais...' : 'Additional notes...'}
-                      className={`w-full p-4 border rounded-xl text-xs font-bold outline-none transition-all h-20 resize-none ${
-                        isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white placeholder-zinc-500' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
-                      }`}
-                    />
-                  </div>
-                </div>
-
-                <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-brand/5 border-brand/20' : 'bg-brand/5 border-zinc-100'}`}>
-                  <p className="text-[10px] font-bold text-zinc-500 leading-relaxed">
-                    * {language === 'PT' ? 'As transportadoras listadas são verificadas pela SupplyX Intelligence para garantir segurança e prazo.' : 'Carriers listed are verified by SupplyX Intelligence to ensure safety and lead time.'}
-                  </p>
-                </div>
-
-                <button 
-                  onClick={() => {
-                    const btn = document.getElementById('searching-feedback');
-                    if (btn) btn.innerHTML = language === 'PT' ? 'PESQUISANDO...' : 'SEARCHING...';
-                    setTimeout(() => {
-                      if (btn) btn.innerHTML = language === 'PT' ? 'SOLICITAR ORÇAMENTOS' : 'REQUEST QUOTES';
-                    }, 1500);
-                  }}
-                  id="searching-feedback"
-                  className="w-full py-5 bg-brand text-white rounded-2xl font-black text-lg italic uppercase tracking-tighter shadow-xl shadow-brand/20 hover:bg-brand-hover transition-all active:scale-95"
-                >
-                  {t.btnSubmit}
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <h3 className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>{t.carriersTitle}</h3>
-              <div className="space-y-4">
-                {carriers.map((carrier) => (
-                  <div 
-                    key={carrier.id}
-                    className={`p-5 rounded-2xl border transition-all relative group shadow-sm ${
-                      isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-100'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="w-10 h-10 bg-brand/10 rounded-xl flex items-center justify-center">
-                        <Truck className="w-5 h-5 text-brand" />
-                      </div>
-                      <div className="flex items-center gap-1 bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded-lg text-[10px] font-black">
-                        <Star className="w-3 h-3 fill-amber-500" />
-                        {carrier.rating}
-                      </div>
-                    </div>
-                    <h4 className={`font-black italic uppercase tracking-tighter mb-1 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{carrier.name}</h4>
-                    <div className="flex gap-2 mb-4">
-                      <span className="text-[9px] font-black uppercase text-zinc-500">{carrier.type}</span>
-                      <span className="text-[9px] font-black uppercase text-brand">• {carrier.coverage}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-[10px] font-black uppercase text-zinc-400 mb-4">
-                      <span>Km/MT: {carrier.pricePerKm}</span>
-                      <span className="text-emerald-500 flex items-center gap-1">
-                        <ShieldCheck className="w-3 h-3" /> {language === 'PT' ? 'VERIFICADO' : 'VERIFIED'}
-                      </span>
-                    </div>
-                    
-                    <button 
-                      onClick={() => handleConfirmCarrier(carrier)}
-                      className="w-full py-3 bg-zinc-950 dark:bg-brand text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all active:scale-95 group-hover:shadow-lg group-hover:shadow-brand/20"
-                    >
-                      {t.hireNow}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+      <AnimatePresence mode="wait">
+        
+        {/* 1. DETAILED REQUEST VIEW MATCHING THE IMAGE FAITHFULLY */}
+        {activeSubTab === 'detailed_request' && (
+          <DetailedRequestView
+            isDarkMode={isDarkMode}
+            language={language}
+            selectedRequestId={selectedRequestId}
+            onBack={() => setActiveSubTab('requests_list')}
+            customRequests={customRequests}
+            chatMessages={chatMessages}
+            setChatMessages={setChatMessages}
+            activeChatRoom={activeChatRoom}
+            setActiveChatRoom={setActiveChatRoom}
+            selectedProposalIndex={selectedProposalIndex}
+            setSelectedProposalIndex={setSelectedProposalIndex}
+            mapZoom={mapZoom}
+            setMapZoom={setMapZoom}
+            mapPosition={mapPosition}
+            setMapPosition={setMapPosition}
+          />
         )}
 
-        {bookingStep === 2 && selectedCarrier && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-            <div className="space-y-6">
-              <h4 className={`text-xs font-black uppercase tracking-widest text-zinc-500`}>{t.paymentMethod}</h4>
-              <div className="grid grid-cols-1 gap-3">
-                {paymentMethods.map(method => (
-                  <button 
-                    key={method.id}
-                    onClick={() => setSelectedPaymentMethod(method.id)}
-                    className={`p-4 rounded-2xl border-2 transition-all flex items-center gap-4 relative overflow-hidden group ${
-                      selectedPaymentMethod === method.id 
-                        ? 'border-brand bg-brand/5 shadow-xl shadow-brand/10' 
-                        : isDarkMode ? 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700' : 'border-zinc-100 bg-white hover:border-zinc-200'
-                    }`}
-                  >
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${method.color} shadow-lg transition-transform group-hover:scale-105`}>
-                      {method.type === 'Bank' ? <Building2 className="w-6 h-6 text-white" /> : <Smartphone className="w-6 h-6 text-white" />}
-                    </div>
-                    <div className="text-left">
-                      <p className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{method.name}</p>
-                      <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest mt-0.5">{method.type === 'Bank' ? (language === 'PT' ? 'Transferência Bancária' : 'Bank Transfer') : (language === 'PT' ? 'Carteira Móvel' : 'Mobile Wallet')}</p>
-                    </div>
-                    {selectedPaymentMethod === method.id && (
-                      <div className="absolute top-2 right-2">
-                        <CheckCircle2 className="w-4 h-4 text-brand" />
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
+        {/* 2. CREATE TRANSPORT REQUEST PAGE */}
+        {activeSubTab === 'create_request' && (
+          <CreateRequestPage
+            isDarkMode={isDarkMode}
+            language={language}
+            initialPayload={initialPayload}
+            onSuccess={(newReq) => {
+              setCustomRequests(prev => [newReq, ...prev]);
+              localStorage.setItem('supplyx_freight_requests', JSON.stringify([newReq, ...customRequests]));
+              setSelectedRequestId(newReq.id);
+              setActiveSubTab('detailed_request');
+            }}
+          />
+        )}
 
-            <div className={`p-8 rounded-3xl border flex flex-col h-full ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-100'}`}>
-              <div className="flex-grow">
-                <div className="flex justify-between items-center mb-6 border-b border-zinc-500/10 pb-6">
-                  <h4 className={`text-xs font-black uppercase tracking-widest text-zinc-500`}>{t.summary}</h4>
-                  <span className="text-[10px] font-black uppercase text-brand">{selectedCarrier.name}</span>
+        {/* 3. REQUESTS LIST PAGE */}
+        {activeSubTab === 'requests_list' && (
+          <RequestsListPage
+            isDarkMode={isDarkMode}
+            language={language}
+            customRequests={customRequests}
+            setSelectedRequestId={(id) => {
+              setSelectedRequestId(id);
+              setActiveSubTab('detailed_request');
+            }}
+            setCustomRequests={(val) => {
+              setCustomRequests(val);
+              localStorage.setItem('supplyx_freight_requests', JSON.stringify(val));
+            }}
+          />
+        )}
+
+        {/* 4. AVAILABLE LOADS / COMPETITION PORTAL */}
+        {activeSubTab === 'available_loads' && (
+          <AvailableLoadsPage
+            isDarkMode={isDarkMode}
+            language={language}
+            customRequests={customRequests}
+            onSelectRequest={(id) => {
+              setSelectedRequestId(id);
+              setActiveSubTab('detailed_request');
+            }}
+          />
+        )}
+
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ==========================================
+// DETAILED REQUEST VIEW SUB-COMPONENT
+// ==========================================
+interface DetailedRequestViewProps {
+  isDarkMode: boolean;
+  language: 'PT' | 'EN';
+  selectedRequestId: string;
+  onBack: () => void;
+  customRequests: any[];
+  chatMessages: Record<string, Record<string, any[]>>;
+  setChatMessages: React.Dispatch<React.SetStateAction<Record<string, Record<string, any[]>>>>;
+  activeChatRoom: string;
+  setActiveChatRoom: (room: string) => void;
+  selectedProposalIndex: number;
+  setSelectedProposalIndex: (idx: number) => void;
+  mapZoom: number;
+  setMapZoom: React.Dispatch<React.SetStateAction<number>>;
+  mapPosition: { x: number; y: number };
+  setMapPosition: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
+}
+
+function DetailedRequestView({
+  isDarkMode,
+  language,
+  selectedRequestId,
+  onBack,
+  customRequests,
+  chatMessages,
+  setChatMessages,
+  activeChatRoom,
+  setActiveChatRoom,
+  selectedProposalIndex,
+  setSelectedProposalIndex,
+  mapZoom,
+  setMapZoom,
+  mapPosition,
+  setMapPosition
+}: DetailedRequestViewProps) {
+
+  // Fetch actual data either default TR-2025-0001 or custom built ones
+  const requestObj = useMemo(() => {
+    if (selectedRequestId === 'TR-2025-0001') {
+      return {
+        id: 'TR-2025-0001',
+        tipoCarga: 'Cimento',
+        quantidade: '20 Toneladas',
+        volume: '35 m³',
+        origem: 'Maputo, Moçambique',
+        destino: 'Nampula, Moçambique',
+        dataColeta: '15 Mai 2025',
+        prazoEntrega: '18 Mai 2025',
+        observacoes: 'Carga paletizada',
+        requester: 'Client',
+        freightResponsibility: 'Client',
+        deliveryMode: 'Third-party Logistics',
+        status: 'Em Competição',
+        proposalsCount: 5,
+        rating: 4.8
+      };
+    }
+
+    const matched = customRequests.find(r => r.id === selectedRequestId);
+    if (matched) return matched;
+
+    // Fallback default
+    return {
+      id: 'TR-2025-0001',
+      tipoCarga: 'Cimento',
+      quantidade: '20 Toneladas',
+      volume: '35 m³',
+      origem: 'Maputo, Moçambique',
+      destino: 'Nampula, Moçambique',
+      dataColeta: '15 Mai 2025',
+      prazoEntrega: '18 Mai 2025',
+      observacoes: 'Carga paletizada',
+      requester: 'Client',
+      freightResponsibility: 'Client',
+      deliveryMode: 'Third-party Logistics',
+      status: 'Em Competição',
+      proposalsCount: 5,
+      rating: 4.8
+    };
+  }, [selectedRequestId, customRequests]);
+
+  // Stepper state timeline steps
+  const stepperStates = [
+    { title: 'Solicitação', date: '12 Mai 2025', key: 'Solicitação' },
+    { title: 'Em Competição', date: '12 Mai 2025', key: 'Em Competição' },
+    { title: 'Negociação', date: '', key: 'Negociação' },
+    { title: 'Aguardando Coleta', date: '', key: 'Aguardando Coleta' },
+    { title: 'Em Transporte', date: '', key: 'Em Transporte' },
+    { title: 'Entregue', date: '', key: 'Entregue' }
+  ];
+
+  // Active step index logic
+  const activeStepIndex = useMemo(() => {
+    const status = requestObj.status;
+    if (status === 'Pending' || status === 'Pendente') return 0;
+    if (status === 'Em Competição' || status === 'In Competition') return 1;
+    if (status === 'Negociação' || status === 'Negotiation') return 2;
+    if (status === 'Aguardando Coleta' || status === 'Awaiting Pickup') return 3;
+    if (status === 'Loading' || status === 'Carregando') return 3;
+    if (status === 'Em Transporte' || status === 'In Transit') return 4;
+    if (status === 'Entregue' || status === 'Delivered') return 5;
+    return 1; // Default to Em Competição as in the image
+  }, [requestObj.status]);
+
+  // Proposals listing (specifically customized based on the cargo type or default from the client)
+  const baseProposals = useMemo(() => {
+    const isCement = requestObj.tipoCarga.toLowerCase().includes('cimento');
+    return [
+      {
+        name: 'Moz Logistics, Lda',
+        rating: 4.8,
+        deliverTime: '3 dias',
+        capacity: '30 Ton',
+        price: isCement ? 78000 : 92000,
+        trips: 128,
+        features: {
+          deliverTime: '3 dias',
+          truckType: '30 Ton',
+          insurance: 'Incluso',
+          tracking: 'Disponível',
+          conditions: 'À vista'
+        }
+      },
+      {
+        name: 'Fast Cargo Transportes',
+        rating: 4.6,
+        deliverTime: '2 dias',
+        capacity: '25 Ton',
+        price: isCement ? 85000 : 110000,
+        trips: 94,
+        features: {
+          deliverTime: '2 dias',
+          truckType: '25 Ton',
+          insurance: 'Incluso',
+          tracking: 'Disponível',
+          conditions: 'Faturado 15d'
+        }
+      },
+      {
+        name: 'Nampula Carriers',
+        rating: 4.2,
+        deliverTime: '4 dias',
+        capacity: '30 Ton',
+        price: isCement ? 72500 : 85000,
+        trips: 56,
+        features: {
+          deliverTime: '4 dias',
+          truckType: '30 Ton',
+          insurance: 'Sob consulta',
+          tracking: 'Manual por SMS',
+          conditions: '50% Entrada'
+        }
+      },
+      {
+        name: 'TransMoz Lda',
+        rating: 4.7,
+        deliverTime: '3 dias',
+        capacity: '30 Ton',
+        price: isCement ? 80000 : 99500,
+        trips: 142,
+        features: {
+          deliverTime: '3 dias',
+          truckType: '30 Ton',
+          insurance: 'Incluso',
+          tracking: 'Disponível',
+          conditions: 'Faturado 30d'
+        }
+      },
+      {
+        name: 'Global Transportes',
+        rating: 4.3,
+        deliverTime: '3 dias',
+        capacity: '25 Ton',
+        price: isCement ? 75000 : 89000,
+        trips: 82,
+        features: {
+          deliverTime: '3 dias',
+          truckType: '25 Ton',
+          insurance: 'Incluso',
+          tracking: 'Indisponível',
+          conditions: 'À vista'
+        }
+      }
+    ];
+  }, [requestObj.tipoCarga]);
+
+  const selectedProposal = baseProposals[selectedProposalIndex] || baseProposals[0];
+
+  // B2B Communication state management
+  const [activeChatTab, setActiveChatTab] = useState<'Todos' | 'Cliente' | 'Fornecedor' | 'Transportadora'>('Todos');
+  const chatRooms = [
+    { name: 'Moz Logistics, Lda', lastMsg: 'Claro! Segue em anexo os...', time: '10:30', unread: 2, role: 'Transportadora' },
+    { name: 'Fornecedor Exemplo, Lda', lastMsg: 'A carga estará pronta...', time: '09:15', unread: 1, role: 'Fornecedor' },
+    { name: 'Fast Cargo Transportes', lastMsg: 'Obrigado pelo contacto...', time: 'Ontem', unread: 1, role: 'Transportadora' },
+    { name: 'Nampula Carriers', lastMsg: 'Qual é o tipo de embalagem...', time: 'Ontem', unread: 0, role: 'Transportadora' }
+  ];
+
+  // Filtering chat partner rooms based on role switcher tab selection
+  const filteredRooms = chatRooms.filter(room => {
+    if (activeChatTab === 'Todos') return true;
+    if (activeChatTab === 'Cliente') return room.role === 'Cliente';
+    if (activeChatTab === 'Fornecedor') return room.role === 'Fornecedor';
+    if (activeChatTab === 'Transportadora') return room.role === 'Transportadora';
+    return true;
+  });
+
+  // Unique key for chat messages
+  const chatKey = `${selectedRequestId}_${activeChatRoom}`;
+
+  // Preload messages standard discussion mock if not exists
+  const currentMessages = useMemo(() => {
+    const thread = chatMessages[selectedRequestId]?.[activeChatRoom];
+    if (thread) return thread;
+
+    // Default messages standard
+    if (activeChatRoom === 'Moz Logistics, Lda') {
+      return [
+        { id: 1, sender: activeChatRoom, text: 'Bom dia! Temos disponibilidade para este transporte.', time: '10:30', self: false },
+        { id: 2, sender: 'You', text: 'Bom dia! Pode enviar mais detalhes sobre o veículo e seguro?', time: '10:32', self: true },
+        { id: 3, sender: activeChatRoom, text: 'Claro! Segue em anexo os documentos.', time: '10:33', self: false }
+      ];
+    } else if (activeChatRoom === 'Fornecedor Exemplo, Lda') {
+      return [
+        { id: 1, sender: activeChatRoom, text: 'Olá! A carga de cimento já foi paletizada e está no box B4 do pátio norte.', time: '09:10', self: false },
+        { id: 2, sender: 'You', text: 'Excelente! A transportadora de recolha deve encostar em vossa balança por volta das 11h.', time: '09:15', self: true }
+      ];
+    } else {
+      return [
+        { id: 1, sender: activeChatRoom, text: `Bom dia! Gostaríamos de propor veículo modelo ${activeChatRoom.includes('Fast') ? 'Carreta Baú 24T' : 'Graneleiro 30T'} para esta carga.`, time: 'Ontem', self: false }
+      ];
+    }
+  }, [selectedRequestId, activeChatRoom, chatMessages]);
+
+  const [messageText, setMessageText] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto scroll chat to bottom
+  const scrollChat = () => {
+    setTimeout(() => {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
+  };
+
+  useEffect(() => {
+    scrollChat();
+  }, [activeChatRoom, chatMessages]);
+
+  const handleSendMessage = () => {
+    if (!messageText.trim()) return;
+
+    const newMsg = {
+      id: Date.now(),
+      sender: 'You',
+      text: messageText,
+      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      self: true
+    };
+
+    // Save state
+    const updatedMessages = {
+      ...chatMessages,
+      [selectedRequestId]: {
+        ...(chatMessages[selectedRequestId] || {}),
+        [activeChatRoom]: [...currentMessages, newMsg]
+      }
+    };
+    setChatMessages(updatedMessages);
+    localStorage.setItem('supplyx_freight_chats', JSON.stringify(updatedMessages));
+    setMessageText('');
+
+    // Simulated reply trigger
+    setTimeout(() => {
+      const answersDict: Record<string, string[]> = {
+        'Moz Logistics, Lda': [
+          'Entendido. Acabamos de confirmar a alocação do cavalo mecânico Volvo Plate MC-98-34.',
+          'Pode verificar na guia de trânsito se o NUIT da construtora está atualizado?',
+          'Confirmado. Carga mapeada, o motorista Sérgio já iniciou os testes de freio.'
+        ],
+        'Fornecedor Exemplo, Lda': [
+          'Tudo em ordem. O fiel do armazém fará a liberação mediante apresentação desta guia no app.',
+          'Recebido. Já anexamos os laudos de ensaio químico do cimento para conferência aduaneira.'
+        ],
+        'Fast Cargo Transportes': [
+          'Excelente, agradecemos pelo feed. Nossa equipe de operações logísticas está alinhando os custos de pedágios.',
+          'Nossa filial em Nampula dará o suporte físico para descarga célere.'
+        ]
+      };
+
+      const replies = answersDict[activeChatRoom] || [
+        'Mensagem operacional recebida e registrada na torre de controle SupplyX.',
+        'Ok, daremos retorno em breve.'
+      ];
+
+      const replyText = replies[Math.floor(Math.random() * replies.length)];
+      const replyMsg = {
+        id: Date.now() + 1,
+        sender: activeChatRoom,
+        text: replyText,
+        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        self: false
+      };
+
+      const finalMessages = {
+        ...updatedMessages,
+        [selectedRequestId]: {
+          ...(updatedMessages[selectedRequestId] || {}),
+          [activeChatRoom]: [...currentMessages, newMsg, replyMsg]
+        }
+      };
+      setChatMessages(finalMessages);
+      localStorage.setItem('supplyx_freight_chats', JSON.stringify(finalMessages));
+    }, 1800);
+  };
+
+  // State adjustment callbacks
+  const [timelineEvents, setTimelineEvents] = useState([
+    { hour: '08:30', desc: 'Cotação aprovada na central' },
+    { hour: '09:15', desc: 'Transporte e frete solicitados' },
+    { hour: '10:00', desc: 'Moçambique Freight Market aberto' }
+  ]);
+
+  // Modal alert for proposal acceptance
+  const [successModal, setSuccessModal] = useState<string | null>(null);
+
+  const handleAcceptProposal = () => {
+    setSuccessModal(selectedProposal.name);
+    // Add real event to timeline
+    const nowHour = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    setTimelineEvents(prev => [
+      ...prev,
+      { hour: nowHour, desc: `Transportadora ${selectedProposal.name} selecionada por MT ${selectedProposal.price.toLocaleString('pt-BR')}` }
+    ]);
+
+    // Update Request status to Aguardando Coleta in custom requests if applicable
+    const updatedCustom = customRequests.map(r => {
+      if (r.id === selectedRequestId) {
+        return { ...r, status: 'Aguardando Coleta' };
+      }
+      return r;
+    });
+    // Write back
+    localStorage.setItem('supplyx_freight_requests', JSON.stringify(updatedCustom));
+  };
+
+  // Execute automatic negotiation message routing
+  const handleNegotiateProposal = () => {
+    setActiveChatRoom(selectedProposal.name);
+    setMessageText(`Olá ${selectedProposal.name}, estamos a analisar vossa proposta no valor de MT ${selectedProposal.price.toLocaleString('pt-BR')}. Seria viável conceder uma flexibilização comercial de 5% sobre esta tarifa?`);
+    scrollChat();
+  };
+
+  // Map Controls Zoom helper
+  const handleZoomIn = () => setMapZoom(prev => Math.min(prev + 0.3, 2.5));
+  const handleZoomOut = () => setMapZoom(prev => Math.max(prev - 0.3, 0.6));
+  const handleResetZoom = () => {
+    setMapZoom(1);
+    setMapPosition({ x: 0, y: 0 });
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
+      
+      {/* Header and top buttons */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <button 
+          onClick={onBack}
+          className={`flex items-center gap-2 text-xs font-black uppercase italic tracking-tighter ${
+            isDarkMode ? 'text-zinc-500 hover:text-white' : 'text-zinc-400 hover:text-zinc-900'
+          }`}
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {language === 'PT' ? 'Voltar para Solicitações' : 'Back to Requests'}
+        </button>
+
+        <div className="flex items-center gap-3">
+          <h1 className={`text-xl sm:text-2xl font-black uppercase tracking-tight italic ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+            {language === 'PT' ? 'Solicitação de Transporte' : 'Freight Shipment'} #{requestObj.id}
+          </h1>
+          <span className="px-3.5 py-1 text-[9px] font-black tracking-[0.1em] uppercase rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/30 animate-pulse">
+            {requestObj.status}
+          </span>
+        </div>
+      </div>
+
+      {/* Horizontal Timed Stepper exactly matching the image */}
+      <div className={`p-8 rounded-[32px] border ${
+        isDarkMode ? 'bg-zinc-950/80 border-white/5' : 'bg-white border-zinc-100 shadow-sm'
+      }`}>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-6 relative">
+          
+          {/* Timeline connecting lines in background */}
+          <div className="hidden md:block absolute top-7 left-[8%] right-[8%] h-0.5 bg-zinc-800" />
+          <div 
+            className="hidden md:block absolute top-7 left-[8%] h-0.5 bg-supplyx-blue transition-all duration-700" 
+            style={{ width: `${(activeStepIndex / 5) * 84}%` }}
+          />
+
+          {stepperStates.map((step, idx) => {
+            const isCompleted = idx < activeStepIndex;
+            const isCurrent = idx === activeStepIndex;
+            return (
+              <div key={idx} className="flex flex-col items-center text-center relative z-10 group">
+                {/* Stepper Node Circle */}
+                <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all ${
+                  isCompleted 
+                    ? 'bg-supplyx-blue border-supplyx-blue text-white shadow-lg shadow-supplyx-blue/30' 
+                    : isCurrent 
+                      ? 'bg-zinc-950 border-supplyx-blue text-supplyx-blue shadow-lg shadow-supplyx-blue/20 ring-4 ring-supplyx-blue/25'
+                      : 'bg-zinc-900 border-zinc-800 text-zinc-500'
+                }`}>
+                  {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <span className="text-xs font-black">{idx + 1}</span>}
                 </div>
                 
-                <div className="space-y-4 mb-8">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-bold text-zinc-500 uppercase tracking-widest">{language === 'PT' ? 'Taxa Base' : 'Base Rate'}</span>
-                    <span className={`font-black ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>MT {selectedCarrier.basePrice.toLocaleString('pt-BR')}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-bold text-zinc-500 uppercase tracking-widest">{language === 'PT' ? 'Seguro' : 'Insurance'}</span>
-                    <span className={`font-black text-emerald-500 uppercase`}>{language === 'PT' ? 'INCLUSO' : 'INCLUDED'}</span>
-                  </div>
-                </div>
-
-                <div className={`p-6 rounded-2xl mb-8 ${isDarkMode ? 'bg-zinc-900' : 'bg-white shadow-sm'}`}>
-                  <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">{language === 'PT' ? 'TOTAL' : 'TOTAL'}</p>
-                  <p className="text-4xl font-black italic tracking-tighter text-brand">MT {selectedCarrier.basePrice.toLocaleString('pt-BR')}</p>
-                </div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-white mt-3 mb-0.5 group-hover:text-supplyx-blue transition-colors">
+                  {step.title}
+                </p>
+                {step.date ? (
+                  <p className="text-[8px] font-bold text-zinc-500 uppercase">{step.date}</p>
+                ) : (
+                  <p className="text-[8px] font-bold text-zinc-650 uppercase">—</p>
+                )}
               </div>
+            );
+          })}
+        </div>
+      </div>
 
-              <div className="space-y-4">
-                <button 
-                  onClick={handlePayment}
-                  disabled={!selectedPaymentMethod || isPaying}
-                  className="w-full py-4 bg-brand text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-brand/20 hover:brightness-110 transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
-                >
-                  {isPaying ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                  {t.confirmPayment}
-                </button>
-              </div>
+      {/* Load Details + Radar Tracking visual map row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Left Card: Detalhes da Carga */}
+        <div className={`lg:col-span-1 p-8 rounded-[36px] border flex flex-col justify-between ${
+          isDarkMode ? 'bg-zinc-900/50 border-white/5 shadow-2xl shadow-black/40' : 'bg-white border-zinc-100 shadow-sm'
+        }`}>
+          <div>
+            <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
+              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-supplyx-blue flex items-center gap-2">
+                <Package className="w-4 h-4" />
+                {language === 'PT' ? 'Detalhes da Carga' : 'Cargo Attributes'}
+              </h3>
+              <span className="text-[9px] font-bold text-zinc-500 uppercase italic">
+                {requestObj.requester === 'Client' ? (language === 'PT' ? 'Fretado pelo Cliente' : 'Client Requested') : (language === 'PT' ? 'Fretado pelo Fornecedor' : 'Supplier Requested')}
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              {[
+                { label: language === 'PT' ? 'Tipo de Carga' : 'Cargo Type', val: requestObj.tipoCarga },
+                { label: language === 'PT' ? 'Quantidade' : 'Quantity', val: requestObj.quantidade },
+                { label: language === 'PT' ? 'Volume' : 'Volume', val: requestObj.volume },
+                { label: language === 'PT' ? 'Origem' : 'Origin', val: requestObj.origem },
+                { label: language === 'PT' ? 'Destino' : 'Destination', val: requestObj.destino },
+                { label: language === 'PT' ? 'Data de Coleta' : 'Collection Date', val: requestObj.dataColeta },
+                { label: language === 'PT' ? 'Prazo de Entrega' : 'Delivery Lead', val: requestObj.prazoEntrega },
+                { label: language === 'PT' ? 'Observações' : 'Operational Notes', val: requestObj.observacoes }
+              ].map((item, i) => (
+                <div key={i} className="flex justify-between items-center text-xs pb-1 border-b border-white/[0.02]">
+                  <span className="font-bold text-zinc-500 uppercase tracking-widest text-[9px]">{item.label}</span>
+                  <span className="font-black text-white text-right leading-relaxed max-w-[200px] truncate">{item.val}</span>
+                </div>
+              ))}
             </div>
           </div>
-        )}
 
-        {bookingStep === 3 && (
-          <div className="flex-grow flex flex-col items-center justify-center py-20">
-            <div className="w-24 h-24 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/20 mb-8 relative">
-              <CheckCircle className="w-12 h-12" />
-              <motion.div 
-                initial={{ scale: 1, opacity: 0.5 }}
-                animate={{ scale: 1.8, opacity: 0 }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-                className="absolute inset-0 bg-emerald-500 rounded-full"
-              />
+          <div className="mt-8 pt-4 border-t border-white/5 space-y-2">
+            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-zinc-500">
+              <span>{language === 'PT' ? 'Responsabilidade Operacional' : 'Freight Liability'}</span>
+              <span className="text-supplyx-blue">{requestObj.freightResponsibility || 'Client'}</span>
             </div>
-            <p className={`text-2xl font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.success}</p>
-            <p className="text-zinc-500 text-sm font-bold mt-2 mb-8">{t.transaction}: #LX-{Math.random().toString(36).substring(7).toUpperCase()}</p>
-            
-            <button 
-              onClick={exportBookingToExcel}
-              className="flex items-center gap-2 px-6 py-2 bg-emerald-500/10 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all mb-4"
-            >
-              <Download className="w-3 h-3" />
-              {language === 'PT' ? 'Baixar Comprovativo (Excel)' : 'Download Receipt (Excel)'}
-            </button>
+            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-zinc-500">
+              <span>{language === 'PT' ? 'Modalidade de Entrega' : 'Delivery Mode'}</span>
+              <span className="text-teal-400">{requestObj.deliveryMode || 'Third-party Logistics'}</span>
+            </div>
+          </div>
+        </div>
 
-            <div className="mt-4">
-              <button 
-                onClick={() => {
-                  setShowBooking(false);
-                  setBookingStep(1);
-                  setSelectedCarrier(null);
-                  setSelectedPaymentMethod(null);
-                }}
-                className="px-12 py-4 bg-zinc-900 dark:bg-brand text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all active:scale-95"
+        {/* Right Card: Interactive stylized Flight/Freight Map Maputo-Nampula */}
+        <div className={`lg:col-span-2 rounded-[36px] border p-6 flex flex-col justify-between relative overflow-hidden h-[450px] lg:h-auto min-h-[400px] ${
+          isDarkMode ? 'bg-zinc-950 border-white/5 shadow-2xl' : 'bg-zinc-100 border-zinc-200'
+        }`}>
+          {/* Subtle grid pattern background */}
+          <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none" />
+
+          {/* Map header info */}
+          <div className="absolute top-6 left-6 z-10 flex flex-col pointer-events-none">
+            <p className="text-[8px] font-black uppercase text-zinc-500 tracking-[0.3em] mb-1">Mozambique Grid Locator v2.0</p>
+            <p className="text-sm font-black italic uppercase tracking-tighter text-white">Roteamento Atlântico de Carga</p>
+          </div>
+
+          {/* Interactive Zoom buttons */}
+          <div className="absolute right-6 top-6 z-10 flex flex-col gap-2">
+            <button 
+              onClick={handleZoomIn}
+              className="w-10 h-10 rounded-xl bg-zinc-900 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-all active:scale-90"
+              title="Aproximar"
+            >
+              <Plus className="w-5 h-5 font-bold" />
+            </button>
+            <button 
+              onClick={handleZoomOut}
+              className="w-10 h-10 rounded-xl bg-zinc-900 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-all active:scale-90"
+              title="Afastar"
+            >
+              <span className="text-lg font-black leading-none mb-1">-</span>
+            </button>
+            <button 
+              onClick={handleResetZoom}
+              className="w-10 h-10 rounded-xl bg-zinc-900 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-all active:scale-90"
+              title="Resetar"
+            >
+              <MapIcon className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Visual abstract map using clean procedural vector lines */}
+          <div className="w-full h-full flex items-center justify-center pt-8">
+            <motion.div 
+              style={{ scale: mapZoom }} 
+              transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+              className="w-full h-full max-w-lg max-h-[300px] relative mt-12 select-none"
+            >
+              {/* Map drawing container */}
+              <svg 
+                viewBox="0 0 500 320" 
+                className="w-full h-full text-zinc-800"
+                fill="none" 
+                stroke="currentColor"
               >
-                {t.backToLogistics}
+                {/* Coastal guidelines and state labels */}
+                <path 
+                  d="M 120 290 C 130 250, 180 230, 210 190 C 240 150, 270 120, 310 80 C 350 40, 420 50, 460 30" 
+                  stroke="rgba(255,255,255,0.03)" 
+                  strokeWidth="8" 
+                />
+                
+                {/* Dotted target path line map */}
+                <path 
+                  d="M 152 262 Q 260 160, 385 110" 
+                  stroke="#3b82f6" 
+                  strokeWidth="3" 
+                  strokeDasharray="8 6" 
+                  className="animate-dash"
+                  id="target-route" 
+                />
+
+                {/* Simulated transit point beacon */}
+                <motion.circle 
+                  cx="152" 
+                  cy="262" 
+                  r="5" 
+                  fill="#10b981" 
+                  className="animate-pulse"
+                />
+                <circle cx="152" cy="262" r="1.5" fill="#fff" />
+
+                {/* End Point Beacon */}
+                <motion.circle 
+                  cx="385" 
+                  cy="110" 
+                  r="6" 
+                  fill="#ef4444" 
+                />
+                <circle cx="385" cy="110" r="2.5" fill="#fff" />
+
+                {/* Territory descriptive curves */}
+                <text x="310" y="160" fill="rgba(255,255,255,0.15)" fontSize="8" fontWeight="bold" letterSpacing="3" fontFamily="monospace">MOÇAMBIQUE</text>
+                <text x="280" y="195" fill="rgba(255,255,255,0.06)" fontSize="9" fontWeight="black" letterSpacing="4" fontFamily="monospace">ZAMBÉZIA</text>
+              </svg>
+
+              {/* Map Overlay Labels absolutely positioned for beautiful crisp render */}
+              <div className="absolute top-[210px] left-[130px] flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20 animate-ping absolute" />
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20" />
+                <span className="text-[10px] font-black uppercase text-emerald-400 bg-zinc-950/80 px-2.5 py-1 rounded-md border border-emerald-500/10 shadow-lg select-none">
+                  • Maputo
+                </span>
+              </div>
+
+              <div className="absolute top-[88px] left-[340px] flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500 ring-4 ring-red-500/30 animate-pulse absolute" />
+                <div className="w-3 h-3 rounded-full bg-red-500 ring-4 ring-red-500/30" />
+                <span className="text-[10px] font-black uppercase text-red-400 bg-zinc-950/80 px-2.5 py-1 rounded-md border border-red-500/10 shadow-lg select-none">
+                  📍 Nampula
+                </span>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Bottom telemetry indicators */}
+          <div className="flex justify-between items-center text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-4">
+            <span>{language === 'PT' ? 'Frequência de Atualização' : 'GPS Refresh rate'}: 2s</span>
+            <span>Estabilidade de Satélite: 99.8%</span>
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* Transport Proposals & Selections Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        {/* Card 1: Propostas de Transporte */}
+        <div className={`p-6 rounded-[32px] border ${
+          isDarkMode ? 'bg-zinc-900/50 border-white/5 shadow-2xl pb-8' : 'bg-white border-zinc-100 shadow-sm'
+        }`}>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400">
+                {language === 'PT' ? 'Propostas de Transporte' : 'Freight Bids'}
+              </h3>
+              <span className="px-2 py-0.5 rounded-full bg-supplyx-blue/20 text-supplyx-blue text-[9px] font-black">
+                {baseProposals.length}
+              </span>
+            </div>
+
+            <div className="space-y-3.5 max-h-[280px] overflow-y-auto pr-1">
+              {baseProposals.map((prop, idx) => {
+                const isSelected = selectedProposalIndex === idx;
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => setSelectedProposalIndex(idx)}
+                    className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 ${
+                      isSelected
+                        ? 'bg-supplyx-blue/10 border-supplyx-blue ring-2 ring-supplyx-blue/20'
+                        : isDarkMode ? 'bg-zinc-950/40 border-white/5 hover:border-white/10' : 'bg-zinc-50 border-zinc-200'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-xs font-black truncate text-white leading-none mb-1 flex items-center gap-1.5">
+                          {prop.name}
+                          <span className="flex items-center gap-0.5 bg-amber-500/10 text-amber-500 px-1 py-0.5 rounded text-[8px] font-black leading-none">
+                            <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                            {prop.rating}
+                          </span>
+                        </h4>
+                        <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest leading-none mt-1">
+                          {language === 'PT' ? 'Prazo' : 'Time'}: {prop.deliverTime} • {prop.capacity}
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="text-xs font-black text-emerald-400 italic">
+                          {prop.price.toLocaleString('pt-BR')} MZN
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/[0.03]">
+                      <span className="text-[8px] font-bold text-zinc-500 uppercase">{prop.trips} entregas realizadas</span>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedProposalIndex(idx);
+                        }}
+                        className="px-2.5 py-1 rounded bg-supplyx-blue/10 text-supplyx-blue text-[8px] font-black uppercase hover:bg-supplyx-blue hover:text-white transition-all shadow-sm"
+                      >
+                        Ver Proposta
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="text-center text-[10px] text-zinc-500 font-extrabold uppercase tracking-widest mt-4 cursor-pointer hover:text-supplyx-blue transition-all">
+              Ver todas as propostas
+            </p>
+          </div>
+
+          {/* Card 2: Proposta Selecionada */}
+          <div className={`p-6 rounded-[32px] border ${
+            isDarkMode ? 'bg-zinc-900/50 border-white/5 shadow-2xl' : 'bg-white border-zinc-100 shadow-sm'
+          }`}>
+            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-6">
+              {language === 'PT' ? 'Proposta Selecionada' : 'Selected Freight Proposal'}
+            </h3>
+
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
+              <div>
+                <h4 className="text-sm font-black text-white italic truncate">{selectedProposal.name}</h4>
+                <div className="flex items-center gap-1 bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded text-[8px] font-black w-fit mt-1">
+                  <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500 animate-pulse" />
+                  {selectedProposal.rating} Rating
+                </div>
+              </div>
+              <p className="text-lg font-black text-emerald-400 italic">
+                {selectedProposal.price.toLocaleString('pt-BR')} MZN
+              </p>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Detalhes da Proposta:</p>
+              {[
+                { label: language === 'PT' ? '✓ Prazo de Entrega' : '✓ Lead Time', val: selectedProposal.features.deliverTime },
+                { label: language === 'PT' ? '✓ Tipo de Caminhão' : '✓ Truck Payload', val: selectedProposal.features.truckType },
+                { label: language === 'PT' ? '✓ Seguro de Carga' : '✓ Transit Insurance', val: selectedProposal.features.insurance },
+                { label: language === 'PT' ? '✓ Rastreamento' : '✓ Live Tracking', val: selectedProposal.features.tracking },
+                { label: language === 'PT' ? '✓ Condições de Pgto' : '✓ Deal Terms', val: selectedProposal.features.conditions }
+              ].map((f, i) => (
+                <div key={i} className="flex justify-between items-center text-[10px] font-semibold text-zinc-400 uppercase tracking-widest">
+                  <span className="text-[9.5px]">{f.label}</span>
+                  <span className="text-white font-black">{f.val}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Action buttons matching the image green button and dark negociar link */}
+            <div className="grid grid-cols-2 gap-3 mt-6">
+              <button 
+                onClick={handleNegotiateProposal}
+                className="w-full py-4 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-white/5 text-zinc-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
+              >
+                {language === 'PT' ? 'Negociar' : 'Negotiate'}
+              </button>
+              <button 
+                onClick={handleAcceptProposal}
+                className="w-full py-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 hover:shadow-lg hover:shadow-emerald-500/25 border-t border-emerald-400/20"
+              >
+                {language === 'PT' ? 'Aceitar Proposta' : 'Accept Bid'}
               </button>
             </div>
           </div>
+
+      </div>
+
+      {/* Confetti success state confirmation modal */}
+      <AnimatePresence>
+        {successModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              className="absolute inset-0 bg-black/85 backdrop-blur-md" 
+              onClick={() => setSuccessModal(null)} 
+            />
+            <motion.div 
+              initial={{ scale: 0.9, y: 20, opacity: 0 }} 
+              animate={{ scale: 1, y: 0, opacity: 1 }} 
+              exit={{ scale: 0.9, y: 20, opacity: 0 }} 
+              className={`w-full max-w-md p-8 rounded-[40px] border shadow-3xl relative z-10 text-center ${
+                isDarkMode ? 'bg-zinc-900 border-white/10 text-white' : 'bg-white border-zinc-100 text-zinc-900'
+              }`}
+            >
+              <div className="w-20 h-20 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/30 mx-auto mb-6 relative">
+                <CheckCircle className="w-10 h-10" />
+                <motion.div 
+                  initial={{ scale: 1, opacity: 0.5 }}
+                  animate={{ scale: 1.8, opacity: 0 }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                  className="absolute inset-0 bg-emerald-500 rounded-full"
+                />
+              </div>
+
+              <h3 className="text-xl font-black italic uppercase tracking-tighter mb-2">
+                {language === 'PT' ? 'Contrato Consolidado!' : 'Deal Consolidated!'}
+              </h3>
+              <p className="text-xs text-zinc-400 leading-relaxed font-semibold mb-6">
+                {language === 'PT' 
+                  ? `Iniciaremos a operação logística conjunta com ${successModal}. Toda a comunicação operacional, TIMELINE e guias serão vinculadas ao canal direto.`
+                  : `Initiating operational deployment with ${successModal}. Telemetry tracking, timeline events, and customs forms are integrated securely into the channel.`}
+              </p>
+
+              <button 
+                onClick={() => setSuccessModal(null)}
+                className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95"
+              >
+                {language === 'PT' ? 'Aceder Painel de Operações' : 'Open Fleet Console'}
+              </button>
+            </motion.div>
+          </div>
         )}
-      </motion.div>
-    );
-  }
+      </AnimatePresence>
+
+    </div>
+  );
+}
+
+// ==========================================
+// CREATE REQUEST FORM SUB-COMPONENT
+// ==========================================
+interface CreateRequestPageProps {
+  isDarkMode: boolean;
+  language: 'PT' | 'EN';
+  initialPayload?: any;
+  onSuccess: (newReq: any) => void;
+}
+
+function CreateRequestPage({ isDarkMode, language, initialPayload, onSuccess }: CreateRequestPageProps) {
+  const [formData, setFormData] = useState({
+    tipoCarga: initialPayload?.tipoCarga || '',
+    quantidade: initialPayload?.quantidade || '20 Toneladas',
+    peso: initialPayload?.peso || '20t',
+    volume: initialPayload?.volume || '35 m³',
+    origem: initialPayload?.origem || '',
+    destino: initialPayload?.destino || '',
+    dataColeta: '15 Mai 2025',
+    prazoEntrega: '18 Mai 2025',
+    observacoes: initialPayload?.observacoes || '',
+    requester: 'Client',
+    freightResponsibility: 'Client',
+    deliveryMode: 'Third-party Logistics'
+  });
+
+  const [loading, setLoading] = useState(false);
+
+  const keyLabels = {
+    PT: {
+      req: 'Quem está solicitando o transporte?',
+      resp: 'Responsibilidade do Frete',
+      mode: 'Tipo de Entrega',
+      tipo: 'Tipo de Carga',
+      qtd: 'Quantidade',
+      pso: 'Peso / Tonelagem',
+      vol: 'Volume',
+      origen: 'Origem (Coleta)',
+      dest: 'Destino (Entrega)',
+      data: 'Data de Coleta',
+      prazo: 'Prazo Limite de Entrega',
+      obs: 'Observações Operacionais',
+      sub: 'PUBLICAR REQUISIÇÃO DO FRETE'
+    },
+    EN: {
+      req: 'Who is requesting transport?',
+      resp: 'Freight Responsibility',
+      mode: 'Delivery Mode',
+      tipo: 'Cargo Type',
+      qtd: 'Quantity',
+      pso: 'Weight / Tonnage',
+      vol: 'Volume',
+      origen: 'Origem Location',
+      dest: 'Destination Location',
+      data: 'Collection Date',
+      prazo: 'Delivery Deadline',
+      obs: 'Operational Notes',
+      sub: 'PUBLISH FREIGHT REQUEST'
+    }
+  }[language];
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      const generatedReq = {
+        id: `TR-2025-${Math.floor(1000 + Math.random() * 9000)}`,
+        ...formData,
+        status: 'Em Competição',
+        proposalsCount: 5,
+        rating: 4.5
+      };
+      setLoading(false);
+      onSuccess(generatedReq);
+    }, 1200);
+  };
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-8"
-    >
-      <div className={`p-10 rounded-[48px] border flex flex-col lg:flex-row justify-between items-center gap-8 ${
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0 }}
+      className={`max-w-4xl mx-auto p-10 rounded-[48px] border ${
         isDarkMode ? 'bg-zinc-900 border-white/5 shadow-3xl' : 'bg-white border-zinc-100 shadow-sm'
-      }`}>
-        <div className="text-center lg:text-left flex items-center gap-6">
-           <div className="w-16 h-16 rounded-[24px] bg-supplyx-blue/10 flex items-center justify-center text-supplyx-blue">
-             <Truck className="w-8 h-8" />
-           </div>
-           <div>
-             <h2 className={`text-3xl font-black italic tracking-tighter uppercase mb-2 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.title}</h2>
-             <p className="text-zinc-500 text-[11px] font-black uppercase tracking-[0.3em]">{t.subtitle}</p>
-           </div>
+      }`}
+    >
+      <div className="mb-10 text-left">
+        <span className="px-3.5 py-1 text-[8.5px] font-black uppercase bg-supplyx-blue/10 text-supplyx-blue border border-supplyx-blue/20 rounded-full tracking-wider">
+          {language === 'PT' ? 'Novo Pedido de Carga' : 'New Freight Request'}
+        </span>
+        <h2 className={`text-2xl font-black italic uppercase tracking-tighter mt-3 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+          {language === 'PT' ? 'Solicitar Cotação Inteligente de Frete' : 'Direct Transport Request'}
+        </h2>
+        <p className="text-zinc-500 font-semibold text-xs mt-1">Preencha os campos para abrir a licitação regional com transportadoras credenciadas à rede Mozambique.</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-8">
+        
+        {/* Step Row Radio selections exactly as prompt specified */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          {/* Who is requesting */}
+          <div className="p-5 rounded-2xl bg-zinc-950/60 border border-white/5 text-left space-y-3">
+            <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider flex items-center gap-2">
+              <User className="w-4 h-4 text-supplyx-blue" />
+              {keyLabels.req}
+            </label>
+            <div className="flex flex-col gap-2">
+              {['Client', 'Supplier'].map(role => (
+                <label key={role} className="flex items-center gap-3 text-xs font-black uppercase text-white cursor-pointer select-none">
+                  <input 
+                    type="radio" 
+                    name="requester" 
+                    value={role} 
+                    checked={formData.requester === role}
+                    onChange={() => setFormData({ ...formData, requester: role })}
+                    className="w-4 h-4 accent-supplyx-blue" 
+                  />
+                  {role === 'Client' ? (language === 'PT' ? 'Cliente' : 'Client') : (language === 'PT' ? 'Fornecedor' : 'Supplier')}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Freight Responsibility */}
+          <div className="p-5 rounded-2xl bg-zinc-950/60 border border-white/5 text-left space-y-3">
+            <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-teal-400" />
+              {keyLabels.resp}
+            </label>
+            <div className="flex flex-col gap-2">
+              {['Client', 'Supplier', 'Shared'].map(resp => (
+                <label key={resp} className="flex items-center gap-3 text-xs font-black uppercase text-white cursor-pointer select-none">
+                  <input 
+                    type="radio" 
+                    name="freightResponsibility" 
+                    value={resp} 
+                    checked={formData.freightResponsibility === resp}
+                    onChange={() => setFormData({ ...formData, freightResponsibility: resp })}
+                    className="w-4 h-4 accent-supplyx-blue" 
+                  />
+                  {resp === 'Client' ? (language === 'PT' ? 'Cliente' : 'Client') : 
+                   resp === 'Supplier' ? (language === 'PT' ? 'Fornecedor' : 'Supplier') : (language === 'PT' ? 'Compartilhado' : 'Shared')}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Delivery Mode */}
+          <div className="p-5 rounded-2xl bg-zinc-950/60 border border-white/5 text-left space-y-3">
+            <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider flex items-center gap-2">
+              <Truck className="w-4 h-4 text-emerald-400" />
+              {keyLabels.mode}
+            </label>
+            <div className="flex flex-col gap-2">
+              {['Supplier Delivery', 'Client Pickup', 'Third-party Logistics'].map(mode => (
+                <label key={mode} className="flex items-center gap-3 text-xs font-black uppercase text-white cursor-pointer select-none">
+                  <input 
+                    type="radio" 
+                    name="deliveryMode" 
+                    value={mode} 
+                    checked={formData.deliveryMode === mode}
+                    onChange={() => setFormData({ ...formData, deliveryMode: mode })}
+                    className="w-4 h-4 accent-supplyx-blue" 
+                  />
+                  {mode === 'Supplier Delivery' ? (language === 'PT' ? 'Entrega Fornecedor' : 'Supplier Delivery') : 
+                   mode === 'Client Pickup' ? (language === 'PT' ? 'Retira Cliente' : 'Client Pickup') : (language === 'PT' ? 'Transportadoras 3PL' : 'Third-party Logistics')}
+                </label>
+              ))}
+            </div>
+          </div>
+
         </div>
-        <div className="flex items-center gap-4">
-           <div className="hidden sm:flex items-center gap-3 px-6 py-3 bg-white/5 rounded-2xl border border-white/5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Network Secure</span>
-           </div>
-           <button 
-             onClick={() => setShowBooking(true)}
-             className="bg-supplyx-blue hover:bg-blue-600 text-white px-10 py-5 rounded-[24px] text-sm font-black italic uppercase tracking-widest transition-all active:scale-95 shadow-3xl shadow-blue-500/20 flex items-center gap-4"
-           >
-             <Plus className="w-6 h-6 border-2 border-white/20 rounded-full" />
-             {t.btnHire}
-           </button>
+
+        {/* Regular inputs info fields */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <div className="space-y-1.5 text-left">
+            <label className="text-[9px] font-black uppercase text-zinc-500 tracking-widest px-2">{keyLabels.tipo} *</label>
+            <input 
+              required
+              type="text" 
+              value={formData.tipoCarga}
+              onChange={(e) => setFormData({ ...formData, tipoCarga: e.target.value })}
+              className={`w-full p-4 rounded-xl border text-xs font-bold outline-none transition-all ${
+                isDarkMode ? 'bg-zinc-950 border-white/5 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-200 text-zinc-800'
+              }`}
+              placeholder="Ex: Cimento / Areia / Peças de Britadeira"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5 text-left">
+              <label className="text-[9px] font-black uppercase text-zinc-500 tracking-widest px-2">{keyLabels.qtd}</label>
+              <input 
+                type="text" 
+                value={formData.quantidade}
+                onChange={(e) => setFormData({ ...formData, quantidade: e.target.value })}
+                className={`w-full p-4 rounded-xl border text-xs font-bold outline-none transition-all ${isDarkMode ? 'bg-zinc-950 border-white/5' : ''}`}
+                placeholder="Ex: 20 un"
+              />
+            </div>
+            <div className="space-y-1.5 text-left">
+              <label className="text-[9px] font-black uppercase text-zinc-500 tracking-widest px-2">{keyLabels.pso} *</label>
+              <input 
+                required
+                type="text" 
+                value={formData.peso}
+                onChange={(e) => setFormData({ ...formData, peso: e.target.value })}
+                className={`w-full p-4 rounded-xl border text-xs font-bold outline-none transition-all ${isDarkMode ? 'bg-zinc-950 border-white/5' : ''}`}
+                placeholder="Ex: 20 Ton"
+              />
+            </div>
+            <div className="space-y-1.5 text-left">
+              <label className="text-[9px] font-black uppercase text-zinc-500 tracking-widest px-2">{keyLabels.vol}</label>
+              <input 
+                type="text" 
+                value={formData.volume}
+                onChange={(e) => setFormData({ ...formData, volume: e.target.value })}
+                className={`w-full p-4 rounded-xl border text-xs font-bold outline-none transition-all ${isDarkMode ? 'bg-zinc-950 border-white/5' : ''}`}
+                placeholder="Ex: 35 m³"
+              />
+            </div>
+          </div>
+
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-1.5 text-left">
+            <label className="text-[9px] font-black uppercase text-zinc-500 tracking-widest px-2">{keyLabels.origen} *</label>
+            <input 
+              required
+              type="text" 
+              value={formData.origem}
+              onChange={(e) => setFormData({ ...formData, origem: e.target.value })}
+              className={`w-full p-4 rounded-xl border text-xs font-bold outline-none transition-all ${
+                isDarkMode ? 'bg-zinc-950 border-white/5 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-200'
+              }`}
+              placeholder="Localização exata de recolha"
+            />
+          </div>
+          <div className="space-y-1.5 text-left">
+            <label className="text-[9px] font-black uppercase text-zinc-500 tracking-widest px-2">{keyLabels.dest} *</label>
+            <input 
+              required
+              type="text" 
+              value={formData.destino}
+              onChange={(e) => setFormData({ ...formData, destino: e.target.value })}
+              className={`w-full p-4 rounded-xl border text-xs font-bold outline-none transition-all ${
+                isDarkMode ? 'bg-zinc-950 border-white/5 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-200'
+              }`}
+              placeholder="Localização exata de entrega"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-1.5 text-left">
+            <label className="text-[9px] font-black uppercase text-zinc-500 tracking-widest px-2">{keyLabels.data}</label>
+            <input 
+              type="text" 
+              value={formData.dataColeta}
+              onChange={(e) => setFormData({ ...formData, dataColeta: e.target.value })}
+              className={`w-full p-4 rounded-xl border text-xs font-bold outline-none ${isDarkMode ? 'bg-zinc-950 border-white/5' : ''}`}
+            />
+          </div>
+          <div className="space-y-1.5 text-left">
+            <label className="text-[9px] font-black uppercase text-zinc-500 tracking-widest px-2">{keyLabels.prazo}</label>
+            <input 
+              type="text" 
+              value={formData.prazoEntrega}
+              onChange={(e) => setFormData({ ...formData, prazoEntrega: e.target.value })}
+              className={`w-full p-4 rounded-xl border text-xs font-bold outline-none ${isDarkMode ? 'bg-zinc-950 border-white/5' : ''}`}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5 text-left">
+          <label className="text-[9px] font-black uppercase text-zinc-500 tracking-widest px-2">{keyLabels.obs}</label>
+          <textarea 
+            value={formData.observacoes}
+            onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+            className={`w-full p-4 border rounded-xl text-xs font-bold outline-none transition-all h-24 resize-none ${
+              isDarkMode ? 'bg-zinc-950 border-white/5 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-200'
+            }`}
+            placeholder="Especificações sobre empacotamento, cubagem, risco químico ou cuidados extras..."
+          />
+        </div>
+
+        <button 
+          type="submit" 
+          disabled={loading}
+          className="w-full py-5 bg-supplyx-blue hover:brightness-110 text-white rounded-2xl font-black text-sm uppercase italic tracking-tighter shadow-xl shadow-supplyx-blue/20 transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlusCircle className="w-5 h-5" />}
+          {keyLabels.sub}
+        </button>
+
+      </form>
+    </motion.div>
+  );
+}
+
+// ==========================================
+// MY REQUESTS LIST PAGE SUB-COMPONENT
+// ==========================================
+interface RequestsListPageProps {
+  isDarkMode: boolean;
+  language: 'PT' | 'EN';
+  customRequests: any[];
+  setSelectedRequestId: (id: string) => void;
+  setCustomRequests: (val: any[]) => void;
+}
+
+function RequestsListPage({ isDarkMode, language, customRequests, setSelectedRequestId, setCustomRequests }: RequestsListPageProps) {
+  
+  // Default base request + user generated solicitations merged
+  const allRequests = useMemo(() => {
+    const base = [
+      {
+        id: 'TR-2025-0001',
+        tipoCarga: 'Cimento',
+        quantidade: '20 Toneladas',
+        origem: 'Maputo Port',
+        destino: 'Nampula Central Obra',
+        status: 'Em Competição',
+        requester: 'Client'
+      },
+      {
+        id: 'TR-2025-0002',
+        tipoCarga: 'Combustível Diesel',
+        quantidade: '12.000 Litros',
+        origem: 'Matola Refinery',
+        destino: 'Tete Moatize Mine',
+        status: 'Em Transporte',
+        requester: 'Supplier'
+      }
+    ];
+    return [...customRequests, ...base];
+  }, [customRequests]);
+
+  const handleDeleteCustom = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = customRequests.filter(r => r.id !== id);
+    setCustomRequests(updated);
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }}
+      className="space-y-6 text-left"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-black uppercase italic text-white tracking-tight">
+            {language === 'PT' ? 'Painel de Controle de Solicitações' : 'My Freight Board'}
+          </h2>
+          <p className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-widest mt-1">
+            Status operacional de todas as cargas solicitadas na nuvem
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
-        {[
-          { label: t.activeVehicles, val: '12', icon: Truck, color: 'text-brand', bg: 'bg-brand/10' },
-          { label: t.completedDeliveries, val: '45', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-          { label: t.pendingCritical, val: '2', icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-        ].map((stat, i) => (stat &&
-          <motion.div 
-            key={i}
-            whileHover={{ y: -5 }}
-            className={`p-6 rounded-3xl border flex items-center gap-4 ${
-              isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {allRequests.map((req) => (
+          <div
+            key={req.id}
+            onClick={() => setSelectedRequestId(req.id)}
+            className={`p-6 rounded-[32px] border transition-all cursor-pointer group hover:scale-[1.02] hover:-translate-y-1 flex flex-col justify-between min-h-[220px] ${
+              isDarkMode ? 'bg-zinc-900/50 border-white/5 hover:border-supplyx-blue/50 shadow-2xl' : 'bg-white border-zinc-100 shadow-sm'
             }`}
           >
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${stat.bg}`}>
-              <stat.icon className={`w-7 h-7 ${stat.color}`} />
-            </div>
             <div>
-              <p className={`text-2xl font-black italic tracking-tighter leading-none ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{stat.val}</p>
-              <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mt-1">{stat.label}</p>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+              <div className="flex justify-between items-start mb-4">
+                <span className="text-[10px] font-black text-supplyx-blue uppercase tracking-widest bg-supplyx-blue/10 px-3 py-1 rounded-full border border-supplyx-blue/15">
+                  #{req.id}
+                </span>
 
-      {/* NEW Fleet Quick Selection */}
-      <div className="space-y-4">
-        <h3 className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
-          {language === 'PT' ? 'Solicitar por Categoria' : 'Request by Category'}
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {truckTypes.map((type) => (
-            <motion.button 
-              key={type.id}
-              whileHover={{ y: -5 }}
-              onClick={() => {
-                setSelectedTruck(type.id);
-                setShowBooking(true);
-                setBookingStep(1);
-              }}
-              className={`p-6 rounded-3xl border transition-all flex flex-col items-center gap-4 group text-center ${
-                isDarkMode ? 'bg-zinc-900 border-zinc-800 hover:border-brand/30' : 'bg-white border-zinc-100 shadow-sm hover:border-brand/30'
-              }`}
-            >
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 transition-all group-hover:bg-brand/10 group-hover:text-brand">
-                <type.icon className="w-8 h-8 text-zinc-400 group-hover:text-brand" />
+                <span className={`px-3 py-1 rounded-full text-[8.5px] font-black uppercase tracking-wider border ${
+                  req.status === 'Entregue' || req.status === 'Delivered' 
+                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25'
+                    : req.status === 'Em Transporte' || req.status === 'In Transit' 
+                      ? 'bg-supplyx-blue/10 text-supplyx-blue border-supplyx-blue/25 animate-pulse'
+                      : 'bg-amber-500/10 text-amber-500 border-amber-500/25'
+                }`}>
+                  {req.status}
+                </span>
               </div>
-              <div>
-                <p className={`text-xl font-black italic tracking-tighter uppercase leading-none ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-                  {type.name}
-                </p>
-                <p className="text-[10px] font-bold text-zinc-500 uppercase mt-1">
-                  {language === 'PT' ? 'Capacidade' : 'Capacity'}: {type.capacity}
-                </p>
-                <p className="text-[8px] font-medium text-zinc-400 uppercase mt-1 line-clamp-1">{type.description}</p>
-              </div>
-            </motion.button>
-          ))}
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-12">
-        <div className={`xl:col-span-2 rounded-[48px] border overflow-hidden relative group ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100 shadow-xl'}`}>
-          <div className="p-10 border-b border-white/5 flex items-center justify-between relative z-10">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-supplyx-blue/10 flex items-center justify-center">
-                <Navigation2 className="w-6 h-6 text-supplyx-blue" />
-              </div>
-              <div>
-                <h3 className={`text-xl font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.liveTracking}</h3>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Global Logistics Grid v2.4</p>
+              <h3 className="text-md font-black text-white italic truncate leading-none mb-1.5">{req.tipoCarga}</h3>
+              <p className="text-[10px] text-zinc-500 font-semibold">{language === 'PT' ? 'Quantidade' : 'Payload'}: {req.quantidade}</p>
+              
+              <div className="mt-4 pt-3 border-t border-white/[0.03] space-y-1">
+                <p className="text-[9px] font-bold text-zinc-400 uppercase truncate">📍 {req.origem}</p>
+                <p className="text-[9px] font-bold text-zinc-400 uppercase truncate">🏁 {req.destino}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-full">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-widest">
-                  {language === 'PT' ? 'Nós ativos: 1.242' : 'Active nodes: 1,242'}
+
+            <div className="flex justify-between items-center mt-6 pt-3 border-t border-white/[0.03]">
+              <span className="text-[9px] font-black uppercase text-zinc-500">
+                {language === 'PT' ? 'Autor' : 'By'}: {req.requester === 'Client' ? 'Cliente' : 'Fornecedor'}
+              </span>
+
+              <div className="flex items-center gap-1.5">
+                {req.id.startsWith('TR-2025-0') === false && (
+                  <button 
+                    onClick={(e) => handleDeleteCustom(req.id, e)}
+                    className="p-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all text-[8px] font-bold"
+                  >
+                    Excluir
+                  </button>
+                )}
+                <span className="text-[9px] font-black text-supplyx-blue uppercase tracking-widest flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                  Detalhes <ChevronRight className="w-3.5 h-3.5" />
                 </span>
               </div>
             </div>
           </div>
-          
-          <div className="h-[500px] relative bg-supplyx-deep/20 overflow-hidden">
-             <div className="absolute inset-0 opacity-20 pointer-events-none">
-                <svg width="100%" height="100%" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice">
-                   <path d="M100 200 Q 200 100 400 250 T 700 300" stroke="#3B82F6" strokeWidth="2" fill="none" strokeDasharray="10 10" />
-                   <path d="M50 400 Q 250 350 450 450 T 750 350" stroke="#3B82F6" strokeWidth="2" fill="none" strokeDasharray="10 10" />
-                   <circle cx="100" cy="200" r="4" fill="#3B82F6" />
-                   <circle cx="700" cy="300" r="4" fill="#3B82F6" />
-                   <circle cx="50" cy="400" r="4" fill="#3B82F6" />
-                   <circle cx="750" cy="350" r="4" fill="#3B82F6" />
-                </svg>
-             </div>
-
-             {allShipments.filter(s => s.status !== t.statuses.finished).map((s, idx) => (
-                <motion.div 
-                  key={s.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="absolute"
-                  style={{ top: `${20 + idx * 25}%`, left: `${15 + idx * 30}%` }}
-                >
-                   <div className="relative group/shipment cursor-pointer" onClick={() => setSelectedShipment(s)}>
-                      <div className="absolute -inset-4 bg-supplyx-blue/20 blur-xl rounded-full animate-pulse" />
-                      <div className={`p-4 rounded-2xl bg-supplyx-deep border-2 transition-all ${selectedShipment?.id === s.id ? 'border-supplyx-blue scale-110 shadow-2xl' : 'border-white/10 opacity-70'}`}>
-                         <Truck className="w-6 h-6 text-supplyx-blue mb-2" />
-                         <div className="text-[8px] font-black uppercase text-white tracking-widest">{s.id}</div>
-                      </div>
-                      
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 w-48 p-4 glass-dark rounded-2xl border border-white/10 opacity-0 group-hover/shipment:opacity-100 transition-opacity z-50 pointer-events-none text-white">
-                         <p className="text-[10px] font-black text-supplyx-blue uppercase mb-1">{s.carrier}</p>
-                         <p className="text-xs font-black text-white italic truncate">{s.material}</p>
-                         <div className="flex justify-between items-center mt-3 text-[8px] font-black text-zinc-500 uppercase tracking-widest">
-                            <span>ETA {s.ETA}</span>
-                            <span>{s.progress}%</span>
-                         </div>
-                      </div>
-                   </div>
-                </motion.div>
-             ))}
-             
-             <div className="absolute bottom-6 left-6 right-6 flex items-center justify-between pointer-events-none">
-                <div className="p-6 rounded-3xl bg-zinc-950/80 backdrop-blur-md border border-white/10 flex gap-8">
-                   <div className="text-center">
-                      <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest mb-1">Avg Lead Time</p>
-                      <p className="text-xl font-black italic text-white leading-none">2.4d</p>
-                   </div>
-                   <div className="w-px h-10 bg-white/10" />
-                   <div className="text-center">
-                      <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest mb-1">Efficiency Ratio</p>
-                      <p className="text-xl font-black italic text-emerald-500 leading-none">98.2%</p>
-                   </div>
-                </div>
-                <div className="p-4 rounded-2xl bg-zinc-950/80 backdrop-blur-md border border-white/10 text-[10px] font-black text-zinc-500 uppercase tracking-widest">
-                   {language === 'PT' ? 'Status do Link de Telemetria' : 'Live Telemetry Link Status'}: <span className="text-emerald-500">{language === 'PT' ? 'Estável' : 'Stable'}</span>
-                </div>
-             </div>
-          </div>
-        </div>
-
-        <div className={`rounded-[48px] border p-12 relative overflow-hidden flex flex-col ${isDarkMode ? 'bg-zinc-900 border-white/5 shadow-3xl' : 'bg-white border-zinc-100 shadow-sm'}`}>
-          <div className="absolute top-0 right-0 w-32 h-32 bg-supplyx-blue/5 rounded-full blur-3xl -z-10" />
-          
-          <div className="flex items-center justify-between mb-12">
-            <div>
-              <h3 className={`text-xl font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{language === 'PT' ? 'Rastreador Inteligente' : 'Intelligence Tracker'}</h3>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Tracking ID: {selectedShipment?.id}</p>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-supplyx-blue/10 flex items-center justify-center text-supplyx-blue">
-               <ShieldCheck className="w-6 h-6" />
-            </div>
-          </div>
-
-          <div className="flex-1 relative">
-             <div className="absolute left-[15px] top-4 bottom-4 w-1 bg-white/5 rounded-full" />
-             
-             <div className="space-y-10 relative">
-                {timelineSteps.map((step, i) => (
-                   <div key={i} className={`flex gap-6 relative group ${step.status === 'pending' ? 'opacity-30' : ''}`}>
-                      <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 relative z-10 transition-all ${
-                         step.status === 'completed' ? 'bg-emerald-500 border-emerald-500 text-white' : 
-                         step.status === 'current' ? 'bg-supplyx-blue border-supplyx-blue text-white animate-pulse-slow' : 
-                         isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-500' : 'bg-white border-zinc-200 text-zinc-400'
-                      }`}>
-                         {step.status === 'completed' ? <CheckCircle2 className="w-4 h-4" /> : <div className="w-2 h-2 rounded-full bg-current" />}
-                      </div>
-                      
-                      <div className="flex-1 pt-1">
-                         <div className="flex justify-between items-start mb-1">
-                            <h4 className={`text-sm font-black uppercase tracking-tight italic ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{step.label}</h4>
-                            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{step.time}</span>
-                         </div>
-                         <p className="text-[10px] font-bold text-zinc-500 uppercase flex items-center gap-2">
-                           <MapPin className="w-3 h-3 text-supplyx-blue" />
-                           {step.location}
-                         </p>
-                      </div>
-                   </div>
-                ))}
-             </div>
-          </div>
-
-          <div className="mt-12 p-8 rounded-3xl bg-white/[0.02] border border-white/5 space-y-4">
-             <div className="flex justify-between items-center text-[10px] font-black uppercase text-zinc-500 tracking-widest">
-                <span>{language === 'PT' ? 'Destino Final' : 'Final Destination'}</span>
-                <span className={isDarkMode ? 'text-white italic' : 'text-zinc-900 italic'}>{selectedShipment?.destination}</span>
-             </div>
-             <button className={`w-full py-4 border rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 ${isDarkMode ? 'bg-white/5 border-white/10 text-white hover:bg-white/10' : 'bg-zinc-50 border-zinc-100 text-zinc-600 hover:bg-zinc-100'}`}>
-                <Download className="w-4 h-4" />
-                {language === 'PT' ? 'Comprovante de Entrega (WIP)' : 'Proof of Delivery (WIP)'}
-             </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-8">
-        <div className="flex items-center justify-between">
-          <h3 className={`text-xl font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.shipmentStatus}</h3>
-          <div className="flex gap-4">
-             <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input 
-                   type="text" 
-                   placeholder={t.searchPlaceholder}
-                   className={`pl-10 pr-4 py-3 rounded-xl border text-[10px] font-black uppercase outline-none transition-all w-64 ${
-                      isDarkMode ? 'bg-white/5 border-white/5 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-200'
-                   }`}
-                />
-             </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {allShipments.map((s) => (
-            <motion.div 
-              key={s.id}
-              whileHover={{ scale: 1.02 }}
-              onClick={() => setSelectedShipment(s)}
-              className={`p-8 rounded-[40px] border transition-all cursor-pointer group relative overflow-hidden ${
-                selectedShipment?.id === s.id ? (isDarkMode ? 'bg-supplyx-dark border-supplyx-blue shadow-2xl' : 'bg-zinc-50 border-supplyx-blue') :
-                isDarkMode ? 'bg-zinc-900/50 border-white/5 hover:border-white/10' : 'bg-white border-zinc-100 shadow-sm'
-              }`}
-            >
-              <div className="flex justify-between items-start mb-8">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
-                  s.status === t.statuses.finished ? 'bg-emerald-500/10 text-emerald-500' : 
-                  s.status === t.statuses.transit ? 'bg-supplyx-blue/10 text-supplyx-blue' : 'bg-amber-500/10 text-amber-500'
-                }`}>
-                  <Package className="w-7 h-7" />
-                </div>
-                <div className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-full ${
-                  s.status === t.statuses.finished ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 
-                  s.status === t.statuses.transit ? 'bg-supplyx-blue/10 text-supplyx-blue border border-supplyx-blue/20' : 
-                  'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                }`}>
-                  {s.status}
-                </div>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <p className="text-[10px] font-black text-supplyx-blue uppercase tracking-widest mb-1">{s.id} • {s.carrier}</p>
-                  <h4 className={`text-lg font-black italic uppercase tracking-tighter leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{s.material}</h4>
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between text-[10px] font-black uppercase text-zinc-500 tracking-[0.2em]">
-                    <span>Efficiency</span>
-                    <span className={isDarkMode ? 'text-white' : 'text-zinc-900'}>{s.progress}%</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${s.progress}%` }}
-                      className={`h-full ${s.status === t.statuses.finished ? 'bg-emerald-500' : 'bg-supplyx-blue'}`}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center pt-4 border-t border-white/5">
-                  <p className="text-[9px] font-black text-zinc-500 uppercase flex items-center gap-2">
-                    <MapPin className="w-3 h-3" /> {s.destination}
-                  </p>
-                  <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-supplyx-blue transition-colors group-hover:translate-x-1" />
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+        ))}
       </div>
     </motion.div>
   );
 }
 
-interface TruckData {
-  id: string;
-  model: string;
-  plate: string;
-  type: string;
-  capacity: string;
-  status: 'available' | 'in_transit' | 'maintenance';
+// ==========================================
+// AVAILABLE LOADS / CARRIERS COMPETITION PORTAL
+// ==========================================
+interface AvailableLoadsPageProps {
+  isDarkMode: boolean;
+  language: 'PT' | 'EN';
+  customRequests: any[];
+  onSelectRequest: (id: string) => void;
 }
 
-interface LoadData {
-  id: string;
-  origin: string;
-  destination: string;
-  material: string;
-  weight: string;
-  status: 'pending' | 'loading' | 'transit' | 'delivered';
-  truckId?: string;
-}
-
-function LogisticsPartnerDashboard({ isDarkMode, language }: { isDarkMode: boolean, language: 'PT' | 'EN' }) {
-  const [trucks, setTrucks] = useState<TruckData[]>([]);
-  const [loads, setLoads] = useState<LoadData[]>([]);
-  const [isAddTruckOpen, setIsAddTruckOpen] = useState(false);
-  const [isAddLoadOpen, setIsAddLoadOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const t = {
-    PT: {
-      title: 'Painel da Transportadora',
-      subtitle: 'Gestão operacional de frotas e cargas',
-      stats: {
-        fleet: 'Frota Ativa',
-        loads: 'Cargas Ativas',
-        delivered: 'Entregas Totais',
-        revenue: 'Receita Mensal'
+function AvailableLoadsPage({ isDarkMode, language, customRequests, onSelectRequest }: AvailableLoadsPageProps) {
+  
+  const allRequests = useMemo(() => {
+    const base = [
+      {
+        id: 'TR-2025-0001',
+        tipoCarga: 'Cimento CP-IV',
+        quantidade: '20 Toneladas',
+        origem: 'Matola, Província de Maputo',
+        destino: 'Nampula, Província de Nampula',
+        status: 'Em Competição',
+        requester: 'Client',
+        targetPrice: '78.000 MZN'
       },
-      trucks: 'Minha Frota',
-      loads_title: 'Gestão de Cargas',
-      addTruck: 'CADASTRAR CAMIÃO',
-      addLoad: 'CADASTRAR CARGA',
-      noTrucks: 'Nenhum camião cadastrado.',
-      noLoads: 'Nenhuma carga em andamento.',
-      status: {
-        available: 'Disponível',
-        in_transit: 'Em Rota',
-        maintenance: 'Manutenção',
-        pending: 'Pendente',
-        loading: 'Carregando',
-        transit: 'Em Trânsito',
-        delivered: 'Entregue'
+      {
+        id: 'TR-2025-0002',
+        tipoCarga: 'Combustível Especializado',
+        quantidade: '12.000 Litros',
+        origem: 'Instalações Portuárias Maputo',
+        destino: 'Sítio de Exploração Tete',
+        status: 'Em Competição',
+        requester: 'Supplier',
+        targetPrice: '145.000 MZN'
       }
-    },
-    EN: {
-      title: 'Carrier Dashboard',
-      subtitle: 'Operational fleet and cargo management',
-      stats: {
-        fleet: 'Active Fleet',
-        loads: 'Active Loads',
-        delivered: 'Total Deliveries',
-        revenue: 'Monthly Revenue'
-      },
-      trucks: 'My Fleet',
-      loads_title: 'Cargo Management',
-      addTruck: 'REGISTER TRUCK',
-      addLoad: 'REGISTER LOAD',
-      noTrucks: 'No trucks registered.',
-      noLoads: 'No loads in progress.',
-      status: {
-        available: 'Available',
-        in_transit: 'In Route',
-        maintenance: 'Maintenance',
-        pending: 'Pending',
-        loading: 'Loading',
-        transit: 'In Transit',
-        delivered: 'Delivered'
-      }
-    }
-  }[language];
+    ];
+    return [...customRequests.filter(r => r.status === 'Em Competição' || r.status === 'In Competition'), ...base];
+  }, [customRequests]);
 
-  useEffect(() => {
-    if (!auth.currentUser) return;
+  const [appliedBids, setAppliedBids] = useState<Record<string, boolean>>({});
+  const [biddingValues, setBiddingValues] = useState<Record<string, string>>({});
 
-    const trucksQuery = query(collection(db, 'trucks'), where('ownerId', '==', auth.currentUser.uid));
-    const unsubscribeTrucks = onSnapshot(trucksQuery, (snapshot) => {
-      const truckList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TruckData));
-      setTrucks(truckList);
-      setIsLoading(false);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'trucks');
-      setIsLoading(false);
-    });
-
-    const loadsQuery = query(collection(db, 'loads'), where('carrierId', '==', auth.currentUser.uid));
-    const unsubscribeLoads = onSnapshot(loadsQuery, (snapshot) => {
-      const loadList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LoadData));
-      setLoads(loadList);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'loads');
-      setIsLoading(false);
-    });
-
-    return () => {
-      unsubscribeTrucks();
-      unsubscribeLoads();
-    };
-  }, []);
+  const handlePlaceBid = (id: string, e: React.FormEvent) => {
+    e.preventDefault();
+    const val = biddingValues[id];
+    if (!val) return;
+    setAppliedBids(prev => ({ ...prev, [id]: true }));
+  };
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-8"
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }}
+      className="space-y-6 text-left"
     >
-      {/* Header */}
-      <div className={`p-10 rounded-[48px] border flex flex-col lg:flex-row justify-between items-center gap-8 ${
-        isDarkMode ? 'bg-zinc-900 border-white/5 shadow-3xl' : 'bg-white border-zinc-100 shadow-sm'
-      }`}>
-        <div className="text-center lg:text-left flex items-center gap-6">
-           <div className="w-16 h-16 rounded-[24px] bg-supplyx-blue/10 flex items-center justify-center text-supplyx-blue">
-             <MapIcon className="w-8 h-8" />
-           </div>
-           <div>
-             <h2 className={`text-3xl font-black italic tracking-tighter uppercase mb-2 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.title}</h2>
-             <p className="text-zinc-500 text-[11px] font-black uppercase tracking-[0.3em]">{t.subtitle}</p>
-           </div>
-        </div>
-        <div className="flex items-center gap-4">
-           <button 
-             onClick={() => setIsAddTruckOpen(true)}
-             className="bg-supplyx-blue hover:bg-blue-600 text-white px-8 py-5 rounded-[24px] text-xs font-black italic uppercase tracking-widest transition-all active:scale-95 shadow-3xl shadow-blue-500/20 flex items-center gap-3"
-           >
-             <Truck className="w-5 h-5" />
-             {t.addTruck}
-           </button>
-        </div>
+      <div>
+        <h2 className="text-xl font-black uppercase italic text-white tracking-tight">
+          📦 {language === 'PT' ? 'Lotes e Cargas de Fretes Livres' : 'Available Freight Marketplace'}
+        </h2>
+        <p className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-widest mt-1">
+          Espaço regulador de lances onde Transportadoras homologadas competem por rotas de mineração e frotas industriais
+        </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {[
-          { label: t.stats.fleet, val: trucks.length.toString(), icon: Truck, color: 'text-supplyx-blue', bg: 'bg-supplyx-blue/10' },
-          { label: t.stats.loads, val: loads.filter(l => l.status !== 'delivered').length.toString(), icon: Package, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-          { label: t.stats.delivered, val: loads.filter(l => l.status === 'delivered').length.toString(), icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-          { label: t.stats.revenue, val: 'MT 450K', icon: TrendingUp, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-        ].map((stat, i) => (
-          <div key={i} className={`p-6 rounded-3xl border flex items-center gap-4 ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${stat.bg}`}>
-              <stat.icon className={`w-6 h-6 ${stat.color}`} />
-            </div>
-            <div>
-              <p className={`text-xl font-black italic tracking-tighter leading-none ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{stat.val}</p>
-              <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mt-1">{stat.label}</p>
+      <div className="space-y-4">
+        {allRequests.map((req) => (
+          <div
+            key={req.id}
+            className={`p-6 sm:p-8 rounded-[36px] border transition-all ${
+              isDarkMode ? 'bg-zinc-900/50 border-white/5 shadow-2xl' : 'bg-white border-zinc-100 shadow-sm'
+            }`}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-center">
+              
+              {/* Col 1: Attributes */}
+              <div className="md:col-span-1 space-y-2">
+                <span className="px-3 py-1 bg-supplyx-blue/15 text-supplyx-blue border border-supplyx-blue/20 rounded-full text-[8px] font-black uppercase tracking-wider">
+                  #{req.id} - Aberto
+                </span>
+                <h3 className="text-md font-black text-white italic truncate leading-none mt-2">{req.tipoCarga}</h3>
+                <p className="text-[10px] text-zinc-400 font-bold">{language === 'PT' ? 'Qtd Solicitada' : 'Total volume'}: {req.quantidade}</p>
+              </div>
+
+              {/* Col 2: Locations route */}
+              <div className="md:col-span-1 text-xs space-y-1.5 text-zinc-400 font-bold">
+                <p className="flex items-center gap-1.5 truncate"><span className="text-supplyx-blue">📍 De:</span> {req.origem}</p>
+                <p className="flex items-center gap-1.5 truncate"><span className="text-emerald-400">🏁 Para:</span> {req.destino}</p>
+              </div>
+
+              {/* Col 3: Target constraints */}
+              <div className="md:col-span-1 font-semibold text-xs text-zinc-500">
+                <p className="text-[9px] uppercase tracking-widest font-black text-zinc-650">Tarifa Compartilhada Ideal:</p>
+                <p className="text-md font-black text-white italic mt-1">{req.targetPrice || 'Mapeando Lances'}</p>
+              </div>
+
+              {/* Col 4: Operations bid form */}
+              <div className="md:col-span-1">
+                {appliedBids[req.id] ? (
+                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
+                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center justify-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" /> Lance Enviado!
+                    </p>
+                  </div>
+                ) : (
+                  <form onSubmit={(e) => handlePlaceBid(req.id, e)} className="flex items-center gap-2">
+                    <input 
+                      required
+                      type="text" 
+                      placeholder="MT Tarifa (Ex: 75.000)"
+                      value={biddingValues[req.id] || ''}
+                      onChange={(e) => setBiddingValues({ ...biddingValues, [req.id]: e.target.value })}
+                      className="flex-1 bg-zinc-950 border border-white/5 rounded-xl px-3 py-2.5 text-xs font-bold text-white outline-none"
+                    />
+                    <button 
+                      type="submit"
+                      className="px-4 py-2.5 bg-supplyx-blue hover:bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase select-none transition-all"
+                    >
+                      Competir
+                    </button>
+                  </form>
+                )}
+                
+                <p 
+                  onClick={() => onSelectRequest(req.id)}
+                  className="text-center text-[9px] font-extrabold uppercase text-supplyx-blue hover:underline cursor-pointer mt-3 tracking-widest"
+                >
+                  Visualizar Painel e Competidores
+                </p>
+              </div>
+
             </div>
           </div>
         ))}
+
+        {allRequests.length === 0 && (
+          <div className="p-12 text-center border-2 border-dashed border-zinc-800 rounded-3xl">
+            <p className="text-zinc-500 text-xs font-black uppercase tracking-widest">Nenhuma carga livre disponível para disputa no momento.</p>
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        {/* Trucks List */}
-        <div className={`p-8 rounded-[40px] border ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100 shadow-sm'}`}>
-          <div className="flex items-center justify-between mb-8">
-            <h3 className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.trucks}</h3>
-            <Truck className="w-5 h-5 text-supplyx-blue" />
-          </div>
-          
-          {trucks.length === 0 ? (
-            <div className="text-center py-12 border-2 border-dashed border-zinc-800 rounded-3xl">
-              <p className="text-zinc-500 text-xs font-black uppercase tracking-widest">{t.noTrucks}</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {trucks.map(truck => (
-                <div key={truck.id} className={`p-5 rounded-2xl border flex items-center justify-between ${isDarkMode ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-supplyx-blue/10 flex items-center justify-center text-supplyx-blue">
-                      <Truck className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{truck.model}</p>
-                      <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{truck.plate} • {truck.capacity}</p>
-                    </div>
-                  </div>
-                  <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
-                    truck.status === 'available' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
-                    truck.status === 'in_transit' ? 'bg-supplyx-blue/10 text-supplyx-blue border border-supplyx-blue/20' :
-                    'bg-zinc-500/10 text-zinc-500 border border-zinc-500/20'
-                  }`}>
-                    {t.status[truck.status]}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Loads Management */}
-        <div className={`p-8 rounded-[40px] border ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100 shadow-sm'}`}>
-          <div className="flex items-center justify-between mb-8">
-            <h3 className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.loads_title}</h3>
-            <button 
-              onClick={() => setIsAddLoadOpen(true)}
-              className="text-supplyx-blue hover:text-white transition-colors"
-            >
-              <PlusCircle className="w-6 h-6" />
-            </button>
-          </div>
-
-          {loads.length === 0 ? (
-            <div className="text-center py-12 border-2 border-dashed border-zinc-800 rounded-3xl">
-              <p className="text-zinc-500 text-xs font-black uppercase tracking-widest">{t.noLoads}</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {loads.map(load => (
-                <div key={load.id} className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <p className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{load.material}</p>
-                      <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{load.origin} → {load.destination}</p>
-                    </div>
-                    <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
-                      load.status === 'delivered' ? 'bg-emerald-500/10 text-emerald-500' :
-                      load.status === 'transit' ? 'bg-supplyx-blue/10 text-supplyx-blue' : 'bg-amber-500/10 text-amber-500'
-                    }`}>
-                      {t.status[load.status]}
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Peso: {load.weight}</p>
-                    <div className="flex gap-2">
-                       <select 
-                         className="bg-zinc-900 border border-white/10 rounded-lg px-3 py-1.5 text-[8px] font-black uppercase outline-none"
-                         value={load.status}
-                         onChange={async (e) => {
-                           try {
-                             await updateDoc(doc(db, 'loads', load.id), { status: e.target.value });
-                           } catch (err) {
-                             handleFirestoreError(err, OperationType.UPDATE, `loads/${load.id}`);
-                           }
-                         }}
-                       >
-                         <option value="pending">{t.status.pending}</option>
-                         <option value="loading">{t.status.loading}</option>
-                         <option value="transit">{t.status.transit}</option>
-                         <option value="delivered">{t.status.delivered}</option>
-                       </select>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Modals */}
-      {isAddTruckOpen && (
-        <AddTruckModal 
-          isDarkMode={isDarkMode} 
-          language={language} 
-          onClose={() => setIsAddTruckOpen(false)} 
-        />
-      )}
-      {isAddLoadOpen && (
-        <AddLoadModal 
-          isDarkMode={isDarkMode} 
-          language={language} 
-          onClose={() => setIsAddLoadOpen(false)} 
-        />
-      )}
     </motion.div>
-  );
-}
-
-function AddTruckModal({ isDarkMode, language, onClose }: { isDarkMode: boolean, language: 'PT' | 'EN', onClose: () => void }) {
-  const [formData, setFormData] = useState({
-    model: '',
-    plate: '',
-    type: 'Camião Simples',
-    capacity: '10 Ton'
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!auth.currentUser) return;
-    setIsSubmitting(true);
-    try {
-      await addDoc(collection(db, 'trucks'), {
-        ...formData,
-        ownerId: auth.currentUser.uid,
-        status: 'available',
-        createdAt: serverTimestamp()
-      });
-      onClose();
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'trucks');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <motion.div 
-        initial={{ scale: 0.9, opacity: 0 }} 
-        animate={{ scale: 1, opacity: 1 }} 
-        className={`w-full max-w-md p-8 rounded-[40px] border shadow-2xl relative z-10 ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100'}`}
-      >
-        <div className="flex justify-between items-center mb-8">
-          <h3 className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-            {language === 'PT' ? 'Novo Veículo' : 'New Vehicle'}
-          </h3>
-          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl transition-colors"><X className="w-5 h-5 text-zinc-500" /></button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5 text-left">
-            <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Modelo</label>
-            <input 
-              required
-              value={formData.model}
-              onChange={e => setFormData({ ...formData, model: e.target.value })}
-              className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-100'}`}
-              placeholder="Ex: Volvo FH / Scania R500"
-            />
-          </div>
-          <div className="space-y-1.5 text-left">
-            <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Matrícula</label>
-            <input 
-              required
-              value={formData.plate}
-              onChange={e => setFormData({ ...formData, plate: e.target.value })}
-              className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-100'}`}
-              placeholder="Ex: ABC 123 MC"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5 text-left">
-              <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Tipo</label>
-              <select 
-                value={formData.type}
-                onChange={e => setFormData({ ...formData, type: e.target.value })}
-                className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100'}`}
-              >
-                <option>Camião Simples</option>
-                <option>Carreta</option>
-                <option>VUC</option>
-                <option>Toco</option>
-              </select>
-            </div>
-            <div className="space-y-1.5 text-left">
-              <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Capacidade</label>
-              <input 
-                value={formData.capacity}
-                onChange={e => setFormData({ ...formData, capacity: e.target.value })}
-                className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100'}`}
-                placeholder="Ex: 24 Ton"
-              />
-            </div>
-          </div>
-          <button 
-            type="submit" 
-            disabled={isSubmitting}
-            className="w-full py-5 bg-supplyx-blue text-white rounded-2xl font-black text-sm uppercase italic tracking-tighter shadow-xl shadow-blue-500/20 active:scale-95 transition-all mt-4 flex items-center justify-center gap-2"
-          >
-            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-            {language === 'PT' ? 'CADASTRAR VEÍCULO' : 'REGISTER TRUCK'}
-          </button>
-        </form>
-      </motion.div>
-    </div>
-  );
-}
-
-function AddLoadModal({ isDarkMode, language, onClose }: { isDarkMode: boolean, language: 'PT' | 'EN', onClose: () => void }) {
-  const [formData, setFormData] = useState({
-    origin: '',
-    destination: '',
-    material: '',
-    weight: '10 Ton'
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!auth.currentUser) return;
-    setIsSubmitting(true);
-    try {
-      await addDoc(collection(db, 'loads'), {
-        ...formData,
-        carrierId: auth.currentUser.uid,
-        status: 'pending',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-      onClose();
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'loads');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <motion.div 
-        initial={{ scale: 0.9, opacity: 0 }} 
-        animate={{ scale: 1, opacity: 1 }} 
-        className={`w-full max-w-md p-8 rounded-[40px] border shadow-2xl relative z-10 ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100'}`}
-      >
-        <div className="flex justify-between items-center mb-8">
-          <h3 className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-            {language === 'PT' ? 'Nova Carga' : 'New Load'}
-          </h3>
-          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl transition-colors"><X className="w-5 h-5 text-zinc-500" /></button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5 text-left">
-            <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Material</label>
-            <input 
-              required
-              value={formData.material}
-              onChange={e => setFormData({ ...formData, material: e.target.value })}
-              className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white focus:border-supplyx-blue' : 'bg-zinc-50 border-zinc-100'}`}
-              placeholder="Ex: 500 Sacas de Cimento"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5 text-left">
-              <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Origem</label>
-              <input 
-                required
-                value={formData.origin}
-                onChange={e => setFormData({ ...formData, origin: e.target.value })}
-                className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100'}`}
-                placeholder="Ex: Porto Maputo"
-              />
-            </div>
-            <div className="space-y-1.5 text-left">
-              <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Destino</label>
-              <input 
-                required
-                value={formData.destination}
-                onChange={e => setFormData({ ...formData, destination: e.target.value })}
-                className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100'}`}
-                placeholder="Ex: Obra Central"
-              />
-            </div>
-          </div>
-          <div className="space-y-1.5 text-left">
-            <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-2">Peso</label>
-            <input 
-              value={formData.weight}
-              onChange={e => setFormData({ ...formData, weight: e.target.value })}
-              className={`w-full p-4 rounded-2xl border text-xs font-black outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100'}`}
-              placeholder="Ex: 25 Ton"
-            />
-          </div>
-          <button 
-            type="submit" 
-            disabled={isSubmitting}
-            className="w-full py-5 bg-supplyx-blue text-white rounded-2xl font-black text-sm uppercase italic tracking-tighter shadow-xl shadow-blue-500/20 active:scale-95 transition-all mt-4 flex items-center justify-center gap-2"
-          >
-            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Package className="w-5 h-5" />}
-            {language === 'PT' ? 'CADASTRAR CARGA' : 'REGISTER LOAD'}
-          </button>
-        </form>
-      </motion.div>
-    </div>
   );
 }

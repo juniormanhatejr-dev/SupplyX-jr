@@ -27,6 +27,7 @@ import {
   MessageSquare,
   X,
   User,
+  Truck,
 } from 'lucide-react';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -491,6 +492,86 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const [selectedResponseIndex, setSelectedResponseIndex] = useState<number>(0);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [selectedScenario, setSelectedScenario] = useState<number | null>(null);
+  const [scenarioCommitted, setScenarioCommitted] = useState(false);
+  const [newLogisticsId, setNewLogisticsId] = useState<string | null>(null);
+
+  const handleCommitScenario = () => {
+    if (selectedScenario === null) return;
+    
+    const targetResponse = aiResponses[selectedResponseIndex] || respondingTo;
+    const currentSupplierName = targetResponse?.name || targetResponse?.supplierName || 'Fornecedor Parceiro';
+    let materialsList = rows.map(r => r.material).filter(Boolean).join(', ');
+    if (!materialsList && targetResponse?.items) {
+      materialsList = targetResponse.items.map((it: any) => it.material || it.description).join(', ');
+    }
+    if (!materialsList) materialsList = 'Materiais de Construção B2B';
+
+    const clientName = profile?.name || 'Cliente SupplyX';
+    const clientPhone = profile?.phone || '+258 84 123 4567';
+
+    if (selectedScenario === 3) {
+      // Create logistics cargo request order automatically!
+      const logisticsId = `TR-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      setNewLogisticsId(logisticsId);
+
+      let existing: any[] = [];
+      try {
+        const saved = localStorage.getItem('supplyx_freight_requests');
+        if (saved) existing = JSON.parse(saved);
+      } catch (err) {
+        console.error(err);
+      }
+
+      const totalQty = rows.reduce((acc, r) => acc + (parseFloat(r.quantity) || 0), 0) || 5;
+      const calculatedWeight = `${Math.min(30, Math.ceil(totalQty * 0.4))} Toneladas`;
+      const calculatedVolume = `${Math.min(60, Math.ceil(totalQty * 0.7))} m³`;
+
+      const newLogisticsOrder = {
+        id: logisticsId,
+        tipoCarga: materialsList,
+        quantidade: `${totalQty} Lotes`,
+        peso: calculatedWeight,
+        volume: calculatedVolume,
+        origem: targetResponse?.supplierAddress || currentSupplierName + ', Moçambique',
+        destino: profile?.address || 'Província de Nampula, Moçambique',
+        status: 'Em concurso',
+        requester: 'Client',
+        freightResponsibility: 'Client',
+        deliveryMode: 'Third-party Logistics',
+        dataColeta: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}),
+        prazoEntrega: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}),
+        observacoes: `Ordem Logística vinculada à Cotação #${targetResponse?.requestId || 'QT-01'}. Faturamento sob custódia SupplyX. Urgência: ALTA`,
+        targetPrice: `MT ${(targetResponse?.price ? Math.round(targetResponse.price * 0.12) : 78000).toLocaleString('pt-BR')} MZN`,
+        contacto: clientPhone,
+        proposalsCount: 0,
+        rating: 5.0
+      };
+
+      existing = [newLogisticsOrder, ...existing];
+      localStorage.setItem('supplyx_freight_requests', JSON.stringify(existing));
+
+      // Also register a system notification
+      let liveNotifications: any[] = [];
+      try {
+        const savedNotifications = localStorage.getItem('supplyx_logistics_notifications');
+        if (savedNotifications) liveNotifications = JSON.parse(savedNotifications);
+      } catch (e) {}
+
+      const notificationObj = {
+        id: `N-${Math.floor(100 + Math.random() * 900)}`,
+        title: `NOVO CONCURSO LOGÍSTICO #${logisticsId}`,
+        text: `Carga de ${materialsList} gerada automaticamente a partir do faturamento B2B com ${currentSupplierName}.`,
+        time: 'Agora mesmo',
+        read: false
+      };
+      liveNotifications = [notificationObj, ...liveNotifications];
+      localStorage.setItem('supplyx_logistics_notifications', JSON.stringify(liveNotifications));
+    }
+
+    setScenarioCommitted(true);
+  };
+
   const [isPaying, setIsPaying] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
@@ -1591,30 +1672,237 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                 </div>
 
                 {paymentSuccess ? (
-                  <div className="flex-grow flex flex-col items-center justify-center py-10">
-                    <div className="w-24 h-24 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/20 mb-8 relative">
-                      <CheckCircle2 className="w-12 h-12" />
-                      <motion.div 
-                        initial={{ scale: 1, opacity: 0.5 }}
-                        animate={{ scale: 1.8, opacity: 0 }}
-                        transition={{ duration: 1.5, repeat: Infinity }}
-                        className="absolute inset-0 bg-emerald-500 rounded-full"
-                      />
-                    </div>
-                    <p className={`text-2xl font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.success}</p>
-                    <p className="text-zinc-500 text-sm font-bold mt-2">{t.transaction}: #SX-{Math.random().toString(36).substring(7).toUpperCase()}</p>
-                    <div className="mt-12 flex gap-4">
-                      <button 
-                        onClick={() => {
-                          setStep(1);
-                          setPaymentSuccess(false);
-                          setShowForm(false);
-                        }}
-                        className="px-8 py-4 bg-zinc-900 dark:bg-brand text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all active:scale-95"
-                      >
-                        {t.myOrders}
-                      </button>
-                    </div>
+                  <div className="flex-grow flex flex-col">
+                    {!scenarioCommitted ? (
+                      <div className="flex-grow flex flex-col py-2">
+                        <div className="text-center mb-6">
+                          <h4 className={`text-base sm:text-lg font-black italic uppercase tracking-tight ${isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                            {language === 'PT' ? 'Como será feita a entrega?' : 'How will delivery be handled?'}
+                          </h4>
+                          <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mt-1">
+                            {language === 'PT' ? 'Selecione uma modalidade operacional para prosseguir' : 'Select an operational method to proceed'}
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                          {/* Option 1: Levantamento próprio */}
+                          <div 
+                            onClick={() => setSelectedScenario(1)}
+                            className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex flex-col justify-between hover:scale-[1.01] ${
+                              selectedScenario === 1 
+                                ? 'border-[#0052CC] bg-[#0052CC]/5 shadow-brand' 
+                                : isDarkMode ? 'border-zinc-800 bg-zinc-900 hover:border-zinc-700' : 'border-zinc-100 bg-white hover:border-zinc-300 shadow-sm'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between mb-4">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedScenario === 1 ? 'bg-[#0052CC] text-white' : 'bg-amber-500/10 text-amber-500'}`}>
+                                  <User className="w-5 h-5" />
+                                </div>
+                                <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-zinc-500/10 text-zinc-500">
+                                  {language === 'PT' ? 'Cenário 1' : 'Scenario 1'}
+                                </span>
+                              </div>
+                              <h5 className={`text-xs font-black uppercase tracking-widest mb-2 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                                {language === 'PT' ? 'Levantamento Próprio' : 'Self-Pickup'}
+                              </h5>
+                              <p className="text-[10px] font-bold text-zinc-500 leading-normal">
+                                {language === 'PT' 
+                                  ? 'O cliente levanta a mercadoria diretamente nas instalações do fornecedor. A logística externa da SupplyX não é acionada.' 
+                                  : 'The customer retrieves materials direct from the supplier database. Outer logistics not required.'}
+                              </p>
+                            </div>
+                            <div className="mt-4 pt-3 border-t border-zinc-500/10 flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-[#0052CC]">
+                              <span>{language === 'PT' ? 'Sem taxa de frete' : 'No freight fee'}</span>
+                              <span className="bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded-md">FOB</span>
+                            </div>
+                          </div>
+
+                          {/* Option 2: Entrega pelo fornecedor */}
+                          <div 
+                            onClick={() => setSelectedScenario(2)}
+                            className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex flex-col justify-between hover:scale-[1.01] ${
+                              selectedScenario === 2 
+                                ? 'border-[#0052CC] bg-[#0052CC]/5 shadow-brand' 
+                                : isDarkMode ? 'border-zinc-800 bg-zinc-900 hover:border-zinc-700' : 'border-zinc-100 bg-white hover:border-zinc-300 shadow-sm'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between mb-4">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedScenario === 2 ? 'bg-[#0052CC] text-white' : 'bg-[#0052CC]/10 text-[#0052CC]'}`}>
+                                  <Building2 className="w-5 h-5" />
+                                </div>
+                                <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-zinc-500/10 text-zinc-500">
+                                  {language === 'PT' ? 'Cenário 2' : 'Scenario 2'}
+                                </span>
+                              </div>
+                              <h5 className={`text-xs font-black uppercase tracking-widest mb-2 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                                {language === 'PT' ? 'Entrega pelo Fornecedor' : 'Supplier own fleet'}
+                              </h5>
+                              <p className="text-[10px] font-bold text-zinc-500 leading-normal">
+                                {language === 'PT' 
+                                  ? 'O fornecedor assume o transporte utilizando motorista e frota próprios. O fornecedor controla toda a entrega no sistema.' 
+                                  : 'Supplier controls delivery using cooperative or proprietary vehicle. Outer carriers optional.'}
+                              </p>
+                            </div>
+                            <div className="mt-4 pt-3 border-t border-zinc-500/10 flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-[#0052CC]">
+                              <span>{language === 'PT' ? 'Controlo do Fornecedor' : 'Supplier Controlled'}</span>
+                              <span className="bg-indigo-500/10 text-indigo-500 px-2 py-0.5 rounded-md">CIF</span>
+                            </div>
+                          </div>
+
+                          {/* Option 3: Solicitar Logística */}
+                          <div 
+                            onClick={() => setSelectedScenario(3)}
+                            className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex flex-col justify-between hover:scale-[1.01] ${
+                              selectedScenario === 3 
+                                ? 'border-brand bg-brand/5 shadow-brand' 
+                                : isDarkMode ? 'border-zinc-800 bg-zinc-900 hover:border-zinc-700' : 'border-zinc-100 bg-white hover:border-zinc-300 shadow-sm'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between mb-4">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedScenario === 3 ? 'bg-brand text-white' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                                  <Truck className="w-5 h-5" />
+                                </div>
+                                <span className="text-[8px] font-black uppercase px-2.5 py-1 rounded-full bg-emerald-500 text-white animate-pulse">
+                                  {language === 'PT' ? 'Sugerido' : 'Suggested'}
+                                </span>
+                              </div>
+                              <h5 className={`text-xs font-black uppercase tracking-widest mb-2 text-brand`}>
+                                {language === 'PT' ? 'Solicitar Logística no SupplyX' : 'Third-Party Carrier (SupplyX)'}
+                              </h5>
+                              <p className="text-[10px] font-bold text-zinc-500 leading-normal">
+                                {language === 'PT' 
+                                  ? 'Cria uma ordem logística automatizada no concórcio público para transportadoras externas avaliarem e licitarem em tempo-real.' 
+                                  : 'Full comprehensive logistics module. Auto-generates cargo dispatch for outer network carriers.'}
+                              </p>
+                            </div>
+                            <div className="mt-4 pt-3 border-t border-zinc-500/10 flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-emerald-500">
+                              <span>{language === 'PT' ? 'Bidding Ativo & Rastreio' : 'Active Bidding & Tracking'}</span>
+                              <span className="bg-emerald-500 text-white px-2 py-0.5 rounded-md text-[7px]">COMPLETO</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-zinc-500/10">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              // Skip selection and just close
+                              setStep(1);
+                              setPaymentSuccess(false);
+                              setShowForm(false);
+                            }}
+                            className={`px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${isDarkMode ? 'text-zinc-500 hover:text-white' : 'text-zinc-400 hover:text-zinc-900'}`}
+                          >
+                            {language === 'PT' ? 'Decidir mais tarde' : 'Decide later'}
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={handleCommitScenario}
+                            disabled={selectedScenario === null}
+                            className="px-10 py-3.5 bg-[#0052CC] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-brand/20 hover:bg-[#0747A6] transition-all disabled:opacity-50 active:scale-95 flex items-center gap-2"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            {language === 'PT' ? 'Confirmar Agendamento' : 'Confirm Scheduling'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex-grow flex flex-col items-center justify-center py-6 text-center">
+                        <div className="w-20 h-20 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-xl shadow-emerald-500/10 mb-6 relative">
+                          {selectedScenario === 3 ? <Truck className="w-10 h-10 animate-bounce" /> : <CheckCircle2 className="w-10 h-10" />}
+                          <motion.div 
+                            initial={{ scale: 1, opacity: 0.5 }}
+                            animate={{ scale: 1.6, opacity: 0 }}
+                            transition={{ duration: 1.5, repeat: Infinity }}
+                            className="absolute inset-0 bg-emerald-500 rounded-full"
+                          />
+                        </div>
+
+                        <h4 className={`text-xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                          {selectedScenario === 1 && (language === 'PT' ? 'Levantamento Próprio Agendado!' : 'Self-Pickup Scheduled!')}
+                          {selectedScenario === 2 && (language === 'PT' ? 'Entrega pelo Fornecedor Ativada!' : 'Supplier Delivery Activated!')}
+                          {selectedScenario === 3 && (language === 'PT' ? 'Ordem Logística Criada em Tempo-real!' : 'Logistics Request Active!')}
+                        </h4>
+
+                        <p className="text-zinc-500 text-xs font-bold mt-2 max-w-md">
+                          {selectedScenario === 1 && (
+                            language === 'PT' 
+                              ? 'O faturamento foi concluído e os manifestos fiscais da guia de expedição foram liberados para levantamento pelo cliente.' 
+                              : 'Requisition saved as Self-Pickup. Clearance paperwork has been delivered directly to the buyer.'
+                          )}
+                          {selectedScenario === 2 && (
+                            language === 'PT' 
+                              ? 'O fornecedor parceiro foi notificado em tempo-real para despachar a carga utilizando sua rota cooperativa própria.' 
+                              : 'cooperative dispatch request sent. Supplier has been notified to execute transport from their corporate depot.'
+                          )}
+                          {selectedScenario === 3 && (
+                            language === 'PT' 
+                              ? 'A requisição de transporte público foi iniciada no ecossistema inteligente de lances e fretes da SupplyX. Transportadores cadastrados foram alertados.' 
+                              : 'The automated public freight corridor proposal has been sent to the SupplyX Carriers Concourse with status: Em concurso.'
+                          )}
+                        </p>
+
+                        {selectedScenario === 3 && newLogisticsId && (
+                          <div className={`mt-6 p-4 rounded-2xl w-full max-w-sm text-left text-[11px] font-bold space-y-2 border ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-100 shadow-inner'}`}>
+                            <div className="flex justify-between border-b border-zinc-500/10 pb-2">
+                              <span className="text-zinc-500 uppercase text-[9px] tracking-wider">{language === 'PT' ? 'Identificador' : 'Load ID'}</span>
+                              <span className="text-brand font-black tracking-tight">{newLogisticsId}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-zinc-500 uppercase text-[9px] tracking-wider">{language === 'PT' ? 'Status Concurso' : 'Status'}</span>
+                              <span className="text-emerald-500 uppercase text-[9px] font-black tracking-wider bg-emerald-500/10 px-2 py-0.5 rounded-md">Em concurso</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-zinc-500 uppercase text-[9px] tracking-wider">{language === 'PT' ? 'Fretagem' : 'Payer Responsibility'}</span>
+                              <span className={isDarkMode ? 'text-white' : 'text-zinc-900'}>{language === 'PT' ? 'FOB (Pago pelo Cliente)' : 'FOB (Buyer Pays)'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-zinc-500 uppercase text-[9px] tracking-wider">{language === 'PT' ? 'Urgência' : 'Urgency'}</span>
+                              <span className="text-rose-500 uppercase text-[9px] tracking-wider font-extrabold">ALTA</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mt-8 flex flex-col sm:flex-row gap-3">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setStep(1);
+                              setPaymentSuccess(false);
+                              setShowForm(false);
+                              setScenarioCommitted(false);
+                              setSelectedScenario(null);
+                            }}
+                            className={`px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest border transition-all active:scale-95 ${
+                              isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white' : 'bg-white border-zinc-100 text-zinc-600 hover:text-zinc-900 shadow-sm'
+                            }`}
+                          >
+                            {language === 'PT' ? 'Voltar para Cotações' : 'Back to Quotes'}
+                          </button>
+                          
+                          {selectedScenario === 3 && onNavigate && (
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                setStep(1);
+                                setPaymentSuccess(false);
+                                setShowForm(false);
+                                setScenarioCommitted(false);
+                                setSelectedScenario(null);
+                                onNavigate('Logística');
+                              }}
+                              className="px-8 py-4 bg-brand text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:brightness-110 transition-all active:scale-95 flex items-center justify-center gap-2"
+                            >
+                              <Truck className="w-4 h-4" />
+                              {language === 'PT' ? 'Ver no Painel Logístico' : 'Monitor Logistics'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">

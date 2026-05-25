@@ -74,6 +74,7 @@ export default function App() {
   const [prevTab, setPrevTab] = useState<string | null>(null);
   const [persistentSearchQuery, setPersistentSearchQuery] = useState('');
   const [logisticsPayload, setLogisticsPayload] = useState<any>(null);
+  const [logisticsSubTab, setLogisticsSubTab] = useState<string>('dashboard');
 
   useEffect(() => {
     const handleNavigate = (e: any) => {
@@ -259,7 +260,15 @@ export default function App() {
           {...commonProps} 
         />;
       case 'Logística':
-        return <LogisticsView initialPayload={logisticsPayload} onNavigate={handleNavigateWithPayload} {...commonProps} />;
+        return (
+          <LogisticsView 
+            initialPayload={logisticsPayload} 
+            activeSubTab={logisticsSubTab}
+            setActiveSubTab={setLogisticsSubTab}
+            onNavigate={handleNavigateWithPayload} 
+            {...commonProps} 
+          />
+        );
       case 'Seller Central':
         return <SupplierDashboard onNavigate={handleNavigateWithPayload} {...commonProps} />;
       case 'Notificações':
@@ -322,6 +331,26 @@ export default function App() {
               setIsProfileModalOpen(true);
               return;
             }
+            if (label === 'Cockpit Analítico') {
+              setLogisticsSubTab('dashboard');
+              setActiveTab('Logística');
+              return;
+            }
+            if (label === 'Monitor de Cargas') {
+              setLogisticsSubTab('requests_list');
+              setActiveTab('Logística');
+              return;
+            }
+            if (label === 'Frotas & Motoristas') {
+              setLogisticsSubTab('drivers');
+              setActiveTab('Logística');
+              return;
+            }
+            if (label === 'Fulfillment Stock') {
+              setLogisticsSubTab('inventory');
+              setActiveTab('Logística');
+              return;
+            }
             if (label === 'Ajustes') {
               setShouldEditProfile(false);
             }
@@ -335,6 +364,7 @@ export default function App() {
           language={language}
           userType={profile?.type}
           onLogout={handleLogout}
+          logisticsSubTab={logisticsSubTab}
         />
         
         <main className="lg:ml-64 transition-all pb-12 pt-28 relative z-10">

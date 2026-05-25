@@ -37,67 +37,73 @@ interface SidebarProps {
   language?: 'PT' | 'EN';
   userType?: 'buyer' | 'supplier' | 'logistics';
   onLogout?: () => void;
+  logisticsSubTab?: string;
 }
 
-export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, isDarkMode, language, userType, onLogout }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, isDarkMode, language, userType, onLogout, logisticsSubTab }: SidebarProps) {
   const { unreadMessages, unreadNotifications } = useNotifications();
   const { profile } = useAuth();
+
+  const isLogistics = userType === 'logistics' || activeItem === 'Logística' || ['Cockpit Analítico', 'Monitor de Cargas', 'Frotas & Motoristas', 'Fulfillment Stock'].includes(activeItem);
+
   const translations = {
     PT: {
-      dashboard: 'Dashboard',
-      products: 'Produtos / Materiais',
-      quotes: 'Pedidos / Cotações',
-      suppliers: 'Fornecedores',
-      reports: 'Relatórios',
-      messages: 'Mensagens',
-      logistics: 'Logística',
-      seller: 'Central do Vendedor',
-      notifications: 'Notificações',
-      settings: 'Ajustes',
-      profile: 'Meu Perfil',
-      logout: 'Sair da conta',
-      about: 'Sobre o SupplyX'
+      profile: 'Meu perfil',
+      dashboard: 'Cockpit analítico',
+      monitor: 'Monitor de cargas',
+      drivers: 'Frotas e motoristas',
+      fulfillment: 'Fulfillment stock',
+      chat: 'Chat B2B',
+      settings: 'Ajustes do sistema',
+      about: 'About',
+      logout: 'Sair da conta'
     },
     EN: {
-      dashboard: 'Dashboard',
-      products: 'Products / Materials',
-      quotes: 'Orders / Quotes',
-      suppliers: 'Suppliers',
-      reports: 'Reports',
-      messages: 'Messages',
-      logistics: 'Logistics',
-      seller: 'Seller Central',
-      notifications: 'Notifications',
-      settings: 'Settings',
       profile: 'My Profile',
-      logout: 'Logout',
-      about: 'About SupplyX'
+      dashboard: 'Control Dashboard',
+      monitor: 'Cargo Monitor',
+      drivers: 'Fleets & Drivers',
+      fulfillment: 'Fulfillment Stock',
+      chat: 'B2B Chat',
+      settings: 'System Settings',
+      about: 'About',
+      logout: 'Logout'
     }
   };
 
   const nav = translations[language || 'PT'];
 
-  const allItems = [
-    { icon: LayoutDashboard, label: nav.dashboard, originalLabel: 'Dashboard' },
-    { icon: User, label: nav.profile, originalLabel: 'Meu Perfil' },
-    { icon: BarChart3, label: nav.seller, originalLabel: 'Seller Central', supplierOnly: true },
-    { icon: Package, label: nav.products, originalLabel: 'Produtos / Materiais', hideForLogistics: true },
-    { icon: FileText, label: nav.quotes, originalLabel: 'Pedidos / Cotações', hideForLogistics: true },
-    { icon: Handshake, label: nav.suppliers, originalLabel: 'Fornecedores', buyerOnly: true },
-    { icon: BarChart3, label: nav.reports, originalLabel: 'Relatórios' },
-    { icon: MessageSquare, label: nav.messages, originalLabel: 'Mensagens' },
-    { icon: Truck, label: nav.logistics, originalLabel: 'Logística' },
-    { icon: Bell, label: nav.notifications, originalLabel: 'Notificações' },
-    { icon: Settings, label: nav.settings, originalLabel: 'Ajustes' },
-    { icon: Info, label: nav.about, originalLabel: 'About' },
-  ];
-
-  const filteredItems = allItems.filter(item => {
-    if (item.supplierOnly && userType !== 'supplier') return false;
-    if (item.buyerOnly && userType !== 'buyer' && userType !== 'logistics') return false;
-    if (item.hideForLogistics && userType === 'logistics') return false;
-    return true;
-  });
+  const filteredItems = isLogistics 
+    ? [
+        { icon: User, label: nav.profile, originalLabel: 'Meu Perfil' },
+        { icon: LayoutDashboard, label: nav.dashboard, originalLabel: 'Cockpit Analítico' },
+        { icon: Package, label: nav.monitor, originalLabel: 'Monitor de Cargas' },
+        { icon: Truck, label: nav.drivers, originalLabel: 'Frotas & Motoristas' },
+        { icon: Package, label: nav.fulfillment, originalLabel: 'Fulfillment Stock' },
+        { icon: MessageSquare, label: nav.chat, originalLabel: 'Mensagens' },
+        { icon: Settings, label: nav.settings, originalLabel: 'Ajustes' },
+        { icon: Info, label: nav.about, originalLabel: 'About' }
+      ]
+    : [
+        { icon: LayoutDashboard, label: language === 'PT' ? 'Dashboard' : 'Dashboard', originalLabel: 'Dashboard' },
+        { icon: User, label: language === 'PT' ? 'Meu Perfil' : 'My Profile', originalLabel: 'Meu Perfil' },
+        { icon: BarChart3, label: language === 'PT' ? 'Central do Vendedor' : 'Seller Central', originalLabel: 'Seller Central', supplierOnly: true },
+        { icon: Package, label: language === 'PT' ? 'Produtos / Materiais' : 'Products / Materials', originalLabel: 'Produtos / Materiais', hideForLogistics: true },
+        { icon: FileText, label: language === 'PT' ? 'Pedidos / Cotações' : 'Orders / Quotes', originalLabel: 'Pedidos / Cotações', hideForLogistics: true },
+        { icon: Handshake, label: language === 'PT' ? 'Fornecedores' : 'Suppliers', originalLabel: 'Fornecedores', buyerOnly: true },
+        { icon: BarChart3, label: language === 'PT' ? 'Relatórios' : 'Reports', originalLabel: 'Relatórios' },
+        { icon: MessageSquare, label: language === 'PT' ? 'Mensagens' : 'Messages', originalLabel: 'Mensagens' },
+        { icon: Truck, label: language === 'PT' ? 'Logística' : 'Logistics', originalLabel: 'Logística' },
+        { icon: Bell, label: language === 'PT' ? 'Notificações' : 'Notifications', originalLabel: 'Notificações' },
+        { icon: Settings, label: language === 'PT' ? 'Ajustes' : 'Settings', originalLabel: 'Ajustes' },
+        { icon: Info, label: language === 'PT' ? 'Sobre o SupplyX' : 'About SupplyX', originalLabel: 'About' },
+      ].filter(item => {
+        const uType = userType as string;
+        if (item.supplierOnly && uType !== 'supplier') return false;
+        if (item.buyerOnly && uType !== 'buyer' && uType !== 'logistics') return false;
+        if (item.hideForLogistics && uType === 'logistics') return false;
+        return true;
+      });
 
   return (
     <>
@@ -122,7 +128,22 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
 
       <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto custom-scrollbar">
         {filteredItems.map((item, index) => {
-          const isActive = activeItem === item.originalLabel;
+          let isActive = false;
+          if (isLogistics) {
+            if (item.originalLabel === 'Cockpit Analítico') {
+              isActive = activeItem === 'Logística' && logisticsSubTab === 'dashboard';
+            } else if (item.originalLabel === 'Monitor de Cargas') {
+              isActive = activeItem === 'Logística' && ['requests_list', 'detailed_request', 'create_request'].includes(logisticsSubTab || '');
+            } else if (item.originalLabel === 'Frotas & Motoristas') {
+              isActive = activeItem === 'Logística' && logisticsSubTab === 'drivers';
+            } else if (item.originalLabel === 'Fulfillment Stock') {
+              isActive = activeItem === 'Logística' && logisticsSubTab === 'inventory';
+            } else {
+              isActive = activeItem === item.originalLabel;
+            }
+          } else {
+            isActive = activeItem === item.originalLabel;
+          }
           return (
             <button
               key={index}

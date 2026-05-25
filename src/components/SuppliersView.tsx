@@ -4,7 +4,7 @@ import { OptimizedImage } from './ui/OptimizedImage';
 import UserPresenceIndicator from './UserPresenceIndicator';
 import { useState, useEffect, useMemo } from 'react';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, query, where, getDocs, onSnapshot, addDoc, serverTimestamp, getDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, addDoc, serverTimestamp, getDoc, doc, deleteDoc } from 'firebase/firestore';
 import { rankSuppliers, PROVINCE_COORDINATES } from '../services/supplierRankingService';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
@@ -39,6 +39,28 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+
+  const handleClearAllSuppliers = async () => {
+    if (window.confirm(language === 'PT' ? 'Deseja mesmo remover todos os fornecedores cadastrados na base de dados do Firestore?' : 'Do you want to clear all registered suppliers from the Firestore database?')) {
+      try {
+        setLoading(true);
+        const q = query(collection(db, 'users'), where('type', '==', 'supplier'));
+        const querySnapshot = await getDocs(q);
+        for (const docSnap of querySnapshot.docs) {
+          // Keep current logged-in user if they are a supplier
+          if (docSnap.id !== auth.currentUser?.uid) {
+            await deleteDoc(doc(db, 'users', docSnap.id));
+          }
+        }
+        alert(language === 'PT' ? 'Todos os fornecedores terceiros foram excluídos com sucesso!' : 'All third-party suppliers have been successfully deleted!');
+      } catch (err) {
+        console.error("Error deleting documents:", err);
+        alert(language === 'PT' ? 'Erro ao apagar fornecedores: ' + err : 'Error clearing suppliers: ' + err);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
 
   useEffect(() => {
     const q = query(collection(db, 'users'), where('type', '==', 'supplier'));
@@ -308,18 +330,18 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
           {t.strategicPartners}
         </h2>
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-          <input 
-            type="text" 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={t.searchSuppliers}
-            className={`w-full pl-10 pr-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand/20 transition-all ${
-              isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500' : 'bg-white border-zinc-200 text-zinc-900 placeholder-zinc-400'
-            }`}
-          />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+            <input 
+              type="text" 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={t.searchSuppliers}
+              className={`w-full pl-10 pr-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand/20 transition-all ${
+                isDarkMode ? 'bg-zinc-900 border-zinc-800 text-white placeholder-zinc-500' : 'bg-white border-zinc-200 text-zinc-900 placeholder-zinc-400'
+              }`}
+            />
+          </div>
         </div>
-      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-20">

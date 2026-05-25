@@ -14,7 +14,7 @@ interface RequestsListPageProps {
 export default function RequestsListPage({
   isDarkMode,
   language,
-  requests,
+  requests = [],
   onSelectRequest,
   onDeleteRequest
 }: RequestsListPageProps) {

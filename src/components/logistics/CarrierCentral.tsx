@@ -81,6 +81,89 @@ export default function CarrierCentral({
   const [typedMessage, setTypedMessage] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Bidding states and action
+  const [biddingLoadId, setBiddingLoadId] = useState<string | null>(null);
+  const [bidPrice, setBidPrice] = useState('');
+  const [bidDays, setBidDays] = useState('3');
+  const [bidRemarks, setBidRemarks] = useState('');
+  const [bidVehicle, setBidVehicle] = useState('Volvo FH 540 Globetrotter');
+
+  const handleSubmitBid = (loadId: string) => {
+    if (!bidPrice.trim()) return;
+
+    // Build bid object
+    const newBid = {
+      id: `PP-${Math.floor(1000 + Math.random() * 9000)}`,
+      name: carrierName,
+      price: `MT ${parseInt(bidPrice).toLocaleString('pt-BR')} MZN`,
+      rating: 4.9,
+      timeEstimate: `${bidDays} Dias`,
+      status: 'Em análise',
+      truckType: bidVehicle,
+      completedDeliveries: 184,
+      remarks: bidRemarks
+    };
+
+    // Load existing bids
+    let existingBids: any[] = [];
+    try {
+      const stored = localStorage.getItem(`supplyx_bids_${loadId}`);
+      if (stored) {
+        existingBids = JSON.parse(stored);
+      } else {
+        // Mock competing bids for rich simulation
+        existingBids = [
+          {
+            id: 'PP-102',
+            name: 'Moz Logistics, Lda',
+            price: `MT ${Math.round(parseInt(bidPrice) * 1.1).toLocaleString('pt-BR')} MZN`,
+            rating: 4.7,
+            timeEstimate: `${parseInt(bidDays) + 1} Dias`,
+            status: 'Em análise',
+            truckType: 'Scania Streamline R440',
+            completedDeliveries: 312,
+            remarks: 'Frota certificada com seguro carga ambiental incluso.'
+          },
+          {
+            id: 'PP-103',
+            name: 'Nampula Fretes Express',
+            price: `MT ${Math.round(parseInt(bidPrice) * 0.95).toLocaleString('pt-BR')} MZN`,
+            rating: 4.3,
+            timeEstimate: `${parseInt(bidDays) + 2} Dias`,
+            status: 'Em análise',
+            truckType: 'Caminhão Ligeiro Baú',
+            completedDeliveries: 64,
+            remarks: 'Fretamento flexível.'
+          }
+        ];
+      }
+    } catch (e) {}
+
+    // Add new user bid to list representatively
+    existingBids = [newBid, ...existingBids];
+    localStorage.setItem(`supplyx_bids_${loadId}`, JSON.stringify(existingBids));
+
+    // Update cargo request details: increment proposalsCount and record driver bid
+    const updated = requests.map(r => {
+      if (r.id === loadId) {
+        return {
+          ...r,
+          proposalsCount: (r.proposalsCount || 0) + 1,
+          hasUserBid: true,
+          userBidPrice: `MT ${parseInt(bidPrice).toLocaleString('pt-BR')} MZN`
+        };
+      }
+      return r;
+    });
+    onUpdateRequests(updated);
+
+    // Show confirmation and reset
+    alert(language === 'PT' ? 'Proposta logística enviada com sucesso ao cliente! Aguarde a adjudicação no painel.' : 'Logistics bid successfully submitted to the buyer! Awaiting selection.');
+    setBiddingLoadId(null);
+    setBidPrice('');
+    setBidRemarks('');
+  };
+
   // Auto scroll chats
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -386,19 +469,119 @@ export default function CarrierCentral({
                     </div>
                   </div>
 
-                  <div className="mt-6 pt-4 border-t border-white/[0.03] flex items-center justify-between">
-                    <div>
-                      <span className="text-[8px] font-black uppercase text-zinc-500 block leading-none">{language === 'PT' ? 'Valor do Frete' : 'Freight Rate'}</span>
-                      <span className="text-md font-black text-emerald-400 italic">MT {load.targetPrice || '68.000'}</span>
+                  <div className="mt-6 pt-4 border-t border-white/[0.03] space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[8px] font-black uppercase text-zinc-550 block leading-none">{language === 'PT' ? 'Valor Sugerido' : 'Target Price'}</span>
+                        <span className="text-sm font-black text-emerald-400 italic">MT {load.targetPrice || '68.000'}</span>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            if (biddingLoadId === load.id) {
+                              setBiddingLoadId(null);
+                            } else {
+                              setBiddingLoadId(load.id);
+                              setBidPrice(load.targetPrice ? load.targetPrice.replace(/[^0-9]/g, '') : '65000');
+                            }
+                          }}
+                          className={`px-4 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all flex items-center gap-1 active:scale-95 border ${
+                            load.hasUserBid 
+                              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                              : 'bg-zinc-950/40 border-white/5 text-zinc-300 hover:text-white hover:bg-zinc-900'
+                          }`}
+                        >
+                          {load.hasUserBid ? '✓ Proposto' : '🤖 Enviar Proposta'}
+                        </button>
+
+                        <button
+                          onClick={() => handleAcceptLoad(load.id)}
+                          className="px-4 py-2.5 bg-[#0052CC] text-white rounded-xl font-black text-[9px] uppercase tracking-wider shadow-lg hover:bg-[#0747A6] transition-all flex items-center gap-1.5 active:scale-95"
+                        >
+                          <Truck className="w-3 h-3" />
+                          {language === 'PT' ? 'Arrematar' : 'Accept'}
+                        </button>
+                      </div>
                     </div>
-                    
-                    <button
-                      onClick={() => handleAcceptLoad(load.id)}
-                      className="px-6 py-3 bg-[#0052CC] text-white rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-brand/15 hover:bg-[#0747A6] transition-all flex items-center gap-1.5 active:scale-95"
-                    >
-                      <Truck className="w-3.5 h-3.5" />
-                      {language === 'PT' ? 'Aceitar Entrega' : 'Accept Delivery'}
-                    </button>
+
+                    {biddingLoadId === load.id && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="p-4 rounded-2xl bg-zinc-950/50 border border-white/5 space-y-3 text-xs text-left"
+                      >
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[8px] font-black uppercase text-zinc-500 block mb-1">Seu Frete (MZN)</label>
+                            <input 
+                              type="number"
+                              value={bidPrice}
+                              onChange={e => setBidPrice(e.target.value)}
+                              className="w-full p-2 bg-zinc-950 rounded-lg border border-white/5 text-white font-bold font-mono text-[11px]"
+                              placeholder="Ex: 62000"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[8px] font-black uppercase text-zinc-500 block mb-1">Dias Estimados</label>
+                            <select
+                              value={bidDays}
+                              onChange={e => setBidDays(e.target.value)}
+                              className="w-full p-2 bg-zinc-950 rounded-lg border border-white/5 text-white font-bold text-[11px]"
+                            >
+                              <option value="1">1 Dia (Expresso)</option>
+                              <option value="2">2 Dias</option>
+                              <option value="3">3 Dias</option>
+                              <option value="4">4 Dias</option>
+                              <option value="5">5 Dias</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[8px] font-black uppercase text-zinc-500 block mb-1">Veículo Alocado</label>
+                          <select
+                            value={bidVehicle}
+                            onChange={e => setBidVehicle(e.target.value)}
+                            className="w-full p-2 bg-zinc-950 rounded-lg border border-white/5 text-white font-bold text-[11px]"
+                          >
+                            <option value="Volvo FH 540 Globetrotter">Volvo FH 540 Globetrotter (Camião Pesado)</option>
+                            <option value="Scania Streamline R440">Scania Streamline R440 (LS Pesado)</option>
+                            <option value="Mercedes Benz Actros">Mercedes Benz Actros (Pesado LS)</option>
+                            <option value="Iveco Trakker 380">Iveco Trakker 380 (Prancha)</option>
+                            <option value="Camião Refrigerado B2B">Camião Refrigerado (Termo)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[8px] font-black uppercase text-zinc-500 block mb-1">Observações pro Cliente</label>
+                          <input 
+                            type="text"
+                            value={bidRemarks}
+                            onChange={e => setBidRemarks(e.target.value)}
+                            className="w-full p-2 bg-zinc-950 rounded-lg border border-white/5 text-zinc-300 font-semibold text-[11px]"
+                            placeholder="Ex: Lona térmica e seguro ambiental incluso."
+                          />
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-1">
+                          <button 
+                            type="button"
+                            onClick={() => setBiddingLoadId(null)}
+                            className="px-3 py-1.5 bg-transparent text-zinc-500 hover:text-white text-[8px] font-black uppercase tracking-wider"
+                          >
+                            Cancelar
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => handleSubmitBid(load.id)}
+                            className="px-4 py-1.5 bg-emerald-500 text-white rounded-lg text-[8px] font-black uppercase tracking-wider hover:bg-emerald-600 font-sans"
+                          >
+                            Enviar Proposta
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
                   </div>
                 </div>
               ))}

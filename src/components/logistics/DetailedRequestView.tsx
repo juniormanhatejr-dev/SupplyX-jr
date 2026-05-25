@@ -47,9 +47,9 @@ export default function DetailedRequestView({
   language,
   selectedRequestId,
   onBack,
-  requests,
-  occurrences,
-  drivers,
+  requests = [],
+  occurrences = [],
+  drivers = [],
   onChangeRequestStatus,
   onPublishToConcourse,
   onAssignCarrier,
@@ -714,52 +714,121 @@ export default function DetailedRequestView({
                 {language === 'PT' ? 'Dossiê da Proposta Ativa' : 'Proposal Term Parameters'}
               </h3>
 
-              {bids[selectedProposalIndex] ? (
-                <div>
-                  <div className="flex items-center justify-between pb-4 border-b border-white/5 mb-6">
-                    <div>
-                      <h4 className="text-sm font-black text-white italic">{bids[selectedProposalIndex].name}</h4>
-                      <p className="text-[8px] text-zinc-500 font-bold uppercase mt-1">Prazo operacional: {bids[selectedProposalIndex].deliverTime}</p>
-                    </div>
-                    <h4 className="text-lg font-black text-emerald-400 italic">MT {bids[selectedProposalIndex].price.toLocaleString('pt-BR')} MZN</h4>
-                  </div>
+              {bids[selectedProposalIndex] ? (() => {
+                const selectedBid = bids[selectedProposalIndex];
+                // Math for AI matchmaking scoring
+                const priceScore = Math.max(15, 100 - ((selectedBid.price - 50000) / 700));
+                const ratingScore = (selectedBid.rating || 4.5) * 20;
+                const tripsScore = Math.min(100, (selectedBid.trips || 10) * 1.6);
+                const totalScore = Math.min(99, Math.round((priceScore * 0.4) + (ratingScore * 0.3) + (tripsScore * 0.3)));
+                
+                // Hazard and delay risks estimation
+                const riskPercentage = Math.round(Math.max(1.8, 22 - ((selectedBid.rating || 4) * 3) - ((selectedBid.trips || 5) / 10)));
+                const isHighlyRecommended = totalScore > 82;
 
-                  <div className="space-y-3 mb-8 text-xs text-zinc-400 font-semibold uppercase tracking-wider text-left">
-                    <div className="flex justify-between border-b border-white/[0.02] pb-1">
-                      <span>✓ Cobertura Seguro:</span>
-                      <span className="text-white font-black">{bids[selectedProposalIndex].insurance}</span>
+                return (
+                  <div className="space-y-6 text-left">
+                    <div className="flex items-center justify-between pb-4 border-b border-white/5">
+                      <div>
+                        <h4 className="text-sm font-black text-white italic">{selectedBid.name}</h4>
+                        <p className="text-[8px] text-zinc-500 font-bold uppercase mt-1">Prazo operacional: {selectedBid.deliverTime}</p>
+                      </div>
+                      <h4 className="text-lg font-black text-emerald-400 italic">MT {selectedBid.price.toLocaleString('pt-BR')} MZN</h4>
                     </div>
-                    <div className="flex justify-between border-b border-white/[0.02] pb-1">
-                      <span>✓ Condição Faturamento:</span>
-                      <span className="text-white font-black">{bids[selectedProposalIndex].conditions}</span>
-                    </div>
-                    <div className="flex justify-between pb-1">
-                      <span>✓ Reputação Motoristas:</span>
-                      <span className="text-amber-500 font-black flex items-center gap-1">★ {bids[selectedProposalIndex].rating} Excelência</span>
-                    </div>
-                  </div>
 
-                  {requestObj.status === 'Em concurso' ? (
-                    <button 
-                      onClick={() => {
-                        onAssignCarrier(requestObj.id, bids[selectedProposalIndex].name, bids[selectedProposalIndex].price);
-                        setSuccessModal(bids[selectedProposalIndex].name);
-                      }}
-                      className="w-full py-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest transition-all"
-                    >
-                      {language === 'PT' ? 'Fechar Contrato / Atribuir Transportadora' : 'Accept Terms & Sign Agreement'}
-                    </button>
-                  ) : (
-                    <div className="p-4 bg-zinc-950/60 rounded-xl text-center border border-white/5">
-                      <p className="text-[10px] font-black uppercase text-zinc-500 leading-none">
-                        {language === 'PT' 
-                          ? '✓ Concurso finalizado para esta carga. Transportadora já atribuída.' 
-                          : '✓ Allocation sealed. Dispatch route already running.'}
+                    {/* AI ASSISTANT EMBEDDED DASHLET */}
+                    <div className="p-4 rounded-2xl bg-zinc-950/80 border border-white/5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8.5px] font-black text-supplyx-blue uppercase tracking-widest flex items-center gap-1.5">
+                          <span>🤖</span> Matchmaking Inteligente AI
+                        </span>
+                        <span className={`text-[8.5px] font-mono font-black ${isHighlyRecommended ? 'text-emerald-400' : 'text-zinc-400'} uppercase`}>
+                          MATCH: {totalScore}%
+                        </span>
+                      </div>
+
+                      {/* Bar indicator */}
+                      <div className="w-full bg-zinc-900 h-1.5 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-1000 ${isHighlyRecommended ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                          style={{ width: `${totalScore}%` }}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-left">
+                        <div className="p-2 bg-zinc-900/50 rounded-xl border border-white/[0.01]">
+                          <span className="text-[7px] text-zinc-500 font-bold uppercase block tracking-wider">Delay Predictor</span>
+                          <span className="text-[10px] text-amber-500 font-mono font-black">{riskPercentage}% Probabilidade</span>
+                        </div>
+                        <div className="p-2 bg-zinc-900/50 rounded-xl border border-white/[0.01]">
+                          <span className="text-[7px] text-zinc-500 font-bold uppercase block tracking-wider">Alocação Eficiente</span>
+                          <span className="text-[10px] text-emerald-400 font-mono font-black">Camião Pesado 35m³</span>
+                        </div>
+                      </div>
+
+                      <p className="text-[8.5px] text-zinc-400 font-medium leading-relaxed uppercase pt-1 border-t border-white/[0.02]">
+                        <span className="text-zinc-500 font-extrabold">Revisão AI:</span> {isHighlyRecommended 
+                          ? `Atribuição ideal recomendada! O transportador possui alta aderência no trecho ${requestObj.origem.split(',')[0]} ➔ ${requestObj.destino.split(',')[0]} com baixíssimo índice de perdas.`
+                          : "Capacidade física excelente, contudo a margem de faturamento é superior à estimativa alvo definida pelo comprador."}
                       </p>
                     </div>
-                  )}
-                </div>
-              ) : (
+
+                    <div className="space-y-3 text-xs text-zinc-400 font-semibold uppercase tracking-wider text-left">
+                      <div className="flex justify-between border-b border-white/[0.02] pb-1">
+                        <span>✓ Cobertura Seguro:</span>
+                        <span className="text-white font-black">{selectedBid.insurance}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/[0.02] pb-1">
+                        <span>✓ Condição Faturamento:</span>
+                        <span className="text-white font-black">{selectedBid.conditions}</span>
+                      </div>
+                      <div className="flex justify-between pb-1">
+                        <span>✓ Reputação Motoristas:</span>
+                        <span className="text-amber-500 font-black flex items-center gap-1">★ {selectedBid.rating} Excelência</span>
+                      </div>
+                    </div>
+
+                    {requestObj.status === 'Em concurso' ? (
+                      <div className="flex flex-col gap-2">
+                        <button 
+                          onClick={() => {
+                            onAssignCarrier(requestObj.id, selectedBid.name, selectedBid.price);
+                            setSuccessModal(selectedBid.name);
+                          }}
+                          className="w-full py-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          {language === 'PT' ? 'Fechar Contrato / Atribuir Transportadora' : 'Accept Terms & Sign Agreement'}
+                        </button>
+                        
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            // Automatically select the highest matching score
+                            const bestBid = bids.reduce((prev, current) => {
+                              const scoreP = Math.max(15, 100 - ((prev.price - 50000) / 700)) + (prev.rating * 20);
+                              const scoreC = Math.max(15, 100 - ((current.price - 50000) / 700)) + (current.rating * 20);
+                              return scoreC > scoreP ? current : prev;
+                            });
+                            onAssignCarrier(requestObj.id, bestBid.name, bestBid.price);
+                            setSuccessModal(`🤖 AI Match: ${bestBid.name}`);
+                          }}
+                          className="w-full py-3 rounded-xl bg-zinc-950 border border-supplyx-blue/30 text-supplyx-blue text-[9px] font-black uppercase tracking-widest hover:border-supplyx-blue/70 transition-all text-center"
+                        >
+                          ⚡ Auto-Match Inteligente (Recomendado via IA)
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-zinc-950/60 rounded-xl text-center border border-white/5">
+                        <p className="text-[10px] font-black uppercase text-zinc-500 leading-none">
+                          {language === 'PT' 
+                            ? '✓ Concurso finalizado para esta carga. Transportadora já atribuída.' 
+                            : '✓ Allocation sealed. Dispatch route already running.'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : (
                 <p className="text-xs font-black text-zinc-500 uppercase tracking-widest text-center py-10">Nenhuma proposta ativa selecionada.</p>
               )}
             </div>

@@ -13,7 +13,7 @@ interface LogisticsFinancialProps {
 export default function LogisticsFinancial({
   isDarkMode,
   language,
-  ledgers,
+  ledgers = [],
   onConfirmClearance
 }: LogisticsFinancialProps) {
   

@@ -12,7 +12,7 @@ interface InventoryFulfillmentProps {
 export default function InventoryFulfillment({
   isDarkMode,
   language,
-  warehouses
+  warehouses = []
 }: InventoryFulfillmentProps) {
   // Volume cubage calculator state variables
   const [length, setLength] = useState<number>(3);

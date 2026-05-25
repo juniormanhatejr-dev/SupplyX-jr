@@ -48,9 +48,13 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       buyerSub: 'Compre rápido e seguro',
       supplierTitle: 'FORNECEDOR',
       supplierSub: 'Ofereça seus produtos',
-      logisticsTitle: 'LOGÍSTICA',
-      logisticsSub: 'Gestão de frotas e carga',
+      logisticsTitle: 'LOGÍSTICA / MOTORISTA',
+      logisticsSub: 'Gestão de frotas, cargas e motoristas',
       companyName: 'NOME DA EMPRESA / RAZÃO SOCIAL',
+      companyNameLogistics: 'NOME DA EMPRESA EM QUE TRABALHA',
+      driverFullName: 'NOME COMPLETO DO MOTORISTA',
+      biNumber: 'Nº BI / DOCUMENTO DE IDENTIDADE',
+      drivingLicense: 'Nº DA CARTA DE CONDUÇÃO',
       userName: 'NOME DO RESPONSÁVEL / USUÁRIO',
       taxId: 'NUIT / IDENTIFICAÇÃO FISCAL',
       taxIdBadge: 'OBRIGATÓRIO',
@@ -96,9 +100,13 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       buyerSub: 'Buy fast and safe',
       supplierTitle: 'SUPPLIER',
       supplierSub: 'Offer your products',
-      logisticsTitle: 'LOGISTICS',
-      logisticsSub: 'Fleet and cargo management',
+      logisticsTitle: 'LOGISTICS / DRIVER',
+      logisticsSub: 'Fleet, cargo and driver management',
       companyName: 'COMPANY NAME / REGISTERED NAME',
+      companyNameLogistics: 'COMPANY NAME YOU WORK FOR',
+      driverFullName: 'DRIVER FULL NAME',
+      biNumber: 'BI NUMBER / IDENTITY DOC',
+      drivingLicense: 'DRIVING LICENSE NUMBER',
       userName: 'USER NAME / RESPONSIBLE NAME',
       taxId: 'TAX ID / VAT NUMBER',
       taxIdBadge: 'REQUIRED',
@@ -163,7 +171,11 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
     sector: t.sectors[0],
     city: 'Maputo Cidade',
     fleetSize: '1-5',
-    specialization: 'Carga Geral'
+    specialization: 'Carga Geral',
+    companyName: '',
+    biNumber: '',
+    fullName: '',
+    licenseNumber: ''
   });
   const [isRobotValid, setIsRobotValid] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -211,20 +223,48 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       return;
     }
 
-    if (mode === 'register') {
+    if (mode === 'register' || mode === 'onboarding') {
+      if (type === 'logistics') {
+        if (!formData.fullName.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira o nome completo do motorista.' : 'Please enter the full name of the driver.');
+          return;
+        }
+        if (!formData.companyName.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira o nome da empresa em que trabalha.' : 'Please enter the company name you work for.');
+          return;
+        }
+        if (!formData.biNumber.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira o Nº BI.' : 'Please enter your BI number.');
+          return;
+        }
+        if (!formData.licenseNumber.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira o Nº da carta de condução.' : 'Please enter your driving license number.');
+          return;
+        }
+        if (!formData.address.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira a localização.' : 'Please enter your location.');
+          return;
+        }
+      } else {
+        if (type === 'supplier' && !formData.userName.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira o nome do responsável.' : 'Please enter responsible user name.');
+          return;
+        }
+        if (!formData.name.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira o nome.' : 'Please enter the name.');
+          return;
+        }
+      }
+
       if (formData.nuit.length !== 9) {
         setError(language === 'PT' ? 'O NUIT deve ter exatamente 9 dígitos.' : 'NUIT must be exactly 9 digits.');
-        return;
-      }
-      if (!validatePassword(formData.password)) {
-        setError(language === 'PT' ? 'A senha deve ter no mínimo 6 caracteres, incluindo letras maiúsculas, minúsculas, números e símbolos.' : 'Password must be at least 6 characters, including uppercase, lowercase, numbers, and symbols.');
         return;
       }
     }
 
-    if (mode === 'onboarding') {
-      if (formData.nuit.length !== 9) {
-        setError(language === 'PT' ? 'O NUIT deve ter exatamente 9 dígitos.' : 'NUIT must be exactly 9 digits.');
+    if (mode === 'register') {
+      if (!validatePassword(formData.password)) {
+        setError(language === 'PT' ? 'A senha deve ter no mínimo 6 caracteres, incluindo letras maiúsculas, minúsculas, números e símbolos.' : 'Password must be at least 6 characters, including uppercase, lowercase, numbers, and symbols.');
         return;
       }
     }
@@ -246,8 +286,8 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
         if (!user.uid) throw new Error("Firebase Auth UID not found after creation.");
 
         await createProfileDoc(user.uid, {
-          name: formData.name,
-          userName: type === 'buyer' ? formData.name : formData.userName,
+          name: type === 'logistics' ? formData.companyName : formData.name,
+          userName: type === 'buyer' ? formData.name : (type === 'logistics' ? formData.fullName : formData.userName),
           nuit: formData.nuit,
           address: formData.address,
           phone: formData.phone,
@@ -257,13 +297,17 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
           city: formData.city,
           fleetSize: type === 'logistics' ? formData.fleetSize : null,
           specialization: type === 'logistics' ? formData.specialization : null,
+          companyName: type === 'logistics' ? formData.companyName : null,
+          biNumber: type === 'logistics' ? formData.biNumber : null,
+          licenseNumber: type === 'logistics' ? formData.licenseNumber : null,
+          fullName: type === 'logistics' ? formData.fullName : null,
           bankAccounts: [],
           mobileWallets: [],
         });
       } else if (mode === 'onboarding' && onboardingUser) {
         await createProfileDoc(onboardingUser.uid, {
-          name: formData.name,
-          userName: type === 'buyer' ? formData.name : formData.userName,
+          name: type === 'logistics' ? formData.companyName : formData.name,
+          userName: type === 'buyer' ? formData.name : (type === 'logistics' ? formData.fullName : formData.userName),
           nuit: formData.nuit,
           address: formData.address,
           phone: formData.phone || onboardingUser.phoneNumber || '',
@@ -273,6 +317,10 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
           city: formData.city,
           fleetSize: type === 'logistics' ? formData.fleetSize : null,
           specialization: type === 'logistics' ? formData.specialization : null,
+          companyName: type === 'logistics' ? formData.companyName : null,
+          biNumber: type === 'logistics' ? formData.biNumber : null,
+          licenseNumber: type === 'logistics' ? formData.licenseNumber : null,
+          fullName: type === 'logistics' ? formData.fullName : null,
           bankAccounts: [],
           mobileWallets: [],
         });
@@ -360,6 +408,10 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
 
       if (data.fleetSize) profileData.fleetSize = data.fleetSize;
       if (data.specialization) profileData.specialization = data.specialization;
+      if (data.companyName) profileData.companyName = data.companyName;
+      if (data.biNumber) profileData.biNumber = data.biNumber;
+      if (data.licenseNumber) profileData.licenseNumber = data.licenseNumber;
+      if (data.fullName) profileData.fullName = data.fullName;
       if (!existingData.bankAccounts) profileData.bankAccounts = [];
       if (!existingData.mobileWallets) profileData.mobileWallets = [];
       
@@ -630,27 +682,62 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                 <form className="space-y-4" onSubmit={handleSubmit}>
                   {(mode === 'register' || mode === 'onboarding') && (
                     <>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField 
-                          icon={Building2} 
-                          label={type === 'buyer' ? t.userName : t.companyName} 
-                          placeholder={type === 'buyer' ? "Ex: Fernando Manhate" : "Ex: Manhate Jr Construction"} 
-                          isDarkMode={isDarkMode}
-                          value={formData.name}
-                          onChange={(v) => setFormData({...formData, name: v})}
-                        />
-                        {type === 'buyer' ? (
-                          mode === 'register' ? (
+                      {type === 'logistics' ? (
+                        <>
+                          {/* Driver / Logistics specific registration fields */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <InputField 
-                              icon={Mail} 
-                              label={t.email} 
-                              placeholder="email@exemplo.com" 
+                              icon={User} 
+                              label={t.driverFullName} 
+                              placeholder="Ex: Fernando Manhate" 
                               isDarkMode={isDarkMode}
-                              type="email"
-                              value={formData.email}
-                              onChange={(v) => setFormData({...formData, email: v})}
+                              value={formData.fullName}
+                              onChange={(v) => setFormData({...formData, fullName: v})}
                             />
-                          ) : (
+                            <InputField 
+                              icon={Building2} 
+                              label={t.companyNameLogistics} 
+                              placeholder="Ex: Manhate Transportes" 
+                              isDarkMode={isDarkMode}
+                              value={formData.companyName}
+                              onChange={(v) => setFormData({...formData, companyName: v})}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <InputField 
+                              icon={FileText} 
+                              label={t.biNumber} 
+                              placeholder="123456789A" 
+                              isDarkMode={isDarkMode}
+                              value={formData.biNumber}
+                              onChange={(v) => setFormData({...formData, biNumber: v})}
+                            />
+                            <InputField 
+                              icon={FileText} 
+                              label={t.taxId} 
+                              placeholder="123 456 789" 
+                              isDarkMode={isDarkMode}
+                              badge={t.taxIdBadge}
+                              value={formData.nuit}
+                              onChange={(v) => {
+                                const numericValue = v.replace(/[^0-9]/g, '');
+                                if (numericValue.length <= 9) {
+                                  setFormData({...formData, nuit: numericValue});
+                                }
+                              }}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <InputField 
+                              icon={ShieldCheck} 
+                              label={t.drivingLicense} 
+                              placeholder="MZ-12345-A" 
+                              isDarkMode={isDarkMode}
+                              value={formData.licenseNumber}
+                              onChange={(v) => setFormData({...formData, licenseNumber: v})}
+                            />
                             <InputField 
                               icon={MapPin} 
                               label={t.address} 
@@ -659,36 +746,9 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                               value={formData.address}
                               onChange={(v) => setFormData({...formData, address: v})}
                             />
-                          )
-                        ) : (
-                          <InputField 
-                            icon={User} 
-                            label={t.userName} 
-                            placeholder="Ex: Fernando Manhate" 
-                            isDarkMode={isDarkMode}
-                            value={formData.userName}
-                            onChange={(v) => setFormData({...formData, userName: v})}
-                          />
-                        )}
-                      </div>
+                          </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField 
-                          icon={FileText} 
-                          label={t.taxId} 
-                          placeholder="123 456 789" 
-                          isDarkMode={isDarkMode}
-                          badge={t.taxIdBadge}
-                          value={formData.nuit}
-                          onChange={(v) => {
-                            const numericValue = v.replace(/[^0-9]/g, '');
-                            if (numericValue.length <= 9) {
-                              setFormData({...formData, nuit: numericValue});
-                            }
-                          }}
-                        />
-                        {type === 'buyer' ? (
-                          mode === 'register' && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <InputField 
                               icon={Phone} 
                               label={t.phone} 
@@ -697,96 +757,175 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                               value={formData.phone}
                               onChange={(v) => setFormData({...formData, phone: v})}
                             />
-                          )
-                        ) : (
-                          <InputField 
-                            icon={MapPin} 
-                            label={t.address} 
-                            placeholder="Ex: Av. Eduardo Mondlane, Maputo" 
-                            isDarkMode={isDarkMode}
-                            value={formData.address}
-                            onChange={(v) => setFormData({...formData, address: v})}
-                          />
-                        )}
-                      </div>
+                            {mode === 'register' && (
+                              <InputField 
+                                icon={Mail} 
+                                label={t.email} 
+                                placeholder="email@exemplo.com" 
+                                isDarkMode={isDarkMode}
+                                type="email"
+                                value={formData.email}
+                                onChange={(v) => setFormData({...formData, email: v})}
+                              />
+                            )}
+                          </div>
 
-                      {type !== 'buyer' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <InputField 
-                            icon={Phone} 
-                            label={t.phone} 
-                            placeholder="+258 84 123 4567" 
-                            isDarkMode={isDarkMode}
-                            value={formData.phone}
-                            onChange={(v) => setFormData({...formData, phone: v})}
-                          />
-                          {mode === 'register' && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.city}</label>
+                              <select 
+                                className={`w-full bg-transparent border rounded-2xl py-4 px-4 text-xs font-bold appearance-none outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
+                                value={formData.city}
+                                onChange={(e) => setFormData({...formData, city: e.target.value})}
+                              >
+                                {t.provinces.map(p => <option key={p} value={p} className={isDarkMode ? 'bg-zinc-900' : ''}>{p}</option>)}
+                              </select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.specialization}</label>
+                              <select 
+                                className={`w-full bg-transparent border rounded-2xl py-4 px-4 text-xs font-bold appearance-none outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
+                                value={formData.specialization}
+                                onChange={(e) => setFormData({...formData, specialization: e.target.value})}
+                              >
+                                <option value="Carga Geral" className={isDarkMode ? 'bg-zinc-900' : ''}>Carga Geral</option>
+                                <option value="Refrigerados" className={isDarkMode ? 'bg-zinc-900' : ''}>Refrigerados</option>
+                                <option value="Produtos Perigosos" className={isDarkMode ? 'bg-zinc-900' : ''}>Produtos Perigosos</option>
+                                <option value="Materiais de Construção" className={isDarkMode ? 'bg-zinc-900' : ''}>Materiais de Construção</option>
+                              </select>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <InputField 
-                              icon={Mail} 
-                              label={t.email} 
-                              placeholder="email@exemplo.com" 
+                              icon={Building2} 
+                              label={type === 'buyer' ? t.userName : t.companyName} 
+                              placeholder={type === 'buyer' ? "Ex: Fernando Manhate" : "Ex: Manhate Jr Construction"} 
                               isDarkMode={isDarkMode}
-                              type="email"
-                              value={formData.email}
-                              onChange={(v) => setFormData({...formData, email: v})}
+                              value={formData.name}
+                              onChange={(v) => setFormData({...formData, name: v})}
                             />
-                          )}
-                        </div>
-                      )}
-                      
-                      {type === 'logistics' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.fleetSize}</label>
-                            <select 
-                              className={`w-full bg-transparent border rounded-2xl py-4 px-4 text-xs font-bold appearance-none outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
-                              value={formData.fleetSize}
-                              onChange={(e) => setFormData({...formData, fleetSize: e.target.value})}
-                            >
-                              <option value="1-5" className={isDarkMode ? 'bg-zinc-900' : ''}>1-5 Veículos</option>
-                              <option value="6-20" className={isDarkMode ? 'bg-zinc-900' : ''}>6-20 Veículos</option>
-                              <option value="21-50" className={isDarkMode ? 'bg-zinc-900' : ''}>21-50 Veículos</option>
-                              <option value="50+" className={isDarkMode ? 'bg-zinc-900' : ''}>Mais de 50</option>
-                            </select>
+                            {type === 'buyer' ? (
+                              mode === 'register' ? (
+                                <InputField 
+                                  icon={Mail} 
+                                  label={t.email} 
+                                  placeholder="email@exemplo.com" 
+                                  isDarkMode={isDarkMode}
+                                  type="email"
+                                  value={formData.email}
+                                  onChange={(v) => setFormData({...formData, email: v})}
+                                />
+                              ) : (
+                                <InputField 
+                                  icon={MapPin} 
+                                  label={t.address} 
+                                  placeholder="Ex: Av. Eduardo Mondlane, Maputo" 
+                                  isDarkMode={isDarkMode}
+                                  value={formData.address}
+                                  onChange={(v) => setFormData({...formData, address: v})}
+                                />
+                              )
+                            ) : (
+                              <InputField 
+                                icon={User} 
+                                label={t.userName} 
+                                placeholder="Ex: Fernando Manhate" 
+                                isDarkMode={isDarkMode}
+                                value={formData.userName}
+                                onChange={(v) => setFormData({...formData, userName: v})}
+                              />
+                            )}
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.specialization}</label>
-                            <select 
-                              className={`w-full bg-transparent border rounded-2xl py-4 px-4 text-xs font-bold appearance-none outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
-                              value={formData.specialization}
-                              onChange={(e) => setFormData({...formData, specialization: e.target.value})}
-                            >
-                              <option value="Carga Geral" className={isDarkMode ? 'bg-zinc-900' : ''}>Carga Geral</option>
-                              <option value="Refrigerados" className={isDarkMode ? 'bg-zinc-900' : ''}>Refrigerados</option>
-                              <option value="Produtos Perigosos" className={isDarkMode ? 'bg-zinc-900' : ''}>Produtos Perigosos</option>
-                              <option value="Materiais de Construção" className={isDarkMode ? 'bg-zinc-900' : ''}>Materiais de Construção</option>
-                            </select>
-                          </div>
-                        </div>
-                      )}
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.city}</label>
-                          <select 
-                            className={`w-full bg-transparent border rounded-2xl py-4 px-4 text-xs font-bold appearance-none outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
-                            value={formData.city}
-                            onChange={(e) => setFormData({...formData, city: e.target.value})}
-                          >
-                            {t.provinces.map(p => <option key={p} value={p} className={isDarkMode ? 'bg-zinc-900' : ''}>{p}</option>)}
-                          </select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.sector}</label>
-                          <select 
-                            className={`w-full bg-transparent border rounded-2xl py-4 px-4 text-xs font-bold appearance-none outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
-                            value={formData.sector}
-                            onChange={(e) => setFormData({...formData, sector: e.target.value})}
-                          >
-                            {t.sectors.map(s => <option key={s} value={s} className={isDarkMode ? 'bg-zinc-900' : ''}>{s}</option>)}
-                          </select>
-                        </div>
-                      </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <InputField 
+                              icon={FileText} 
+                              label={t.taxId} 
+                              placeholder="123 456 789" 
+                              isDarkMode={isDarkMode}
+                              badge={t.taxIdBadge}
+                              value={formData.nuit}
+                              onChange={(v) => {
+                                const numericValue = v.replace(/[^0-9]/g, '');
+                                if (numericValue.length <= 9) {
+                                  setFormData({...formData, nuit: numericValue});
+                                }
+                              }}
+                            />
+                            {type === 'buyer' ? (
+                              mode === 'register' && (
+                                <InputField 
+                                  icon={Phone} 
+                                  label={t.phone} 
+                                  placeholder="+258 84 123 4567" 
+                                  isDarkMode={isDarkMode}
+                                  value={formData.phone}
+                                  onChange={(v) => setFormData({...formData, phone: v})}
+                                />
+                              )
+                            ) : (
+                              <InputField 
+                                icon={MapPin} 
+                                label={t.address} 
+                                placeholder="Ex: Av. Eduardo Mondlane, Maputo" 
+                                isDarkMode={isDarkMode}
+                                value={formData.address}
+                                onChange={(v) => setFormData({...formData, address: v})}
+                              />
+                            )}
+                          </div>
+
+                          {type !== 'buyer' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <InputField 
+                                icon={Phone} 
+                                label={t.phone} 
+                                placeholder="+258 84 123 4567" 
+                                isDarkMode={isDarkMode}
+                                value={formData.phone}
+                                onChange={(v) => setFormData({...formData, phone: v})}
+                              />
+                              {mode === 'register' && (
+                                <InputField 
+                                  icon={Mail} 
+                                  label={t.email} 
+                                  placeholder="email@exemplo.com" 
+                                  isDarkMode={isDarkMode}
+                                  type="email"
+                                  value={formData.email}
+                                  onChange={(v) => setFormData({...formData, email: v})}
+                                />
+                              )}
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.city}</label>
+                              <select 
+                                className={`w-full bg-transparent border rounded-2xl py-4 px-4 text-xs font-bold appearance-none outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
+                                value={formData.city}
+                                onChange={(e) => setFormData({...formData, city: e.target.value})}
+                              >
+                                {t.provinces.map(p => <option key={p} value={p} className={isDarkMode ? 'bg-zinc-900' : ''}>{p}</option>)}
+                              </select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.sector}</label>
+                              <select 
+                                className={`w-full bg-transparent border rounded-2xl py-4 px-4 text-xs font-bold appearance-none outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
+                                value={formData.sector}
+                                onChange={(e) => setFormData({...formData, sector: e.target.value})}
+                              >
+                                {t.sectors.map(s => <option key={s} value={s} className={isDarkMode ? 'bg-zinc-900' : ''}>{s}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </>
                   )}
 

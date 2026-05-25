@@ -13,7 +13,7 @@ interface DriversSystemProps {
 export default function DriversSystem({
   isDarkMode,
   language,
-  drivers,
+  drivers = [],
   onAddDriver
 }: DriversSystemProps) {
   const [showAddForm, setShowAddForm] = useState(false);

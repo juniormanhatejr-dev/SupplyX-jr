@@ -496,6 +496,23 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const [scenarioCommitted, setScenarioCommitted] = useState(false);
   const [newLogisticsId, setNewLogisticsId] = useState<string | null>(null);
 
+  // LOGISTICS DISPATCH FORM STATE
+  const [showLogisticsReqForm, setShowLogisticsReqForm] = useState(false);
+  const [logisticsFormFields, setLogisticsFormFields] = useState({
+    origem: '',
+    destino: '',
+    tipoCarga: '',
+    peso: '12',
+    volume: '24',
+    prioridade: 'normal',
+    dataDesejada: '',
+    tipoVeiculo: 'caminhão pesado',
+    observacoes: '',
+    seguroCarga: 'Incluso (Fidelidade)',
+    cargaFragil: false,
+    temperaturaControlada: false
+  });
+
   const handleCommitScenario = () => {
     if (selectedScenario === null) return;
     
@@ -511,7 +528,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     const clientPhone = profile?.phone || '+258 84 123 4567';
 
     if (selectedScenario === 3) {
-      // Create logistics cargo request order automatically!
+      // Create logistics cargo request order automatically with customized form fields!
       const logisticsId = `TR-2026-${Math.floor(1000 + Math.random() * 9000)}`;
       setNewLogisticsId(logisticsId);
 
@@ -524,32 +541,49 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       }
 
       const totalQty = rows.reduce((acc, r) => acc + (parseFloat(r.quantity) || 0), 0) || 5;
-      const calculatedWeight = `${Math.min(30, Math.ceil(totalQty * 0.4))} Toneladas`;
-      const calculatedVolume = `${Math.min(60, Math.ceil(totalQty * 0.7))} m³`;
+      const targetWeight = `${logisticsFormFields.peso} Toneladas`;
+      const targetVolume = `${logisticsFormFields.volume} m³`;
 
       const newLogisticsOrder = {
         id: logisticsId,
-        tipoCarga: materialsList,
+        tipoCarga: logisticsFormFields.tipoCarga || materialsList,
         quantidade: `${totalQty} Lotes`,
-        peso: calculatedWeight,
-        volume: calculatedVolume,
-        origem: targetResponse?.supplierAddress || currentSupplierName + ', Moçambique',
-        destino: profile?.address || 'Província de Nampula, Moçambique',
+        peso: targetWeight,
+        volume: targetVolume,
+        origem: logisticsFormFields.origem,
+        destino: logisticsFormFields.destino,
         status: 'Em concurso',
         requester: 'Client',
         freightResponsibility: 'Client',
         deliveryMode: 'Third-party Logistics',
-        dataColeta: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}),
-        prazoEntrega: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}),
-        observacoes: `Ordem Logística vinculada à Cotação #${targetResponse?.requestId || 'QT-01'}. Faturamento sob custódia SupplyX. Urgência: ALTA`,
+        dataColeta: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}),
+        prazoEntrega: logisticsFormFields.dataDesejada ? new Date(logisticsFormFields.dataDesejada).toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}) : new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}),
+        observacoes: logisticsFormFields.observacoes,
         targetPrice: `MT ${(targetResponse?.price ? Math.round(targetResponse.price * 0.12) : 78000).toLocaleString('pt-BR')} MZN`,
         contacto: clientPhone,
         proposalsCount: 0,
-        rating: 5.0
+        rating: 5.0,
+        fragile: logisticsFormFields.cargaFragil,
+        temperatureControlled: logisticsFormFields.temperaturaControlada,
+        insurance: logisticsFormFields.seguroCarga,
+        vehicleType: logisticsFormFields.tipoVeiculo,
+        priority: logisticsFormFields.prioridade,
+        orderId: targetResponse?.requestId || 'QT-01',
+        quotationId: targetResponse?.id || 'QT-01',
+        buyerId: auth.currentUser?.uid || 'anonymous',
+        supplierId: targetResponse?.supplierId || 'supplier_default',
+        pickupAddress: logisticsFormFields.origem,
+        deliveryAddress: logisticsFormFields.destino,
+        createdAt: new Date().toISOString()
       };
 
       existing = [newLogisticsOrder, ...existing];
       localStorage.setItem('supplyx_freight_requests', JSON.stringify(existing));
+
+      // Push to Firestore freight_orders collection
+      addDoc(collection(db, 'freight_orders'), newLogisticsOrder).catch(err => {
+        console.warn('Firestore write warning:', err);
+      });
 
       // Also register a system notification
       let liveNotifications: any[] = [];
@@ -561,12 +595,51 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       const notificationObj = {
         id: `N-${Math.floor(100 + Math.random() * 900)}`,
         title: `NOVO CONCURSO LOGÍSTICO #${logisticsId}`,
-        text: `Carga de ${materialsList} gerada automaticamente a partir do faturamento B2B com ${currentSupplierName}.`,
+        text: `Carga de ${logisticsFormFields.tipoCarga || materialsList} com destino a ${logisticsFormFields.destino} no concurso público.`,
         time: 'Agora mesmo',
         read: false
       };
       liveNotifications = [notificationObj, ...liveNotifications];
       localStorage.setItem('supplyx_logistics_notifications', JSON.stringify(liveNotifications));
+    } else if (selectedScenario === 2) {
+      // Create supplier fleet shipment
+      const logisticsId = `TR-SUPP-${Math.floor(1000 + Math.random() * 9000)}`;
+      setNewLogisticsId(logisticsId);
+
+      let existing: any[] = [];
+      try {
+        const saved = localStorage.getItem('supplyx_freight_requests');
+        if (saved) existing = JSON.parse(saved);
+      } catch (err) {}
+
+      const totalQty = rows.reduce((acc, r) => acc + (parseFloat(r.quantity) || 0), 0) || 5;
+      const newLogisticsOrder = {
+        id: logisticsId,
+        tipoCarga: materialsList,
+        quantidade: `${totalQty} Lotes`,
+        peso: `${Math.min(30, Math.ceil(totalQty * 0.4))} Toneladas`,
+        volume: `${Math.min(60, Math.ceil(totalQty * 0.7))} m³`,
+        origem: targetResponse?.supplierAddress || currentSupplierName + ', Moçambique',
+        destino: profile?.address || 'Província de Nampula, Moçambique',
+        status: 'Aguardando Coleta',
+        assignedCarrier: currentSupplierName,
+        requester: 'Client',
+        freightResponsibility: 'Supplier',
+        deliveryMode: 'Supplier Owned Fleet',
+        dataColeta: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}),
+        prazoEntrega: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}),
+        observacoes: `Entrega gerenciada pela frota própria do fornecedor. Rastreamento e Escrow ativo.`,
+        targetPrice: 'MT 0 MZN ( CIF )',
+        contacto: clientPhone,
+        proposalsCount: 1,
+        rating: 4.8,
+        createdAt: new Date().toISOString()
+      };
+
+      existing = [newLogisticsOrder, ...existing];
+      localStorage.setItem('supplyx_freight_requests', JSON.stringify(existing));
+
+      addDoc(collection(db, 'freight_orders'), newLogisticsOrder).catch(() => {});
     }
 
     setScenarioCommitted(true);
@@ -1800,7 +1873,36 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                           </button>
                           <button 
                             type="button"
-                            onClick={handleCommitScenario}
+                            onClick={() => {
+                              if (selectedScenario === 3) {
+                                // Prepopulate and open form
+                                const targetResponse = aiResponses[selectedResponseIndex] || respondingTo;
+                                const currentSupplierName = targetResponse?.name || targetResponse?.supplierName || 'Fornecedor Parceiro';
+                                let materialsList = rows.map(r => r.material).filter(Boolean).join(', ');
+                                if (!materialsList && targetResponse?.items) {
+                                  materialsList = targetResponse.items.map((it: any) => it.material || it.description).join(', ');
+                                }
+                                if (!materialsList) materialsList = 'Materiais de Construção B2B';
+
+                                setLogisticsFormFields({
+                                  origem: targetResponse?.supplierAddress || currentSupplierName + ', Moçambique',
+                                  destino: profile?.address || 'Província de Nampula, Moçambique',
+                                  tipoCarga: materialsList,
+                                  peso: '12',
+                                  volume: '24',
+                                  prioridade: 'normal',
+                                  dataDesejada: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                                  tipoVeiculo: 'caminhão pesado',
+                                  observacoes: `Ordem Logística vinculada à Cotação #${targetResponse?.requestId || 'QT-01'}. Faturamento sob custódia SupplyX. Urgência: ALTA`,
+                                  seguroCarga: 'Incluso (Fidelidade)',
+                                  cargaFragil: false,
+                                  temperaturaControlada: false
+                                });
+                                setShowLogisticsReqForm(true);
+                              } else {
+                                handleCommitScenario();
+                              }
+                            }}
                             disabled={selectedScenario === null}
                             className="px-10 py-3.5 bg-[#0052CC] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-brand/20 hover:bg-[#0747A6] transition-all disabled:opacity-50 active:scale-95 flex items-center gap-2"
                           >
@@ -1808,6 +1910,217 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                             {language === 'PT' ? 'Confirmar Agendamento' : 'Confirm Scheduling'}
                           </button>
                         </div>
+
+                        {/* HIGHLY INTERACTIVE POPUP MODAL FOR TRANSPORTATION REQUEST FORM */}
+                        {showLogisticsReqForm && (
+                          <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm overflow-y-auto">
+                            <motion.div 
+                              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              className={`w-full max-w-[650px] border rounded-[32px] p-6 shadow-2xl relative flex flex-col max-h-[90vh] overflow-y-auto ${
+                                isDarkMode ? 'bg-zinc-900 border-white/5 text-white' : 'bg-white border-zinc-150 text-zinc-900'
+                              }`}
+                            >
+                              <div className="flex justify-between items-center mb-5 pb-3 border-b border-zinc-500/10">
+                                <div className="flex items-center gap-3">
+                                  <span className="p-2 bg-[#0052CC] text-white rounded-xl flex items-center justify-center">
+                                    <Truck className="w-4 h-4" />
+                                  </span>
+                                  <div>
+                                    <h3 className="text-xs font-black uppercase tracking-widest">
+                                      {language === 'PT' ? 'Fretamento Logístico Inteligente SupplyX' : 'Smart Logistics Dispatch'}
+                                    </h3>
+                                    <p className="text-[9px] font-bold text-zinc-500 uppercase mt-1 tracking-wider">
+                                      Insira os parâmetros de cubagem e roteamento corporativo
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-4 text-left">
+                                {/* Row 1: Origem / Destino */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1">Origem da Carga B2B</label>
+                                    <input 
+                                      type="text" 
+                                      value={logisticsFormFields.origem}
+                                      onChange={e => setLogisticsFormFields({...logisticsFormFields, origem: e.target.value})}
+                                      className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                                        isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+                                      }`}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1 font-sans">Destino do Frete</label>
+                                    <input 
+                                      type="text" 
+                                      value={logisticsFormFields.destino}
+                                      onChange={e => setLogisticsFormFields({...logisticsFormFields, destino: e.target.value})}
+                                      className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                                        isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+                                      }`}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Row 2: Tipo de Carga, Peso, Volume */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1">Tipo de Carga</label>
+                                    <input 
+                                      type="text" 
+                                      value={logisticsFormFields.tipoCarga}
+                                      onChange={e => setLogisticsFormFields({...logisticsFormFields, tipoCarga: e.target.value})}
+                                      className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                                        isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+                                      }`}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1">Peso (Toneladas)</label>
+                                    <input 
+                                      type="number" 
+                                      value={logisticsFormFields.peso}
+                                      onChange={e => setLogisticsFormFields({...logisticsFormFields, peso: e.target.value})}
+                                      className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                                        isDarkMode ? 'bg-zinc-950 border-white/5 text-white font-mono' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+                                      }`}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1">Volume Cubagem (m³)</label>
+                                    <input 
+                                      type="number" 
+                                      value={logisticsFormFields.volume}
+                                      onChange={e => setLogisticsFormFields({...logisticsFormFields, volume: e.target.value})}
+                                      className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                                        isDarkMode ? 'bg-zinc-950 border-white/5 text-white font-mono' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+                                      }`}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Row 3: Prioridade, Data Desejada, Veículo */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1">Prioridade</label>
+                                    <select
+                                      value={logisticsFormFields.prioridade}
+                                      onChange={e => setLogisticsFormFields({...logisticsFormFields, prioridade: e.target.value})}
+                                      className={`w-full p-2.5 rounded-xl border text-xs font-bold uppercase ${
+                                        isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+                                      }`}
+                                    >
+                                      <option value="normal">Urgência Normal</option>
+                                      <option value="urgente">Urgência Crítica</option>
+                                      <option value="expressa">Entrega Expressa</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1">Data de Entrega</label>
+                                    <input 
+                                      type="date" 
+                                      value={logisticsFormFields.dataDesejada}
+                                      onChange={e => setLogisticsFormFields({...logisticsFormFields, dataDesejada: e.target.value})}
+                                      className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                                        isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+                                      }`}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1">Veículo Recomendado</label>
+                                    <select
+                                      value={logisticsFormFields.tipoVeiculo}
+                                      onChange={e => setLogisticsFormFields({...logisticsFormFields, tipoVeiculo: e.target.value})}
+                                      className={`w-full p-2.5 rounded-xl border text-xs font-bold uppercase ${
+                                        isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+                                      }`}
+                                    >
+                                      <option value="moto">Moto Express</option>
+                                      <option value="pickup">Pickup / L300</option>
+                                      <option value="caminhão pequeno">Camião Ligeiro Baú</option>
+                                      <option value="caminhão pesado">Camião Pesado Graneleiro</option>
+                                      <option value="contentor">Porta Contentor 40ft</option>
+                                      <option value="refrigerado">Camião Refrigerado</option>
+                                      <option value="tanque">Carga Líquida Tanque</option>
+                                      <option value="plataforma">Prancha Plataforma Baixa</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                {/* Row 4: Observações / Seguros */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1">Observações Despacho</label>
+                                    <input 
+                                      type="text"
+                                      value={logisticsFormFields.observacoes}
+                                      onChange={e => setLogisticsFormFields({...logisticsFormFields, observacoes: e.target.value})}
+                                      className={`w-full p-2.5 rounded-xl border text-xs font-semibold ${
+                                        isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+                                      }`}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1 font-sans">Seguro da Carga</label>
+                                    <input 
+                                      type="text" 
+                                      value={logisticsFormFields.seguroCarga}
+                                      onChange={e => setLogisticsFormFields({...logisticsFormFields, seguroCarga: e.target.value})}
+                                      className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                                        isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+                                      }`}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Row 5: Flags (carga frágil, temperatura controlada) */}
+                                <div className="flex items-center gap-6 p-3 rounded-xl bg-zinc-950/30 border border-white/[0.03]">
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                      type="checkbox"
+                                      checked={logisticsFormFields.cargaFragil}
+                                      onChange={e => setLogisticsFormFields({...logisticsFormFields, cargaFragil: e.target.checked})}
+                                      className="rounded-md border-transparent text-[#0052CC] w-3.5 h-3.5 bg-zinc-900"
+                                    />
+                                    <span className="text-[9px] uppercase font-black tracking-wider text-zinc-400">⚠ Carga Frágil</span>
+                                  </label>
+
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                      type="checkbox"
+                                      checked={logisticsFormFields.temperaturaControlada}
+                                      onChange={e => setLogisticsFormFields({...logisticsFormFields, temperaturaControlada: e.target.checked})}
+                                      className="rounded-md border-transparent text-[#0052CC] w-3.5 h-3.5 bg-zinc-900"
+                                    />
+                                    <span className="text-[9px] uppercase font-black tracking-wider text-zinc-400">❄ Temp. Controlada (Refrigeração)</span>
+                                  </label>
+                                </div>
+                              </div>
+
+                              <div className="flex justify-end gap-3.5 pt-5 border-t border-zinc-500/10 mt-5">
+                                <button 
+                                  type="button"
+                                  onClick={() => setShowLogisticsReqForm(false)}
+                                  className="px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest text-zinc-550 hover:text-white"
+                                >
+                                  Cancelar
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    setShowLogisticsReqForm(false);
+                                    handleCommitScenario();
+                                  }}
+                                  className="px-7 py-2.5 bg-[#0052CC] text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-[#0747A6]"
+                                >
+                                  Publicar Despacho no Marketplace
+                                </button>
+                              </div>
+                            </motion.div>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex-grow flex flex-col items-center justify-center py-6 text-center">

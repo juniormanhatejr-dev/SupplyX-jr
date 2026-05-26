@@ -44,7 +44,7 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
   const { unreadMessages, unreadNotifications } = useNotifications();
   const { profile } = useAuth();
 
-  const isLogistics = userType === 'logistics' || activeItem === 'Logística' || ['Cockpit Analítico', 'Monitor de Cargas', 'Frotas & Motoristas', 'Fulfillment Stock'].includes(activeItem);
+  const isLogistics = userType === 'logistics';
 
   const translations = {
     PT: {
@@ -97,10 +97,11 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
         { icon: Bell, label: language === 'PT' ? 'Notificações' : 'Notifications', originalLabel: 'Notificações' },
         { icon: Settings, label: language === 'PT' ? 'Ajustes' : 'Settings', originalLabel: 'Ajustes' },
         { icon: Info, label: language === 'PT' ? 'Sobre o SupplyX' : 'About SupplyX', originalLabel: 'About' },
-      ].filter(item => {
+      ].filter((item: any) => {
         const uType = userType as string;
         if (item.supplierOnly && uType !== 'supplier') return false;
         if (item.buyerOnly && uType !== 'buyer' && uType !== 'logistics') return false;
+        if (item.logisticsOnly && uType !== 'logistics') return false;
         if (item.hideForLogistics && uType === 'logistics') return false;
         return true;
       });

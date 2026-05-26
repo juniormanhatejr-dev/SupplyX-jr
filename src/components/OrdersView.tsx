@@ -513,6 +513,116 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     temperaturaControlada: false
   });
 
+  // NEW STATES FOR CUSTOM CUSTOMER LOGISTICS DECISION
+  const [showLogisticsQuestion, setShowLogisticsQuestion] = useState(false);
+  const [showLogisticsSpreadsheet, setShowLogisticsSpreadsheet] = useState(false);
+  const [isDirectLogisticsRequest, setIsDirectLogisticsRequest] = useState(false);
+  const [spreadsheetOrigem, setSpreadsheetOrigem] = useState('');
+  const [spreadsheetDestino, setSpreadsheetDestino] = useState('');
+  const [spreadsheetRows, setSpreadsheetRows] = useState([
+    { id: '1', name: '', quantity: '1', weight: '' }
+  ]);
+
+  const handleAddSpreadsheetRow = () => {
+    setSpreadsheetRows([
+      ...spreadsheetRows,
+      { id: Date.now().toString(), name: '', quantity: '1', weight: '' }
+    ]);
+  };
+
+  const handleRemoveSpreadsheetRow = (id: string) => {
+    if (spreadsheetRows.length > 1) {
+      setSpreadsheetRows(spreadsheetRows.filter((r) => r.id !== id));
+    } else {
+      setSpreadsheetRows([{ id: '1', name: '', quantity: '1', weight: '' }]);
+    }
+  };
+
+  const handleSpreadsheetRowChange = (id: string, field: 'name' | 'quantity' | 'weight', value: string) => {
+    setSpreadsheetRows(spreadsheetRows.map(r => r.id === id ? { ...r, [field]: value } : r));
+  };
+
+  const handleCommitSpreadsheetScenario = () => {
+    const targetResponse = aiResponses[selectedResponseIndex] || respondingTo;
+    const logisticsId = `TR-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    setNewLogisticsId(logisticsId);
+
+    let existing: any[] = [];
+    try {
+      const saved = localStorage.getItem('supplyx_freight_requests');
+      if (saved) existing = JSON.parse(saved);
+    } catch (err) {
+      console.error(err);
+    }
+
+    const validRows = spreadsheetRows.filter(r => r.name.trim() !== '');
+    const materialsList = validRows.map(r => `${r.name} (${r.quantity}x${r.weight ? `, ${r.weight}T` : ''})`).join(', ') || 'Lista de Materiais de Construção';
+    const totalQty = validRows.reduce((acc, r) => acc + (parseFloat(r.quantity) || 1), 0);
+    const estimatedWeight = validRows.reduce((acc, r) => acc + (parseFloat(r.weight) || 0), 0);
+
+    const clientPhone = profile?.phone || '+258 84 123 4567';
+
+    const newLogisticsOrder = {
+      id: logisticsId,
+      tipoCarga: materialsList,
+      quantidade: `${totalQty} Itens`,
+      peso: estimatedWeight > 0 ? `${estimatedWeight} Toneladas` : 'Estimado pelo transportador',
+      volume: 'Anexo personalizado',
+      origem: spreadsheetOrigem || 'Moçambique',
+      destino: spreadsheetDestino || 'Moçambique',
+      status: 'Em concurso',
+      requester: 'Client',
+      freightResponsibility: 'Client',
+      deliveryMode: 'Third-party Logistics',
+      dataColeta: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}),
+      prazoEntrega: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}),
+      observacoes: 'Despacho logístico solicitado utilizando planilha de produtos customizados pelo cliente.',
+      targetPrice: language === 'PT' ? 'A definir por lance logístico' : 'To be bid by carrier',
+      contacto: clientPhone,
+      proposalsCount: 0,
+      rating: 5.0,
+      fragile: false,
+      temperatureControlled: false,
+      insurance: 'Incluso (Fidelidade)',
+      vehicleType: 'caminhão pesado',
+      priority: 'normal',
+      orderId: targetResponse?.requestId || 'QT-01',
+      quotationId: targetResponse?.id || 'QT-01',
+      buyerId: auth.currentUser?.uid || 'anonymous',
+      supplierId: targetResponse?.supplierId || 'supplier_default',
+      pickupAddress: spreadsheetOrigem,
+      deliveryAddress: spreadsheetDestino,
+      createdAt: new Date().toISOString()
+    };
+
+    existing = [newLogisticsOrder, ...existing];
+    localStorage.setItem('supplyx_freight_requests', JSON.stringify(existing));
+
+    addDoc(collection(db, 'freight_orders'), newLogisticsOrder).catch(err => {
+      console.warn('Firestore write warning:', err);
+    });
+
+    let liveNotifications: any[] = [];
+    try {
+      const savedNotifications = localStorage.getItem('supplyx_logistics_notifications');
+      if (savedNotifications) liveNotifications = JSON.parse(savedNotifications);
+    } catch (e) {}
+
+    const notificationObj = {
+      id: `N-${Math.floor(100 + Math.random() * 900)}`,
+      title: `NOVO CONCURSO LOGÍSTICO #${logisticsId}`,
+      text: `Carga de ${materialsList} com origem em ${spreadsheetOrigem} e destino a ${spreadsheetDestino}.`,
+      time: 'Agora mesmo',
+      read: false
+    };
+    liveNotifications = [notificationObj, ...liveNotifications];
+    localStorage.setItem('supplyx_logistics_notifications', JSON.stringify(liveNotifications));
+
+    setScenarioCommitted(true);
+    setPaymentSuccess(true);
+    setStep(3);
+  };
+
   const handleCommitScenario = () => {
     if (selectedScenario === null) return;
     
@@ -559,7 +669,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         dataColeta: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}),
         prazoEntrega: logisticsFormFields.dataDesejada ? new Date(logisticsFormFields.dataDesejada).toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}) : new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}),
         observacoes: logisticsFormFields.observacoes,
-        targetPrice: `MT ${(targetResponse?.price ? Math.round(targetResponse.price * 0.12) : 78000).toLocaleString('pt-BR')} MZN`,
+        targetPrice: language === 'PT' ? 'A definir por lance logístico' : 'To be bid by carrier',
         contacto: clientPhone,
         proposalsCount: 0,
         rating: 5.0,
@@ -1875,7 +1985,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                             type="button"
                             onClick={() => {
                               if (selectedScenario === 3) {
-                                // Prepopulate and open form
+                                // Prepopulate and open form question
                                 const targetResponse = aiResponses[selectedResponseIndex] || respondingTo;
                                 const currentSupplierName = targetResponse?.name || targetResponse?.supplierName || 'Fornecedor Parceiro';
                                 let materialsList = rows.map(r => r.material).filter(Boolean).join(', ');
@@ -1884,9 +1994,12 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                 }
                                 if (!materialsList) materialsList = 'Materiais de Construção B2B';
 
+                                const calculatedOrigem = targetResponse?.supplierAddress || currentSupplierName + ', Moçambique';
+                                const calculatedDestino = profile?.address || 'Província de Nampula, Moçambique';
+
                                 setLogisticsFormFields({
-                                  origem: targetResponse?.supplierAddress || currentSupplierName + ', Moçambique',
-                                  destino: profile?.address || 'Província de Nampula, Moçambique',
+                                  origem: calculatedOrigem,
+                                  destino: calculatedDestino,
                                   tipoCarga: materialsList,
                                   peso: '12',
                                   volume: '24',
@@ -1898,7 +2011,15 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                   cargaFragil: false,
                                   temperaturaControlada: false
                                 });
-                                setShowLogisticsReqForm(true);
+
+                                // Prep spreadsheet default fields as well
+                                setSpreadsheetOrigem(calculatedOrigem);
+                                setSpreadsheetDestino(calculatedDestino);
+                                setSpreadsheetRows([
+                                  { id: '1', name: '', quantity: '1', weight: '' }
+                                ]);
+
+                                setShowLogisticsQuestion(true);
                               } else {
                                 handleCommitScenario();
                               }
@@ -1911,6 +2032,280 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                           </button>
                         </div>
 
+                        {/* DECISION QUESTION MODAL */}
+                        {showLogisticsQuestion && (
+                          <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
+                            <motion.div 
+                              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              className={`w-full max-w-[480px] border rounded-[32px] p-6 shadow-2xl relative flex flex-col ${
+                                isDarkMode ? 'bg-zinc-900 border-white/5 text-white' : 'bg-white border-zinc-150 text-zinc-900'
+                              }`}
+                            >
+                              {/* Top-right prominent close button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowLogisticsQuestion(false);
+                                  if (isDirectLogisticsRequest) {
+                                    setShowForm(false);
+                                    setIsDirectLogisticsRequest(false);
+                                    setSelectedScenario(null);
+                                    setPaymentSuccess(false);
+                                    setStep(1);
+                                  }
+                                }}
+                                className={`absolute top-5 right-5 p-2 rounded-full border transition-all pointer-events-auto z-10 ${
+                                  isDarkMode 
+                                    ? 'border-white/10 hover:border-white/20 text-zinc-400 hover:text-white hover:bg-white/5' 
+                                    : 'border-zinc-200 hover:border-zinc-300 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50'
+                                }`}
+                                aria-label="Close"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+
+                              <div className="text-center py-4">
+                                <div className="w-16 h-16 bg-[#0052CC]/10 text-[#0052CC] rounded-full flex items-center justify-center mx-auto mb-4">
+                                  <Truck className="w-8 h-8" />
+                                </div>
+                                <h3 className="text-sm font-black uppercase tracking-wider mb-2">
+                                  {language === 'PT' ? 'Configuração da Carga' : 'Cargo Setup'}
+                                </h3>
+                                <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-6">
+                                  {language === 'PT' 
+                                    ? 'Os produtos que deseja carregar/transportar são os que constam nesta cotação atual?' 
+                                    : 'Are the products you want to transport the ones in this quote?'}
+                                </p>
+
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setShowLogisticsQuestion(false);
+                                      setShowLogisticsReqForm(true);
+                                    }}
+                                    className="w-full py-4 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl transition-all shadow-md active:scale-95 flex flex-col items-center justify-center gap-1"
+                                  >
+                                    <span className="text-xs">✅ SIM</span>
+                                    <span>{language === 'PT' ? 'Produtos da Cotação' : 'Products from Quote'}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setShowLogisticsQuestion(false);
+                                      setShowLogisticsSpreadsheet(true);
+                                    }}
+                                    className="w-full py-4 px-4 bg-amber-600 hover:bg-amber-700 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl transition-all shadow-md active:scale-95 flex flex-col items-center justify-center gap-1"
+                                  >
+                                    <span className="text-xs">❌ NÃO</span>
+                                    <span>{language === 'PT' ? 'Outros (Preencher Planilha)' : 'Others (Fill Spreadsheet)'}</span>
+                                  </button>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowLogisticsQuestion(false);
+                                    if (isDirectLogisticsRequest) {
+                                      setShowForm(false);
+                                      setIsDirectLogisticsRequest(false);
+                                      setSelectedScenario(null);
+                                      setPaymentSuccess(false);
+                                      setStep(1);
+                                    }
+                                  }}
+                                  className={`mt-6 text-[9px] font-black uppercase tracking-widest transition-colors ${
+                                    isDarkMode ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-zinc-900'
+                                  }`}
+                                >
+                                  {language === 'PT' ? 'Cancelar e Voltar' : 'Cancel and Back'}
+                                </button>
+                              </div>
+                            </motion.div>
+                          </div>
+                        )}
+
+                        {/* SPREADSHEET MODAL */}
+                        {showLogisticsSpreadsheet && (
+                          <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm overflow-y-auto w-full">
+                            <motion.div 
+                              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              className={`w-full max-w-[700px] border rounded-[32px] p-6 shadow-2xl relative flex flex-col max-h-[90vh] overflow-y-auto ${
+                                isDarkMode ? 'bg-zinc-900 border-white/5 text-white' : 'bg-white border-zinc-150 text-zinc-900'
+                              }`}
+                            >
+                              {/* Top-right prominent close button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowLogisticsSpreadsheet(false);
+                                  if (isDirectLogisticsRequest) {
+                                    setShowForm(false);
+                                    setIsDirectLogisticsRequest(false);
+                                    setSelectedScenario(null);
+                                    setPaymentSuccess(false);
+                                    setStep(1);
+                                  }
+                                }}
+                                className={`absolute top-5 right-5 p-2 rounded-full border transition-all ${
+                                  isDarkMode 
+                                    ? 'border-white/10 hover:border-white/20 text-zinc-400 hover:text-white hover:bg-white/5' 
+                                    : 'border-zinc-200 hover:border-zinc-300 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50'
+                                }`}
+                                aria-label="Close"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+
+                              <div className="flex justify-between items-center mb-5 pb-3 border-b border-zinc-500/10">
+                                <div className="flex items-center gap-3">
+                                  <span className="p-2 bg-amber-500 text-white rounded-xl flex items-center justify-center">
+                                    <FileText className="w-4 h-4" />
+                                  </span>
+                                  <div>
+                                    <h3 className="text-xs font-black uppercase tracking-widest">
+                                      {language === 'PT' ? 'Planilha de Carga Personalizada' : 'Custom Cargo Spreadsheet'}
+                                    </h3>
+                                    <p className="text-[9px] font-bold text-zinc-500 uppercase mt-1 tracking-wider">
+                                       Preencha a relação de materiais, origem e destino
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-4 text-left">
+                                {/* Origem (Localização de Carga) e Destino (Onde deixar a carga) */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1">Localização de Carga (Origem)</label>
+                                    <input 
+                                      type="text" 
+                                      value={spreadsheetOrigem}
+                                      onChange={e => setSpreadsheetOrigem(e.target.value)}
+                                      placeholder={language === 'PT' ? 'Ex: Doca 4, Armazém Central, Maputo' : 'e.g. Warehouse A, Maputo'}
+                                      className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                                        isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+                                      }`}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1">Local onde a carga será deixada (Destino)</label>
+                                    <input 
+                                      type="text" 
+                                      value={spreadsheetDestino}
+                                      onChange={e => setSpreadsheetDestino(e.target.value)}
+                                      placeholder={language === 'PT' ? 'Ex: Obra do Estádio, Nampula' : 'e.g. Stadium construction, Nampula'}
+                                      className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                                        isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+                                      }`}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Spreadsheet Table Container */}
+                                <div className="border border-zinc-500/10 rounded-2xl overflow-hidden bg-zinc-950/20">
+                                  <div className="grid grid-cols-12 gap-2 bg-zinc-950/40 p-2.5 border-b border-zinc-500/10 text-[8px] font-black uppercase tracking-widest text-zinc-500">
+                                    <div className="col-span-6">{language === 'PT' ? 'Descrição do Produto/Material' : 'Material/Product Name'}</div>
+                                    <div className="col-span-3 text-center">{language === 'PT' ? 'Quantidade' : 'Quantity'}</div>
+                                    <div className="col-span-2 text-center">{language === 'PT' ? 'Peso (T)' : 'Weight (T)'}</div>
+                                    <div className="col-span-1 text-right"></div>
+                                  </div>
+
+                                  <div className="divide-y divide-zinc-500/5 max-h-[220px] overflow-y-auto">
+                                    {spreadsheetRows.map((row) => (
+                                      <div key={row.id} className="grid grid-cols-12 gap-2 p-2 items-center">
+                                        <div className="col-span-6">
+                                          <input 
+                                            type="text"
+                                            value={row.name}
+                                            onChange={(e) => handleSpreadsheetRowChange(row.id, 'name', e.target.value)}
+                                            placeholder={language === 'PT' ? 'Ex: Tubos Galvanizados, Cimento' : 'e.g. Cement bag'}
+                                            className={`w-full p-2 rounded-lg text-xs font-bold border-transparent focus:border-brand/45 focus:bg-transparent ${
+                                              isDarkMode ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-900'
+                                            }`}
+                                          />
+                                        </div>
+                                        <div className="col-span-3">
+                                          <input 
+                                            type="number"
+                                            value={row.quantity}
+                                            onChange={(e) => handleSpreadsheetRowChange(row.id, 'quantity', e.target.value)}
+                                            placeholder="1"
+                                            className={`w-full p-2 text-center text-xs font-bold border-transparent focus:border-brand/45 focus:bg-transparent font-mono ${
+                                              isDarkMode ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-900'
+                                            }`}
+                                          />
+                                        </div>
+                                        <div className="col-span-2">
+                                          <input 
+                                            type="number"
+                                            value={row.weight}
+                                            onChange={(e) => handleSpreadsheetRowChange(row.id, 'weight', e.target.value)}
+                                            placeholder="0.5"
+                                            step="0.1"
+                                            className={`w-full p-2 text-center text-xs font-bold border-transparent focus:border-brand/45 focus:bg-transparent font-mono ${
+                                              isDarkMode ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-900'
+                                            }`}
+                                          />
+                                        </div>
+                                        <div className="col-span-1 text-right">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveSpreadsheetRow(row.id)}
+                                            disabled={spreadsheetRows.length <= 1 && row.name === ''}
+                                            className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <div className="p-2 bg-zinc-950/20 border-t border-zinc-500/10 text-left">
+                                    <button
+                                      type="button"
+                                      onClick={handleAddSpreadsheetRow}
+                                      className="py-1.5 px-3 bg-[#0052CC]/10 hover:bg-[#0052CC]/25 text-[#0052CC] rounded-lg text-[8px] font-black uppercase tracking-widest transition-all"
+                                    >
+                                      + {language === 'PT' ? 'Adicionar Material' : 'Add Material'}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex justify-between items-center pt-5 border-t border-zinc-500/10 mt-6">
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    setShowLogisticsSpreadsheet(false);
+                                    setShowLogisticsQuestion(true); // Return back to first question screen
+                                  }}
+                                  className={`px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                                    isDarkMode 
+                                      ? 'text-zinc-300 bg-white/5 hover:bg-white/10 hover:text-white' 
+                                      : 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200 hover:text-zinc-950'
+                                  }`}
+                                >
+                                  {language === 'PT' ? '← Voltar' : '← Back'}
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={handleCommitSpreadsheetScenario}
+                                  disabled={spreadsheetRows.filter((r) => r.name.trim() !== '').length === 0}
+                                  className="px-8 py-2.5 bg-[#0052CC] text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-[#0747A6] disabled:opacity-50 transition-all flex items-center gap-2"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  {language === 'PT' ? 'Criar Despacho por Planilha' : 'Create Dispatch via Sheet'}
+                                </button>
+                              </div>
+                            </motion.div>
+                          </div>
+                        )}
+
                         {/* HIGHLY INTERACTIVE POPUP MODAL FOR TRANSPORTATION REQUEST FORM */}
                         {showLogisticsReqForm && (
                           <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm overflow-y-auto">
@@ -1921,6 +2316,28 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                 isDarkMode ? 'bg-zinc-900 border-white/5 text-white' : 'bg-white border-zinc-150 text-zinc-900'
                               }`}
                             >
+                              {/* Top-right prominent close button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowLogisticsReqForm(false);
+                                  if (isDirectLogisticsRequest) {
+                                    setShowForm(false);
+                                    setIsDirectLogisticsRequest(false);
+                                    setSelectedScenario(null);
+                                    setPaymentSuccess(false);
+                                    setStep(1);
+                                  }
+                                }}
+                                className={`absolute top-5 right-5 p-2 rounded-full border transition-all pointer-events-auto z-10 ${
+                                  isDarkMode 
+                                    ? 'border-white/10 hover:border-white/20 text-zinc-400 hover:text-white hover:bg-white/5' 
+                                    : 'border-zinc-200 hover:border-zinc-300 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50'
+                                }`}
+                                aria-label="Close"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
                               <div className="flex justify-between items-center mb-5 pb-3 border-b border-zinc-500/10">
                                 <div className="flex items-center gap-3">
                                   <span className="p-2 bg-[#0052CC] text-white rounded-xl flex items-center justify-center">
@@ -2099,24 +2516,51 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                 </div>
                               </div>
 
-                              <div className="flex justify-end gap-3.5 pt-5 border-t border-zinc-500/10 mt-5">
-                                <button 
-                                  type="button"
-                                  onClick={() => setShowLogisticsReqForm(false)}
-                                  className="px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest text-zinc-550 hover:text-white"
-                                >
-                                  Cancelar
-                                </button>
+                              <div className="flex justify-between items-center pt-5 border-t border-zinc-500/10 mt-5">
                                 <button 
                                   type="button"
                                   onClick={() => {
                                     setShowLogisticsReqForm(false);
-                                    handleCommitScenario();
+                                    setShowLogisticsQuestion(true); // Return back to first question screen
                                   }}
-                                  className="px-7 py-2.5 bg-[#0052CC] text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-[#0747A6]"
+                                  className={`px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                                    isDarkMode 
+                                      ? 'text-zinc-300 bg-white/5 hover:bg-white/10 hover:text-white' 
+                                      : 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200 hover:text-zinc-950'
+                                  }`}
                                 >
-                                  Publicar Despacho no Marketplace
+                                  {language === 'PT' ? '← Voltar' : '← Back'}
                                 </button>
+                                <div className="flex gap-2">
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      setShowLogisticsReqForm(false);
+                                      if (isDirectLogisticsRequest) {
+                                        setShowForm(false);
+                                        setIsDirectLogisticsRequest(false);
+                                        setSelectedScenario(null);
+                                        setPaymentSuccess(false);
+                                        setStep(1);
+                                      }
+                                    }}
+                                    className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-colors ${
+                                      isDarkMode ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-zinc-900'
+                                    }`}
+                                  >
+                                    {language === 'PT' ? 'Fechar' : 'Close'}
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      setShowLogisticsReqForm(false);
+                                      handleCommitScenario();
+                                    }}
+                                    className="px-7 py-2.5 bg-[#0052CC] text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-[#0747A6]"
+                                  >
+                                    {language === 'PT' ? 'Publicar Despacho no Marketplace' : 'Publish Dispatch in Marketplace'}
+                                  </button>
+                                </div>
                               </div>
                             </motion.div>
                           </div>
@@ -2406,6 +2850,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
               whileHover={{ y: -4 }}
               onClick={() => {
                 if (userType === 'supplier' && order.status === 'pending') {
+                  setIsDirectLogisticsRequest(false);
                   setRespondingTo(order);
                 }
               }}
@@ -2511,6 +2956,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
+                          setIsDirectLogisticsRequest(false);
                           setRespondingTo(order);
                         }}
                         className="px-4 sm:px-5 py-2 sm:py-2.5 bg-supplyx-blue text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-blue-500/20"
@@ -2530,17 +2976,51 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (onNavigate) {
-                          onNavigate('Logística', {
-                            tipoCarga: order.materials?.map((m: any) => m.name || m).join(', ') || 'Cimento CP-IV',
-                            quantidade: `${order.materials?.length || 1} Lote`,
-                            peso: '18 Toneladas',
-                            volume: '30 m³',
-                            origem: order.supplierName || 'Porto de Maputo, Moçambique',
-                            destino: order.buyerName || 'Nampula, Moçambique',
-                            observacoes: 'Gerado a partir da Cotação ' + (order.id || '')
-                          });
+                        // Populate logistics form parameters for this specific quote/order
+                        const currentSupplierName = order.supplierName || 'Fornecedor Parceiro';
+                        let materialsList = order.materials?.map((m: any) => typeof m === 'object' ? m.name : m).filter(Boolean).join(', ');
+                        if (!materialsList && order.items) {
+                          materialsList = order.items.map((it: any) => it.material || it.description).filter(Boolean).join(', ');
                         }
+                        if (!materialsList) materialsList = 'Materiais de Construção B2B';
+
+                        const calculatedOrigem = order.supplierAddress || currentSupplierName + ', Moçambique';
+                        const calculatedDestino = profile?.address || order.buyerName || 'Província de Nampula, Moçambique';
+
+                        setLogisticsFormFields({
+                          origem: calculatedOrigem,
+                          destino: calculatedDestino,
+                          tipoCarga: materialsList,
+                          peso: '12',
+                          volume: '24',
+                          prioridade: 'normal',
+                          dataDesejada: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                          tipoVeiculo: 'caminhão pesado',
+                          observacoes: `Ordem Logística vinculada à Cotação #${order.id || 'QT-01'}. Faturamento sob custódia SupplyX. Urgência: ALTA`,
+                          seguroCarga: 'Incluso (Fidelidade)',
+                          cargaFragil: false,
+                          temperaturaControlada: false
+                        });
+
+                        // Prep spreadsheet default fields as well
+                        setSpreadsheetOrigem(calculatedOrigem);
+                        setSpreadsheetDestino(calculatedDestino);
+                        setSpreadsheetRows([
+                          { id: '1', name: '', quantity: '1', weight: '' }
+                        ]);
+
+                        // Remember the order we are responding to
+                        setRespondingTo(order);
+                        
+                        // Switch view settings to render correctly
+                        setIsDirectLogisticsRequest(true);
+                        setShowForm(true);
+                        setStep(4);
+                        setPaymentSuccess(true);
+                        setSelectedScenario(3);
+                        
+                        // Show the logistics question popup on screen
+                        setShowLogisticsQuestion(true);
                       }}
                       className="px-4 py-2.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
                     >
@@ -2652,6 +3132,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
+                          setIsDirectLogisticsRequest(false);
                           setRespondingTo(order);
                         }}
                         className="px-4 sm:px-5 py-2 sm:py-2.5 bg-supplyx-blue text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-blue-500/20"
@@ -2686,7 +3167,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       </div>
 
       <AnimatePresence>
-        {respondingTo && (
+        {respondingTo && userType === 'supplier' && !isDirectLogisticsRequest && (
           <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-md">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}

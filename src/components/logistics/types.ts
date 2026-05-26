@@ -23,6 +23,8 @@ export interface CargoRequest {
   feedbackCarrier?: { rating: number; comment: string };
   podSignature?: string;
   podPhoto?: string;
+  hasUserBid?: boolean;
+  logisticsReplies?: any[];
 }
 
 export interface CarrierProposal {

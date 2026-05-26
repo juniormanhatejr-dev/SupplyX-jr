@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion } from 'motion/react';
 import { 
   Truck, 
   MapPin, 
@@ -472,8 +473,12 @@ export default function CarrierCentral({
                   <div className="mt-6 pt-4 border-t border-white/[0.03] space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-[8px] font-black uppercase text-zinc-550 block leading-none">{language === 'PT' ? 'Valor Sugerido' : 'Target Price'}</span>
-                        <span className="text-sm font-black text-emerald-400 italic">MT {load.targetPrice || '68.000'}</span>
+                        <span className="text-[8px] font-black uppercase text-zinc-550 block leading-none">{language === 'PT' ? 'Proposta de Preço' : 'Price Proposal'}</span>
+                        <span className="text-sm font-black text-emerald-400 italic">
+                          {load.targetPrice && !load.targetPrice.includes('A definir') && !load.targetPrice.includes('definir')
+                            ? (load.targetPrice.startsWith('MT') ? load.targetPrice : `MT ${load.targetPrice}`)
+                            : (language === 'PT' ? 'A definir por lance logístico' : 'To be bid by carrier')}
+                        </span>
                       </div>
                       
                       <div className="flex gap-2">
@@ -483,7 +488,8 @@ export default function CarrierCentral({
                               setBiddingLoadId(null);
                             } else {
                               setBiddingLoadId(load.id);
-                              setBidPrice(load.targetPrice ? load.targetPrice.replace(/[^0-9]/g, '') : '65000');
+                              const numericPrice = load.targetPrice && !load.targetPrice.includes('A definir') && !load.targetPrice.includes('definir') ? load.targetPrice.replace(/[^0-9]/g, '') : '';
+                              setBidPrice(numericPrice || '68000');
                             }
                           }}
                           className={`px-4 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all flex items-center gap-1 active:scale-95 border ${
@@ -650,7 +656,11 @@ export default function CarrierCentral({
                       <div className="flex items-center gap-4 text-right justify-between md:justify-end">
                         <div className="hidden sm:block">
                           <span className="text-[7.5px] text-zinc-500 font-black block uppercase tracking-widest">{language === 'PT' ? 'Fretagem Líquida' : 'Net Freight'}</span>
-                          <span className="text-sm font-black text-emerald-400 italic">MT {load.targetPrice || '78.500'}</span>
+                          <span className="text-sm font-black text-emerald-400 italic">
+                            {load.targetPrice && !load.targetPrice.includes('A definir') && !load.targetPrice.includes('definir')
+                              ? (load.targetPrice.startsWith('MT') ? load.targetPrice : `MT ${load.targetPrice}`)
+                              : (language === 'PT' ? 'A propor' : 'To be proposed')}
+                          </span>
                         </div>
 
                         <div className="flex gap-2">
@@ -776,7 +786,11 @@ export default function CarrierCentral({
                     </div>
                     <div className="p-3.5 rounded-2xl bg-zinc-950/20 border border-white/5">
                       <span className="text-[7.5px] uppercase font-black text-zinc-500 block">{language === 'PT' ? 'CUSTÓDIA' : 'REVENUE'}</span>
-                      <p className="text-xs font-black text-emerald-400 font-mono">MT {selectedLoad.targetPrice || '68.000'}</p>
+                      <p className="text-xs font-black text-emerald-400 font-mono">
+                        {selectedLoad.targetPrice && !selectedLoad.targetPrice.includes('A definir') && !selectedLoad.targetPrice.includes('definir')
+                          ? (selectedLoad.targetPrice.startsWith('MT') ? selectedLoad.targetPrice : `MT ${selectedLoad.targetPrice}`)
+                          : (language === 'PT' ? 'A definir por lance logístico' : 'To be bid by carrier')}
+                      </p>
                     </div>
                     <div className="p-3.5 rounded-2xl bg-zinc-950/20 border border-white/5">
                       <span className="text-[7.5px] uppercase font-black text-zinc-500 block">{language === 'PT' ? 'MOTORISTA' : 'DRIVER'}</span>

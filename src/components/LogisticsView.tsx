@@ -18,7 +18,8 @@ import {
   Award,
   ListFilter
 } from 'lucide-react';
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
+import { collection, onSnapshot, query, where, getDocs, setDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 
 // Decoupled sub-system views
 import { CargoRequest, CommercialDriver, StorageWarehouse, FinancialLedger } from './logistics/types';
@@ -85,7 +86,7 @@ export default function LogisticsView({
         observacoes: 'Material ensacado resistente paletizado.',
         proposalsCount: 3,
         rating: 4.8,
-        targetPrice: '78.000 MZN'
+        targetPrice: 'A definir por lance logístico'
       },
       {
         id: 'TR-2025-0002',
@@ -218,10 +219,13 @@ export default function LogisticsView({
     setLogisticsNotifications(list);
   };
 
-  // Synchronize triggers to local storage
+  // Synchronize triggers to local storage and Firestore
   const syncRequestsToLocalStorage = (list: CargoRequest[]) => {
     localStorage.setItem('supplyx_freight_requests', JSON.stringify(list));
     setCustomRequests(list);
+    list.forEach((req) => {
+      syncRequestToFirestore(req);
+    });
   };
 
   const syncDriversToLocalStorage = (list: CommercialDriver[]) => {
@@ -234,6 +238,71 @@ export default function LogisticsView({
     setFinancialLedgers(list);
   };
 
+  // Helper to update structural fields in Firestore freight_orders
+  const syncRequestToFirestore = async (req: CargoRequest) => {
+    try {
+      const q = query(collection(db, 'freight_orders'), where('id', '==', req.id));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        querySnapshot.forEach(async (docSnap) => {
+          await updateDoc(docSnap.ref, { ...req });
+        });
+      } else {
+        await setDoc(doc(db, 'freight_orders', req.id), req);
+      }
+    } catch (err) {
+      console.warn('Failed to sync cargo request to Firestore:', err);
+    }
+  };
+
+  // Real-time listener for freight_orders collection
+  useEffect(() => {
+    try {
+      const q = query(collection(db, 'freight_orders'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const firestoreList: CargoRequest[] = [];
+        snapshot.forEach((docSnap) => {
+          const item = docSnap.data();
+          firestoreList.push({
+            id: item.id || docSnap.id,
+            ...item,
+          } as CargoRequest);
+        });
+
+        if (firestoreList.length === 0) return;
+
+        setCustomRequests((prevRequests) => {
+          const combinedMap = new Map<string, CargoRequest>();
+          
+          prevRequests.forEach((req) => {
+            combinedMap.set(req.id, req);
+          });
+          
+          let hasDiff = false;
+          firestoreList.forEach((req) => {
+            const existing = combinedMap.get(req.id);
+            if (!existing || JSON.stringify(existing) !== JSON.stringify(req)) {
+              combinedMap.set(req.id, req);
+              hasDiff = true;
+            }
+          });
+          
+          if (!hasDiff) return prevRequests;
+
+          const result = Array.from(combinedMap.values());
+          localStorage.setItem('supplyx_freight_requests', JSON.stringify(result));
+          return result;
+        });
+      }, (error) => {
+        console.error('Firestore real-time sync failed:', error);
+      });
+
+      return () => unsubscribe();
+    } catch (err) {
+      console.warn('Failed to initialize Firestore listener for freight_orders:', err);
+    }
+  }, []);
+
   // Intercept incoming order payloads (e.g. from Purchase views)
   useEffect(() => {
     if (initialPayload?.tipoCarga) {
@@ -241,10 +310,36 @@ export default function LogisticsView({
     }
   }, [initialPayload]);
 
-  // If user is registered as logistics, default to carrier_central dashboard
+  // Dynamically filter requests based on the user's logged-in role
+  const displayedRequests = useMemo(() => {
+    if (userType === 'logistics') {
+      return customRequests;
+    }
+    // Buyers see their created requests (or requests marked as Client)
+    if (userType === 'buyer') {
+      return customRequests.filter(req => 
+        req.buyerId === auth.currentUser?.uid || 
+        req.requester === 'Client' ||
+        !req.buyerId
+      );
+    }
+    // Suppliers see requests related to them (or requests marked as Supplier)
+    if (userType === 'supplier') {
+      return customRequests.filter(req => 
+        req.supplierId === auth.currentUser?.uid || 
+        req.requester === 'Supplier' ||
+        !req.supplierId
+      );
+    }
+    return customRequests;
+  }, [customRequests, userType]);
+
+  // If user is registered as logistics, default to carrier_central dashboard, otherwise 'requests_list'
   useEffect(() => {
     if (userType === 'logistics') {
       setActiveSubTab('carrier_central');
+    } else {
+      setActiveSubTab('requests_list');
     }
   }, [userType]);
 
@@ -278,9 +373,22 @@ export default function LogisticsView({
     syncDriversToLocalStorage(updated);
   };
 
-  const handleDeleteRequest = (id: string) => {
+  const deleteRequestFromFirestore = async (id: string) => {
+    try {
+      const q = query(collection(db, 'freight_orders'), where('id', '==', id));
+      const querySnapshot = await getDocs(q);
+      querySnapshot.forEach(async (docSnap) => {
+        await deleteDoc(docSnap.ref);
+      });
+    } catch (err) {
+      console.warn('Failed to delete cargo request from Firestore:', err);
+    }
+  };
+
+  const handleDeleteRequest = async (id: string) => {
     const updated = customRequests.filter(r => r.id !== id);
     syncRequestsToLocalStorage(updated);
+    await deleteRequestFromFirestore(id);
   };
 
   const handleClearFinancial = (id: string) => {
@@ -430,6 +538,16 @@ export default function LogisticsView({
     syncRequestsToLocalStorage(updated);
   };
 
+  const handleUpdateCargoRequest = (id: string, updatedFields: Partial<CargoRequest>) => {
+    const updated = customRequests.map(r => {
+      if (r.id === id) {
+        return { ...r, ...updatedFields };
+      }
+      return r;
+    });
+    syncRequestsToLocalStorage(updated);
+  };
+
   return (
     <div className={`w-full max-w-[1440px] mx-auto min-h-screen pb-16 ${isDarkMode ? 'text-zinc-100' : 'text-zinc-800'}`}>
       
@@ -438,11 +556,20 @@ export default function LogisticsView({
         isDarkMode ? 'bg-zinc-900/40 border-white/5 backdrop-blur-md' : 'bg-white border-zinc-150 shadow-sm'
       }`}>
         <div className="flex flex-wrap items-center gap-1.5 w-full xl:w-auto overflow-x-auto select-none no-scrollbar">
-          {[
-            { id: 'carrier_central', pt: '🚚 Painel da Transportadora', en: '🚚 Carrier Central' },
-            { id: 'dashboard', pt: '📊 Cockpit Analítico', en: '📊 Control Dashboard' },
-            { id: 'financial', pt: '💳 B2B Financeiro Split', en: '💳 B2B Split Fees' }
-          ].map((tab) => {
+          {(userType === 'logistics'
+            ? [
+                { id: 'carrier_central', pt: '🚚 Painel da Transportadora', en: '🚚 Carrier Central' },
+                { id: 'dashboard', pt: '📊 Cockpit Analítico', en: '📊 Control Dashboard' },
+                { id: 'requests_list', pt: '📋 Monitor de Cargas', en: '📋 Cargo Monitor' },
+                { id: 'drivers', pt: '👤 Frotas & Motoristas', en: '👤 Fleets & Drivers' },
+                { id: 'inventory', pt: '📦 Fulfillment Stock', en: '📦 Fulfillment Stock' },
+                { id: 'financial', pt: '💳 B2B Financeiro Split', en: '💳 B2B Split Fees' }
+              ]
+            : [
+                { id: 'requests_list', pt: '📋 Minhas Cargas (Rastreio)', en: '📋 My Cargoes (Tracking)' },
+                { id: 'dashboard', pt: '📊 Painel de Rastreio', en: '📊 Tracking Dashboard' }
+              ]
+          ).map((tab) => {
             const isSelected = activeSubTab === tab.id || (tab.id === 'requests_list' && activeSubTab === 'detailed_request');
             return (
               <button
@@ -490,7 +617,7 @@ export default function LogisticsView({
               <CarrierCentral 
                 isDarkMode={isDarkMode}
                 language={language}
-                requests={customRequests}
+                requests={displayedRequests}
                 onUpdateRequests={syncRequestsToLocalStorage}
                 occurrences={occurrences}
                 onAddOccurrence={handleAddOccurrence}
@@ -502,7 +629,7 @@ export default function LogisticsView({
               <LogisticsDashboard 
                 isDarkMode={isDarkMode}
                 language={language}
-                requests={customRequests}
+                requests={displayedRequests}
                 drivers={drivers}
                 occurrences={occurrences}
                 notifications={logisticsNotifications}
@@ -520,7 +647,7 @@ export default function LogisticsView({
                 language={language}
                 selectedRequestId={selectedRequestId}
                 onBack={() => setActiveSubTab('requests_list')}
-                requests={customRequests}
+                requests={displayedRequests}
                 occurrences={occurrences}
                 drivers={drivers}
                 onChangeRequestStatus={handleChangeRequestStatus}
@@ -531,6 +658,8 @@ export default function LogisticsView({
                 onUpdateFeedback={handleUpdateFeedback}
                 onUpdateCargoPod={handleUpdateCargoPod}
                 onNavigateToTab={setActiveSubTab}
+                userType={userType}
+                onUpdateCargoRequest={handleUpdateCargoRequest}
               />
             )}
 
@@ -548,7 +677,7 @@ export default function LogisticsView({
               <RequestsListPage 
                 isDarkMode={isDarkMode}
                 language={language}
-                requests={customRequests}
+                requests={displayedRequests}
                 onSelectRequest={(id) => {
                   setSelectedRequestId(id);
                   setActiveSubTab('detailed_request');

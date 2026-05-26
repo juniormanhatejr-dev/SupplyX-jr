@@ -94,7 +94,8 @@ export default function CreateRequestPage({
         ...formData,
         status: 'Em Competição',
         proposalsCount: 4,
-        rating: 4.8
+        rating: 4.8,
+        targetPrice: language === 'PT' ? 'A definir por lance logístico' : 'To be bid by carrier'
       };
       setLoading(false);
       onSuccess(generatedReq);
@@ -340,8 +341,13 @@ export default function CreateRequestPage({
             <p className="text-sm font-black text-supplyx-blue mt-1.5">{estimatedValues.duration}</p>
           </div>
           <div>
-            <span className="text-[8px] font-black text-zinc-505 text-zinc-500 uppercase tracking-widest leading-none font-sans">TARIFA DE MERCADO ESTIMADA</span>
+            <span className="text-[8px] font-black text-zinc-505 text-zinc-500 uppercase tracking-widest leading-none font-sans">
+              {language === 'PT' ? 'TARIFA DE REFERÊNCIAS (MOCAMBIQUE)' : 'ESTIMATED MARKET REFERENCE'}
+            </span>
             <p className="text-sm font-black text-emerald-400 italic mt-1.5">{estimatedValues.freightCost} MZN</p>
+            <p className="text-[7.5px] text-zinc-400 font-bold uppercase mt-1">
+              {language === 'PT' ? '✦ Preço final será definido por lance do transportador' : '✦ Final price is proposed by logistics carrier via bids'}
+            </p>
           </div>
         </div>
 

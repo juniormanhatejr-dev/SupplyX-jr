@@ -40,6 +40,8 @@ interface DetailedRequestViewProps {
   onUpdateFeedback: (id: string, role: 'client' | 'carrier', rating: number, comment: string) => void;
   onUpdateCargoPod: (id: string, signature: string, photo: string) => void;
   onNavigateToTab: (tab: string, payload?: any) => void;
+  userType?: string;
+  onUpdateCargoRequest?: (id: string, updatedFields: Partial<CargoRequest>) => void;
 }
 
 export default function DetailedRequestView({
@@ -57,14 +59,23 @@ export default function DetailedRequestView({
   onToggleOccurrence,
   onUpdateFeedback,
   onUpdateCargoPod,
-  onNavigateToTab
+  onNavigateToTab,
+  userType,
+  onUpdateCargoRequest
 }: DetailedRequestViewProps) {
   const [selectedProposalIndex, setSelectedProposalIndex] = useState<number>(0);
   const [mapZoom, setMapZoom] = useState<number>(1);
   const [successModal, setSuccessModal] = useState<string | null>(null);
 
   // States for new interactive features
-  const [activeTab, setActiveTab] = useState<'info' | 'bids' | 'occurrences' | 'documents' | 'review'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'reply' | 'bids' | 'occurrences' | 'documents' | 'review'>('info');
+
+  // Response states
+  const [typedReplyMessage, setTypedReplyMessage] = useState('');
+  const [proposedPrice, setProposedPrice] = useState('');
+  const [proposedDate, setProposedDate] = useState('');
+  const [proposedVehicle, setProposedVehicle] = useState('');
+  const [replyStatusMessage, setReplyStatusMessage] = useState('Proposta enviada');
 
   // Proposal Creation modal/form
   const [showAddBidForm, setShowAddBidForm] = useState(false);
@@ -116,7 +127,7 @@ export default function DetailedRequestView({
       observacoes: 'Material ensacado resistente paletizado.',
       proposalsCount: 3,
       rating: 4.8,
-      targetPrice: '78.000 MZN'
+      targetPrice: 'A definir por lance logístico'
     } as CargoRequest;
   }, [selectedRequestId, requests]);
 
@@ -245,6 +256,84 @@ export default function DetailedRequestView({
       category: 'Atrasos',
       description: '',
       responsible: drivers[0]?.name || 'Motorista Terceirizado'
+    });
+  };
+
+  const handleSendReply = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!typedReplyMessage.trim()) return;
+
+    const newReply = {
+      id: `rep-${Date.now()}`,
+      sender: userType === 'logistics' ? 'logistics' : 'requester',
+      senderName: userType === 'logistics' ? 'Operador Logístico' : (requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente'),
+      text: typedReplyMessage,
+      timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})
+    };
+
+    const updatedReplies = [...(requestObj.logisticsReplies || []), newReply];
+    
+    const updatedFields: Partial<CargoRequest> = {
+      logisticsReplies: updatedReplies
+    };
+
+    if (userType === 'logistics') {
+      if (proposedPrice) {
+        updatedFields.targetPrice = proposedPrice.includes('MZN') ? proposedPrice : `${proposedPrice} MZN`;
+      }
+      if (proposedDate) {
+        updatedFields.prazoEntrega = proposedDate;
+      }
+      if (proposedVehicle) {
+        updatedFields.deliveryMode = proposedVehicle;
+      }
+      updatedFields.status = 'Em negociação';
+    }
+
+    onUpdateCargoRequest?.(requestObj.id, updatedFields);
+    setTypedReplyMessage('');
+    setProposedPrice('');
+    setProposedDate('');
+    setProposedVehicle('');
+  };
+
+  const handleAcceptProposal = () => {
+    const rawPrice = requestObj.targetPrice ? requestObj.targetPrice.replace(/\D/g, '') : '80000';
+    const numPrice = parseInt(rawPrice, 10) || 80000;
+    
+    onAssignCarrier(requestObj.id, 'SupplyX Logística Consolidated', numPrice);
+    onChangeRequestStatus(requestObj.id, 'Atribuído');
+
+    const newReply = {
+      id: `rep-agreed-${Date.now()}`,
+      sender: 'requester',
+      senderName: requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente',
+      text: '✓ PROPOSTA ACEITA E CONTRATO FIRMADO. Iniciar trâmite de transporte.',
+      timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})
+    };
+
+    const updatedReplies = [...(requestObj.logisticsReplies || []), newReply];
+    onUpdateCargoRequest?.(requestObj.id, {
+      logisticsReplies: updatedReplies,
+      status: 'Atribuído',
+      assignedCarrier: 'SupplyX Logística Consolidated'
+    });
+
+    setSuccessModal('SupplyX Logística Consolidated');
+  };
+
+  const handleRejectProposal = () => {
+    const newReply = {
+      id: `rep-rejected-${Date.now()}`,
+      sender: 'requester',
+      senderName: requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente',
+      text: '❌ PROPOSTA REJEITADA. Solicitamos revisão dos custos ou prazos.',
+      timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})
+    };
+    const updatedReplies = [...(requestObj.logisticsReplies || []), newReply];
+    onUpdateCargoRequest?.(requestObj.id, {
+      logisticsReplies: updatedReplies,
+      status: 'Em concurso'
     });
   };
 
@@ -449,6 +538,7 @@ export default function DetailedRequestView({
       <div className="flex flex-wrap gap-2 pb-1 border-b border-white/5">
         {[
           { id: 'info', label: language === 'PT' ? '📋 Detalhes Operacionais' : '📋 Spec & Telemetry' },
+          { id: 'reply', label: language === 'PT' ? '💬 Responder ao Remetente' : '💬 Respond to Requester' },
           { id: 'bids', label: language === 'PT' ? `💰 Concurso de Lances [${bids.length}]` : `💰 Bids Portal [${bids.length}]` },
           { id: 'occurrences', label: language === 'PT' ? `⚠️ Ocorrências Registadas [${filteredOccurrences.length}]` : `⚠️ Incidents [${filteredOccurrences.length}]` },
           { id: 'documents', label: language === 'PT' ? '📄 Documentos Digitais / PoD' : '📄 Digital Vault / PoD' },
@@ -469,6 +559,236 @@ export default function DetailedRequestView({
       </div>
 
       <div className="space-y-6">
+        {/* TAB 2: RESPONDER AO REMETENTE */}
+        {activeTab === 'reply' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            {/* LEFT PANE: B2B NEGOTIATION CHAT */}
+            <div className={`p-6 sm:p-8 rounded-[32px] border flex flex-col justify-between h-[520px] ${
+              isDarkMode ? 'bg-zinc-900/50 border-white/5 shadow-2xl' : 'bg-white border-zinc-100 shadow-sm'
+            }`}>
+              <div>
+                <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/5">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-supplyx-blue" />
+                    {language === 'PT' ? 'Histórico de Mensagens / Respostas' : 'Message & Negotiation Log'}
+                  </h3>
+                  <span className="text-[8px] font-mono text-zinc-450 uppercase">ID: #{requestObj.id}</span>
+                </div>
+
+                {/* Messages Loop */}
+                <div className="space-y-3 overflow-y-auto max-h-[340px] pr-2 no-scrollbar">
+                  {(requestObj.logisticsReplies || []).length === 0 ? (
+                    <div className="p-8 text-center border border-dashed border-zinc-800 rounded-2xl my-4">
+                      <p className="text-xs font-bold text-zinc-500 uppercase">
+                        {language === 'PT' 
+                          ? 'Nenhuma mensagem trocada ainda neste frete. Envie uma resposta oficial ao lado!' 
+                          : 'No business responses matched yet. Type a proposal update to start.'}
+                      </p>
+                    </div>
+                  ) : (
+                    (requestObj.logisticsReplies || []).map((rep: any, idx: number) => {
+                      const isLogistics = rep.sender === 'logistics';
+                      return (
+                        <div 
+                          key={rep.id || idx} 
+                          className={`p-3.5 rounded-2xl flex flex-col max-w-[85%] ${
+                            isLogistics
+                              ? 'bg-supplyx-blue/15 border border-supplyx-blue/20 self-end ml-auto text-right'
+                              : 'bg-zinc-850 border border-white/5 self-start mr-auto text-left'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1 justify-between">
+                            <span className="text-[8px] font-black uppercase text-zinc-400">
+                              {rep.senderName}
+                            </span>
+                            <span className="text-[7.5px] font-mono text-zinc-500">{rep.timestamp}</span>
+                          </div>
+                          <p className={`text-[11px] font-bold leading-relaxed ${isDarkMode ? 'text-white' : 'text-zinc-800'}`}>
+                            {rep.text}
+                          </p>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Chat Send Form */}
+              <form onSubmit={handleSendReply} className="flex gap-2 mt-4 pt-4 border-t border-white/5">
+                <input
+                  type="text"
+                  required
+                  placeholder={language === 'PT' ? 'Escreva uma mensagem ou contraproposta...' : 'Type a reply or counter-proposal...'}
+                  value={typedReplyMessage}
+                  onChange={e => setTypedReplyMessage(e.target.value)}
+                  className="flex-grow p-3 bg-zinc-950 border border-white/5 rounded-xl text-xs text-white outline-none focus:border-supplyx-blue/50 transition-colors"
+                />
+                <button
+                  type="submit"
+                  className="px-4 bg-supplyx-blue hover:brightness-110 active:scale-95 text-white rounded-xl flex items-center justify-center transition-all"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+            </div>
+
+            {/* RIGHT PANE: WORKFLOW CONTROLS & DEAL ADJUSTMENTS */}
+            <div className={`p-6 sm:p-8 rounded-[32px] border flex flex-col justify-between ${
+              isDarkMode ? 'bg-zinc-900/50 border-white/5 shadow-2xl' : 'bg-white border-zinc-100 shadow-sm'
+            }`}>
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-4 pb-3 border-b border-white/5">
+                  💼 {language === 'PT' ? 'Painel de Resposta da Proposta' : 'Proposal Reply & Deal Panel'}
+                </h3>
+
+                <div className="space-y-4">
+                  {/* Summary of current state */}
+                  <div className="p-4 bg-zinc-950 border border-white/5 rounded-2xl space-y-2">
+                    <p className="text-[8.5px] font-black uppercase tracking-widest text-zinc-500">RESUMO DA SOLICITAÇÃO</p>
+                    <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
+                      <div>
+                        <span className="text-zinc-500 uppercase text-[8px]">Status:</span>
+                        <div className="text-emerald-400 pl-1">{requestObj.status}</div>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 uppercase text-[8px]">{language === 'PT' ? 'Preço Proposto/Original:' : 'Target Price:'}</span>
+                        <div className="text-white pl-1">{requestObj.targetPrice || 'A definir'}</div>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 uppercase text-[8px]">{language === 'PT' ? 'Prazo Desejado:' : 'Target Date:'}</span>
+                        <div className="text-white pl-1">{requestObj.prazoEntrega || 'A definir'}</div>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 uppercase text-[8px]">{language === 'PT' ? 'Modelo Veículo:' : 'Vehicle Mode:'}</span>
+                        <div className="text-white pl-1">{requestObj.deliveryMode || 'Fretado Livre'}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {userType === 'logistics' ? (
+                    /* OPERATOR LOGISTICS INTERACTION */
+                    <form onSubmit={handleSendReply} className="space-y-3">
+                      <div className="bg-blue-500/5 border border-blue-500/10 p-3.5 rounded-2xl text-[10.5px] font-bold text-zinc-450 leading-relaxed mb-1">
+                        👉 <span className="text-white">{language === 'PT' ? 'Portal do Logístico:' : 'Operator Panel:'}</span> {language === 'PT' ? 'Você pode enviar contrapropostas ajustando os campos abaixo para fechar o faturamento diretamente.' : 'You can fill out terms below to coordinate direct pricing and dates.'}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[8.5px] font-bold text-zinc-500 uppercase pl-1">{language === 'PT' ? 'Ajustar Preço (MZN)' : 'Proposed Freight Fee'}</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: 82000"
+                            value={proposedPrice}
+                            onChange={e => setProposedPrice(e.target.value)}
+                            className="w-full p-3 bg-zinc-950 border border-white/5 rounded-xl text-xs text-white outline-none focus:border-supplyx-blue/40"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[8.5px] font-bold text-zinc-500 uppercase pl-1">{language === 'PT' ? 'Ajustar Prazo Entrega' : 'Proposed Delivery Date'}</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: 3 dias / 30 Mai"
+                            value={proposedDate}
+                            onChange={e => setProposedDate(e.target.value)}
+                            className="w-full p-3 bg-zinc-950 border border-white/5 rounded-xl text-xs text-white outline-none focus:border-supplyx-blue/40"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[8.5px] font-bold text-zinc-500 uppercase pl-1">{language === 'PT' ? 'Alocação de Veículo Sugerido' : 'Suggested Vehicle / Mode'}</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Volvo FH 540 (Caminhão Fechado)"
+                          value={proposedVehicle}
+                          onChange={e => setProposedVehicle(e.target.value)}
+                          className="w-full p-3 bg-zinc-950 border border-white/5 rounded-xl text-xs text-white outline-none focus:border-supplyx-blue/40"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[8.5px] font-bold text-zinc-500 uppercase pl-1">{language === 'PT' ? 'Nota Explicativa (Chat)' : 'Explanatory Note / Reply description'}</label>
+                        <textarea
+                          placeholder={language === 'PT' ? 'Insira detalhes de escolta, rotas e franquias...' : 'Details about route custom terms...'}
+                          value={typedReplyMessage}
+                          onChange={e => setTypedReplyMessage(e.target.value)}
+                          className="w-full p-3 bg-zinc-950 border border-white/5 rounded-xl text-xs text-white outline-none min-h-[50px] focus:border-supplyx-blue/40"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full py-3 bg-supplyx-blue hover:brightness-110 text-white rounded-xl text-[10px] uppercase font-black tracking-widest mt-2 active:scale-95 transition-all"
+                      >
+                        {language === 'PT' ? 'Apresentar Resposta / Contraproposta Oficial' : 'Submit Official Proposal Terms'}
+                      </button>
+                    </form>
+                  ) : (
+                    /* CLIENT OR SUPPLIER REQUESTER INTERACTION */
+                    <div className="space-y-4 pt-1">
+                      <div className="bg-[#b45309]/10 border border-[#b45309]/20 p-3 rounded-2xl text-[10.5px] font-medium leading-relaxed">
+                        ⚠️ {language === 'PT' ? 'Aguardando o aceite ou negociação dos custos com o Operador Logístico.' : 'Pending deal contract review. Apply action below.'}
+                      </div>
+
+                      {/* Display the latest operator proposal if available */}
+                      {requestObj.status === 'Em negociação' && (
+                        <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl space-y-3">
+                          <p className="text-[9.5px] font-black uppercase text-emerald-400 tracking-wider">★ PROPOSTA LOGÍSTICA RECEBIDA:</p>
+                          <p className="text-[10px] text-zinc-400 font-bold">
+                            {language === 'PT' ? 'O operador logístico respondeu apresentando as seguintes condições definitivas para este transporte:' : 'The carrier/logistics operator responded with proposed options:'}
+                          </p>
+                          <ul className="text-[10px] font-mono text-white list-disc pl-4 space-y-1">
+                            <li>{language === 'PT' ? 'Valor Consolidado:' : 'Rate Proposed:'} <span className="text-emerald-400 font-bold">{requestObj.targetPrice}</span></li>
+                            <li>{language === 'PT' ? 'Prazo Recomendado:' : 'Transit Promised:'} <span className="text-zinc-300 font-bold">{requestObj.prazoEntrega}</span></li>
+                            <li>{language === 'PT' ? 'Veículo Alocado:' : 'Vehicle Scheduled:'} <span className="text-zinc-300">{requestObj.deliveryMode}</span></li>
+                          </ul>
+
+                          <div className="flex gap-2.5 pt-2">
+                            <button
+                              onClick={handleRejectProposal}
+                              className="flex-1 py-2 rounded-xl bg-red-500/10 hover:bg-red-550 text-red-500 hover:text-white border border-red-500/20 text-[9px] font-black uppercase tracking-wider transition-all"
+                            >
+                              {language === 'PT' ? 'Recusar / Negociar' : 'Reject & Counter'}
+                            </button>
+                            <button
+                              onClick={handleAcceptProposal}
+                              className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-[9px] font-black uppercase tracking-wider rounded-xl shadow-lg transition-all"
+                            >
+                              {language === 'PT' ? 'Aceitar e Homologar ✓' : 'Accept & Contract ✓'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Client Reply and Counterproposal message form directly */}
+                      <form onSubmit={handleSendReply} className="space-y-2">
+                        <label className="text-[8.5px] font-bold text-zinc-500 uppercase pl-1">
+                          {language === 'PT' ? 'Solicitar Revisão / Enviar Réplica por Chat' : 'Request Revision / Send Reply via Chat'}
+                        </label>
+                        <textarea
+                          placeholder={language === 'PT' ? 'Escreva aqui para o logístico...' : 'Message the logistics operator...'}
+                          value={typedReplyMessage}
+                          onChange={e => setTypedReplyMessage(e.target.value)}
+                          className="w-full p-3 bg-zinc-950 border border-white/5 rounded-xl text-xs text-white outline-none min-h-[70px]"
+                        />
+                        <button
+                          type="submit"
+                          className="w-full py-2 bg-zinc-800 hover:bg-zinc-750 border border-white/5 text-zinc-200 text-[10px] uppercase font-black rounded-xl tracking-widest mt-1 transition-all"
+                        >
+                          {language === 'PT' ? 'Enviar Mensagem ao Logístico' : 'Send Message to Operator'}
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+          </div>
+        )}
+
         {/* TAB 1: OPERATIONAL INFO & SATELLITE MAP */}
         {activeTab === 'info' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

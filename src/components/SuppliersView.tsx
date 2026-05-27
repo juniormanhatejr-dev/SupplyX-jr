@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { Handshake, Search, Star, MapPin, ExternalLink, MoreVertical, ArrowLeft, Phone, Mail, Globe, ShieldCheck, Clock, Award, Loader2, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
+import { Handshake, Search, Star, MapPin, ExternalLink, MoreVertical, ArrowLeft, Phone, Mail, Globe, ShieldCheck, Clock, Award, Loader2, CheckCircle2, ChevronRight, Zap, Trash2 } from 'lucide-react';
 import { OptimizedImage } from './ui/OptimizedImage';
 import UserPresenceIndicator from './UserPresenceIndicator';
 import { useState, useEffect, useMemo } from 'react';
@@ -329,7 +329,8 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
         <h2 className={`text-xl font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
           {t.strategicPartners}
         </h2>
-        <div className="relative w-full sm:w-80">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
             <input 
               type="text" 
@@ -341,7 +342,20 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
               }`}
             />
           </div>
+          <button
+            onClick={handleClearAllSuppliers}
+            title={language === 'PT' ? 'Remover todos os fornecedores cadastrados' : 'Clear all registered suppliers'}
+            className={`p-2.5 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all shrink-0 uppercase tracking-wider ${
+              isDarkMode 
+                ? 'bg-zinc-900 border-rose-500/10 hover:bg-rose-500/10 hover:border-rose-500/30 text-rose-450 hover:text-rose-400' 
+                : 'bg-white border-zinc-200 hover:bg-rose-50 text-rose-500 shadow-sm'
+            }`}
+          >
+            <Trash2 className="w-4 h-4" />
+            <span className="hidden md:inline">{language === 'PT' ? 'Limpar Tudo' : 'Clear All'}</span>
+          </button>
         </div>
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-20">

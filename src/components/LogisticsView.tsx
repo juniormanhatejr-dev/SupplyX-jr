@@ -516,7 +516,7 @@ export default function LogisticsView({
       <div className={`mb-8 p-4 rounded-[32px] border flex flex-col xl:flex-row items-center justify-between gap-4 ${
         isDarkMode ? 'bg-zinc-900/40 border-white/5 backdrop-blur-md' : 'bg-white border-zinc-150 shadow-sm'
       }`}>
-        <div className="flex flex-wrap items-center gap-1.5 w-full xl:w-auto overflow-x-auto select-none no-scrollbar">
+        <div className="flex flex-nowrap xl:flex-wrap items-center gap-1.5 w-full xl:w-auto overflow-x-auto select-none no-scrollbar pb-1 xl:pb-0">
           {(userType === 'logistics'
             ? [
                 { id: 'carrier_central', pt: '🚚 Painel da Transportadora', en: '🚚 Carrier Central' },

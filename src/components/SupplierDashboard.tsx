@@ -232,7 +232,7 @@ export default function SupplierDashboard({ isDarkMode, language, onNavigate }: 
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: t.kpis.totalSales, value: totalSalesVal, trend: '+12.5%', icon: DollarSign, color: 'text-emerald-500' },
           { label: t.kpis.unitsSold, value: '1,240', trend: '+8.2%', icon: Package, color: 'text-brand' },

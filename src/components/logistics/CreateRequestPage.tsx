@@ -243,7 +243,7 @@ export default function CreateRequestPage({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-2">
               <label className="text-[9px] font-black uppercase text-zinc-500 tracking-wider">Quantidade</label>
               <input 

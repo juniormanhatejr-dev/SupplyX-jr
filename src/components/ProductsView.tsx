@@ -708,7 +708,7 @@ export default function ProductsView({
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className={`${isDarkMode ? 'bg-zinc-950 text-white' : 'bg-[#F7F8FA]'} min-h-screen -m-8 p-4 md:p-6`}
+      className={`${isDarkMode ? 'bg-zinc-950 text-white' : 'bg-[#F7F8FA]'} min-h-screen -m-4 md:-m-8 p-4 md:p-6`}
     >
       {/* Top Header Differentiator */}
       <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">

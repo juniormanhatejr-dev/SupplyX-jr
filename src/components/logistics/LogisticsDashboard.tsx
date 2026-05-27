@@ -337,10 +337,10 @@ export default function LogisticsDashboard({
   const estimatedFreightWithWeight = Math.round(calculatedRouteData.basePrice * (1 + (cargoWeightTons - 10) * 0.04));
 
   return (
-    <div className="space-y-8 text-left animate-in fade-in duration-300">
+    <div className="w-full max-w-full overflow-hidden space-y-8 text-left animate-in fade-in duration-300">
       
       {/* 1. TOP KPI KEYMETRICS CARD ROW */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-6 w-full max-w-full">
         {[
           {
             title: t.allOrders,
@@ -484,7 +484,7 @@ export default function LogisticsDashboard({
                     </span>
                   </div>
 
-                  <div className="w-full h-[240px]">
+                  <div className="w-full min-w-0 h-[240px] overflow-hidden">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={trendData} margin={{ left: -10, right: 10, top: 10, bottom: 5 }}>
                         <defs>
@@ -539,7 +539,7 @@ export default function LogisticsDashboard({
                       {language === 'PT' ? 'Tipos de Cargas Comuns' : 'Freight Category Share'}
                     </h3>
                     
-                    <div className="w-full h-[140px] flex items-center justify-center relative my-4">
+                    <div className="w-full min-w-0 h-[140px] flex items-center justify-center relative my-4 overflow-hidden">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
@@ -756,7 +756,9 @@ export default function LogisticsDashboard({
                           <td className="py-4 pl-2 font-mono text-supplyx-blue font-bold">#{req.id}</td>
                           <td className="py-4">
                             <p className="font-bold text-white italic">{req.tipoCarga}</p>
-                            <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest mt-0.5">Fretado por {req.requester}</p>
+                            <p className="text-[8.5px] font-black text-zinc-400 capitalize tracking-wide mt-0.5">
+                              {language === 'PT' ? 'Solicitante:' : 'Requester:'} <span className="text-white font-bold">{req.requesterName || (req.requester === 'Client' ? (language === 'PT' ? 'Cliente' : 'Client') : (language === 'PT' ? 'Fornecedor' : 'Supplier'))}</span>
+                            </p>
                           </td>
                           <td className="py-4 font-bold text-zinc-300">
                             <div className="flex items-center gap-2">

@@ -56,82 +56,26 @@ export default function LogisticsView({
   const [localActiveSubTab, setLocalActiveSubTab] = useState<string>('dashboard');
   const activeSubTab = propActiveSubTab !== undefined ? propActiveSubTab : localActiveSubTab;
   const setActiveSubTab = propSetActiveSubTab !== undefined ? propSetActiveSubTab : setLocalActiveSubTab;
-  const [selectedRequestId, setSelectedRequestId] = useState<string>('TR-2025-0001');
-
-  // ==========================================
-  // STATE MANAGEMENT / LOCAL STORAGE STORAGE PERSISTENCE
-  // ==========================================
-
-  // 1. Cargo Requests lists
   const [customRequests, setCustomRequests] = useState<CargoRequest[]>(() => {
     const saved = localStorage.getItem('supplyx_freight_requests');
-    if (saved) return JSON.parse(saved);
-
-    // Default pre-populated initial requests to make the cockpit feel professional
-    const initialRequests: CargoRequest[] = [
-      {
-        id: 'TR-2025-0001',
-        tipoCarga: 'Cimento CP-IV',
-        quantidade: '20 Toneladas',
-        peso: '20 Toneladas',
-        volume: '35 m³',
-        origem: 'Matola, Província de Maputo',
-        destino: 'Nampula, Província de Nampula',
-        status: 'Em concurso',
-        requester: 'Client',
-        freightResponsibility: 'Client',
-        deliveryMode: 'Third-party Logistics',
-        dataColeta: '25 Mai 2026',
-        prazoEntrega: '29 Mai 2026',
-        observacoes: 'Material ensacado resistente paletizado.',
-        proposalsCount: 3,
-        rating: 4.8,
-        targetPrice: 'A definir por lance logístico'
-      },
-      {
-        id: 'TR-2025-0002',
-        tipoCarga: 'Combustível Especializado',
-        quantidade: '12.000 Litros',
-        peso: '12 Toneladas',
-        volume: '15 m³',
-        origem: 'Instalações Portuárias Maputo',
-        destino: 'Sítio de Exploração Tete',
-        status: 'Em trânsito',
-        requester: 'Supplier',
-        freightResponsibility: 'Supplier',
-        deliveryMode: 'Third-party Logistics',
-        dataColeta: '23 Mai 2026',
-        prazoEntrega: '26 Mai 2026',
-        observacoes: 'Substâncias inflamáveis com condutor classe B habilitado.',
-        proposalsCount: 2,
-        rating: 4.6,
-        targetPrice: '145.000 MZN',
-        assignedCarrier: 'Fast Cargo Transportes'
-      },
-      {
-        id: 'TR-2025-0003',
-        tipoCarga: 'Carvão Mineral Bruto',
-        quantidade: '30 Toneladas',
-        peso: '30 Toneladas',
-        volume: '40 m³',
-        origem: 'Moatize Vale, Província de Tete',
-        destino: 'Beira Terminal Export',
-        status: 'Entregue',
-        requester: 'Client',
-        freightResponsibility: 'Client',
-        deliveryMode: 'Supplier Delivery',
-        dataColeta: '18 Mai 2026',
-        prazoEntrega: '20 Mai 2026',
-        observacoes: 'Descarga livre basculante.',
-        proposalsCount: 5,
-        rating: 4.9,
-        targetPrice: '92.000 MZN',
-        assignedCarrier: 'Moz Logistics, Lda'
+    const demoIds = ['TR-2025-0001', 'TR-2025-0002', 'TR-2025-0003'];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const cleaned = parsed.filter((r: any) => r && !demoIds.includes(r.id));
+        if (cleaned.length !== parsed.length) {
+          localStorage.setItem('supplyx_freight_requests', JSON.stringify(cleaned));
+        }
+        return cleaned;
+      } catch (e) {
+        return [];
       }
-    ];
+    }
+    return [];
+  });
 
-    localStorage.setItem('supplyx_freight_requests', JSON.stringify(initialRequests));
-    return initialRequests;
+  const [selectedRequestId, setSelectedRequestId] = useState<string>(() => {
+    return customRequests[0]?.id || '';
   });
 
   // 2. Active Fleets / Drivers list
@@ -167,46 +111,61 @@ export default function LogisticsView({
   // 4. Financial ledgers billing list
   const [financialLedgers, setFinancialLedgers] = useState<FinancialLedger[]>(() => {
     const saved = localStorage.getItem('supplyx_financials');
-    if (saved) return JSON.parse(saved);
-
-    const initialFinancials: FinancialLedger[] = [
-      { id: 'FT-101', cargoId: 'TR-2025-0001', cargoName: 'Cimento CP-IV', client: 'Construtora Sul', carrier: 'Moz Logistics, Lda', totalFreight: 78000, feeSupplyX: 7800, netPayout: 70200, status: 'Pago', dueDate: '02 Jun 2026' },
-      { id: 'FT-102', cargoId: 'TR-2025-0002', cargoName: 'Combustível Especializado', client: 'Tete Explorations', carrier: 'Fast Cargo Transportes', totalFreight: 145000, feeSupplyX: 14500, netPayout: 130500, status: 'Pendente', dueDate: '15 Jun 2026' }
-    ];
-
-    localStorage.setItem('supplyx_financials', JSON.stringify(initialFinancials));
-    return initialFinancials;
+    const demoCargoIds = ['TR-2025-0001', 'TR-2025-0002', 'TR-2025-0003'];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const cleaned = parsed.filter((f: any) => f && f.cargoId && !demoCargoIds.includes(f.cargoId));
+        if (cleaned.length !== parsed.length) {
+          localStorage.setItem('supplyx_financials', JSON.stringify(cleaned));
+        }
+        return cleaned;
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
   });
 
   // 5. Ocorrências (incidents registry)
   const [occurrences, setOccurrences] = useState<any[]>(() => {
     const saved = localStorage.getItem('supplyx_occurrences');
-    if (saved) return JSON.parse(saved);
-
-    const initialOccurrences = [
-      {
-        id: 'OC-2201',
-        cargoId: 'TR-2025-0002',
-        cargoName: 'Combustível Especializado',
-        description: 'Verificação aduaneira atrasou liberação na ponte de Tete',
-        category: 'Atrasos',
-        dateTime: '22 Mai 2026 14:30',
-        responsible: 'Armando Nhalungo',
-        status: 'Aberta'
+    const demoCargoIds = ['TR-2025-0001', 'TR-2025-0002', 'TR-2025-0003'];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const cleaned = parsed.filter((o: any) => o && o.cargoId && !demoCargoIds.includes(o.cargoId));
+        if (cleaned.length !== parsed.length) {
+          localStorage.setItem('supplyx_occurrences', JSON.stringify(cleaned));
+        }
+        return cleaned;
+      } catch (e) {
+        return [];
       }
-    ];
-
-    localStorage.setItem('supplyx_occurrences', JSON.stringify(initialOccurrences));
-    return initialOccurrences;
+    }
+    return [];
   });
 
   // 6. Alertas / Notificações
   const [logisticsNotifications, setLogisticsNotifications] = useState<any[]>(() => {
     const saved = localStorage.getItem('supplyx_logistics_notifications');
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: 'nt-1', title: 'Novo Concurso Publicado', text: 'Carga TR-2025-0001 está aberta para lances de transportadoras.', time: 'Poucos minutos atrás', type: 'info' }
-    ];
+    const demoCargoIds = ['TR-2025-0001', 'TR-2025-0002', 'TR-2025-0003'];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const cleaned = parsed.filter((n: any) => {
+          if (!n || !n.text) return false;
+          return !demoCargoIds.some(demoId => n.text.includes(demoId));
+        });
+        if (cleaned.length !== parsed.length) {
+          localStorage.setItem('supplyx_logistics_notifications', JSON.stringify(cleaned));
+        }
+        return cleaned;
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
   });
 
   const syncOccurrencesToLocalStorage = (list: any[]) => {
@@ -261,15 +220,17 @@ export default function LogisticsView({
       const q = query(collection(db, 'freight_orders'));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const firestoreList: CargoRequest[] = [];
+        const demoIds = ['TR-2025-0001', 'TR-2025-0002', 'TR-2025-0003'];
         snapshot.forEach((docSnap) => {
           const item = docSnap.data();
-          firestoreList.push({
-            id: item.id || docSnap.id,
-            ...item,
-          } as CargoRequest);
+          const reqId = item.id || docSnap.id;
+          if (!demoIds.includes(reqId)) {
+            firestoreList.push({
+              id: reqId,
+              ...item,
+            } as CargoRequest);
+          }
         });
-
-        if (firestoreList.length === 0) return;
 
         setCustomRequests((prevRequests) => {
           const combinedMap = new Map<string, CargoRequest>();

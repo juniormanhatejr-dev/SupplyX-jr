@@ -105,6 +105,13 @@ export default function DetailedRequestView({
   const [isDrawing, setIsDrawing] = useState(false);
   const [savedSignature, setSavedSignature] = useState<string>('');
 
+  // Safeguard active tab for non-logistics roles
+  useEffect(() => {
+    if (userType !== 'logistics' && activeTab !== 'info') {
+      setActiveTab('info');
+    }
+  }, [userType, activeTab]);
+
   // Match correct cargo request
   const requestObj = useMemo(() => {
     const matched = requests.find(r => r.id === selectedRequestId);
@@ -266,7 +273,7 @@ export default function DetailedRequestView({
     const newReply = {
       id: `rep-${Date.now()}`,
       sender: userType === 'logistics' ? 'logistics' : 'requester',
-      senderName: userType === 'logistics' ? 'Operador Logístico' : (requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente'),
+      senderName: userType === 'logistics' ? 'Operador Logístico' : (requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente')),
       text: typedReplyMessage,
       timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})
     };
@@ -307,7 +314,7 @@ export default function DetailedRequestView({
     const newReply = {
       id: `rep-agreed-${Date.now()}`,
       sender: 'requester',
-      senderName: requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente',
+      senderName: requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente'),
       text: '✓ PROPOSTA ACEITA E CONTRATO FIRMADO. Iniciar trâmite de transporte.',
       timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})
     };
@@ -326,7 +333,7 @@ export default function DetailedRequestView({
     const newReply = {
       id: `rep-rejected-${Date.now()}`,
       sender: 'requester',
-      senderName: requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente',
+      senderName: requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente'),
       text: '❌ PROPOSTA REJEITADA. Solicitamos revisão dos custos ou prazos.',
       timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})
     };
@@ -543,7 +550,7 @@ export default function DetailedRequestView({
           { id: 'occurrences', label: language === 'PT' ? `⚠️ Ocorrências Registadas [${filteredOccurrences.length}]` : `⚠️ Incidents [${filteredOccurrences.length}]` },
           { id: 'documents', label: language === 'PT' ? '📄 Documentos Digitais / PoD' : '📄 Digital Vault / PoD' },
           { id: 'review', label: language === 'PT' ? '⭐ Feedback & Avaliação' : '⭐ Post-Delivery Feedback' }
-        ].map(tb => (
+        ].filter(tb => tb.id === 'info' || userType === 'logistics').map(tb => (
           <button
             key={tb.id}
             onClick={() => setActiveTab(tb.id as any)}
@@ -808,6 +815,7 @@ export default function DetailedRequestView({
                 <div className="space-y-4">
                   {[
                     { label: 'Categoria', val: requestObj.tipoCarga },
+                    { label: 'Solicitante', val: requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente' : 'Fornecedor') },
                     { label: 'Cubagem Estimada', val: requestObj.volume || '35 m³' },
                     { label: 'Peso bruto real', val: requestObj.peso },
                     { label: 'Endereço Recolha', val: requestObj.origem },

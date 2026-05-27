@@ -10,6 +10,7 @@ export interface CargoRequest {
   prazoEntrega: string;
   observacoes: string;
   requester: 'Client' | 'Supplier' | string;
+  requesterName?: string;
   freightResponsibility: 'Client' | 'Supplier' | 'Shared' | string;
   deliveryMode: string;
   status: 'Pendente' | 'Em concurso' | 'Atribuído' | 'Em recolha' | 'Em trânsito' | 'Entregue' | 'Cancelado' | string;

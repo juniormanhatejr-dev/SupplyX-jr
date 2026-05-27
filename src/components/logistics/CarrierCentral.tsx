@@ -302,7 +302,7 @@ export default function CarrierCentral({
     // Simulated responsive feedback from the Client / Buyer
     setTimeout(() => {
       let simulatedReply = '';
-      const clientName = selectedLoad?.requester === 'Client' ? 'Engenharia Geral Central' : 'Consumidor B2B';
+      const clientName = selectedLoad?.requesterName || (selectedLoad?.requester === 'Client' ? 'Engenharia Geral Central' : 'Consumidor B2B');
 
       if (sentText.toLowerCase().includes('recolha') || sentText.toLowerCase().includes('coleta')) {
         simulatedReply = `Perfeito! O fornecedor nas docas já foi avisado sobre a chegada da transportadora ${carrierName}. Por favor verifique o manifesto fiscal de saída da guia nacional antes de arrancar.`;

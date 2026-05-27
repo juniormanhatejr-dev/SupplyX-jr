@@ -14,6 +14,7 @@ import {
   Weight
 } from 'lucide-react';
 import { CargoRequest } from './types';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface CreateRequestPageProps {
   isDarkMode: boolean;
@@ -31,6 +32,7 @@ export default function CreateRequestPage({
   onBack
 }: CreateRequestPageProps) {
   const [loading, setLoading] = useState(false);
+  const { profile } = useAuth();
 
   // States
   const [formData, setFormData] = useState({
@@ -49,6 +51,16 @@ export default function CreateRequestPage({
     freightResponsibility: 'Client',
     deliveryMode: 'Third-party Logistics'
   });
+
+  // Pre-select requester based on logged-in user profile type
+  useEffect(() => {
+    if (profile?.type) {
+      setFormData(prev => ({
+        ...prev,
+        requester: profile.type === 'buyer' ? 'Client' : 'Supplier'
+      }));
+    }
+  }, [profile]);
 
   // Hydrate with initialPayload if applicable (e.g., from OrdersView "Solicitar Logística" button)
   useEffect(() => {
@@ -92,6 +104,7 @@ export default function CreateRequestPage({
       const generatedReq: CargoRequest = {
         id: `TR-2025-${Math.floor(1001 + Math.random() * 8999)}`,
         ...formData,
+        requesterName: profile?.name || profile?.userName || (formData.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente'),
         status: 'Em Competição',
         proposalsCount: 4,
         rating: 4.8,

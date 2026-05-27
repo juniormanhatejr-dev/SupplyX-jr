@@ -76,7 +76,7 @@ export default function RequestsListPage({
 
             <div className="flex justify-between items-center mt-6 pt-3 border-t border-white/[0.03]">
               <span className="text-[8.5px] font-black uppercase text-zinc-500">
-                {language === 'PT' ? 'Fretado por:' : 'FOB:'} {req.requester === 'Client' ? (language === 'PT' ? 'Cliente' : 'Client') : (language === 'PT' ? 'Fornecedor' : 'Supplier')}
+                {language === 'PT' ? 'Solicitado por:' : 'FOB:'} <span className="text-white font-bold">{req.requesterName || (req.requester === 'Client' ? (language === 'PT' ? 'Cliente' : 'Client') : (language === 'PT' ? 'Fornecedor' : 'Supplier'))}</span>
               </span>
 
               <div className="flex items-center gap-2">

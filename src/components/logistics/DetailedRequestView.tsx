@@ -269,20 +269,46 @@ export default function DetailedRequestView({
       let targetUid = '';
 
       if (userType === 'logistics') {
-        if (requestObj.requester === 'Client') {
-          targetUid = (requestObj as any).buyerId || (requestObj as any).userId || '';
-        } else {
-          targetUid = (requestObj as any).supplierId || '';
-        }
-        if (!targetUid) {
+        // Try getting from the request fields directly
+        targetUid = (requestObj as any).buyerId || (requestObj as any).supplierId || (requestObj as any).userId || '';
+
+        // If targetUid is missing or is set to 'anonymous', resolve via database match
+        if (!targetUid || targetUid === 'anonymous') {
           const usersRef = collection(db, 'users');
-          const q = query(usersRef, where('type', '==', requestObj.requester === 'Client' ? 'buyer' : 'supplier'));
-          const userSnap = await getDocs(q);
-          if (!userSnap.empty) {
-            targetUid = userSnap.docs[0].id;
-          } else {
-            // Safe fallback
-            targetUid = requestObj.requester === 'Client' ? 'buyer_demo_uid' : 'supplier_demo_uid';
+          // Try to match by name or companyName if requesterName exists
+          if (requestObj.requesterName) {
+            try {
+              const qName = query(usersRef, where('name', '==', requestObj.requesterName));
+              const nameSnap = await getDocs(qName);
+              if (!nameSnap.empty) {
+                targetUid = nameSnap.docs[0].id;
+              } else {
+                const qCompany = query(usersRef, where('companyName', '==', requestObj.requesterName));
+                const companySnap = await getDocs(qCompany);
+                if (!companySnap.empty) {
+                  targetUid = companySnap.docs[0].id;
+                }
+              }
+            } catch (err) {
+              console.warn('Error matching user by name:', err);
+            }
+          }
+
+          // If still not resolved, query by user type (buyer or supplier) as a backup
+          if (!targetUid || targetUid === 'anonymous') {
+            try {
+              const requesterType = requestObj.requester === 'Client' ? 'buyer' : 'supplier';
+              const qType = query(usersRef, where('type', '==', requesterType));
+              const userSnap = await getDocs(qType);
+              if (!userSnap.empty) {
+                targetUid = userSnap.docs[0].id;
+              } else {
+                targetUid = requestObj.requester === 'Client' ? 'buyer_demo_uid' : 'supplier_demo_uid';
+              }
+            } catch (err) {
+              console.warn('Error querying user by type:', err);
+              targetUid = requestObj.requester === 'Client' ? 'buyer_demo_uid' : 'supplier_demo_uid';
+            }
           }
         }
       } else {
@@ -405,23 +431,46 @@ export default function DetailedRequestView({
     let targetUid = '';
     
     if (userType === 'logistics') {
-      if (requestObj.requester === 'Client') {
-        targetUid = (requestObj as any).buyerId || (requestObj as any).userId || '';
-      } else {
-        targetUid = (requestObj as any).supplierId || '';
-      }
-      if (!targetUid) {
-        try {
-          const usersRef = collection(db, 'users');
-          const q = query(usersRef, where('type', '==', requestObj.requester === 'Client' ? 'buyer' : 'supplier'));
-          const userSnap = await getDocs(q);
-          if (!userSnap.empty) {
-            targetUid = userSnap.docs[0].id;
-          } else {
+      // Try getting from the request fields directly
+      targetUid = (requestObj as any).buyerId || (requestObj as any).supplierId || (requestObj as any).userId || '';
+
+      // If targetUid is missing or is set to 'anonymous', resolve via database match
+      if (!targetUid || targetUid === 'anonymous') {
+        const usersRef = collection(db, 'users');
+        // Try to match by name or companyName if requesterName exists
+        if (requestObj.requesterName) {
+          try {
+            const qName = query(usersRef, where('name', '==', requestObj.requesterName));
+            const nameSnap = await getDocs(qName);
+            if (!nameSnap.empty) {
+              targetUid = nameSnap.docs[0].id;
+            } else {
+              const qCompany = query(usersRef, where('companyName', '==', requestObj.requesterName));
+              const companySnap = await getDocs(qCompany);
+              if (!companySnap.empty) {
+                targetUid = companySnap.docs[0].id;
+              }
+            }
+          } catch (err) {
+            console.warn('Error matching user by name:', err);
+          }
+        }
+
+        // If still not resolved, query by user type (buyer or supplier) as a backup
+        if (!targetUid || targetUid === 'anonymous') {
+          try {
+            const requesterType = requestObj.requester === 'Client' ? 'buyer' : 'supplier';
+            const qType = query(usersRef, where('type', '==', requesterType));
+            const userSnap = await getDocs(qType);
+            if (!userSnap.empty) {
+              targetUid = userSnap.docs[0].id;
+            } else {
+              targetUid = requestObj.requester === 'Client' ? 'buyer_demo_uid' : 'supplier_demo_uid';
+            }
+          } catch (err) {
+            console.warn('Error querying user by type:', err);
             targetUid = requestObj.requester === 'Client' ? 'buyer_demo_uid' : 'supplier_demo_uid';
           }
-        } catch (e) {
-          console.error(e);
         }
       }
     } else {

@@ -46,6 +46,7 @@ export interface CarrierProposal {
   conditions: string;
   insurance: string;
   trips: number;
+  userId?: string;
 }
 
 export interface Occurrence {

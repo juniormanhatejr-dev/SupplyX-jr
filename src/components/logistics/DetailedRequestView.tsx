@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { CargoRequest, CommercialDriver, CarrierProposal, Occurrence } from './types';
 import { db, auth } from '../../lib/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 import { collection, query, where, getDocs, getDoc, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 
 interface DetailedRequestViewProps {
@@ -66,6 +67,7 @@ export default function DetailedRequestView({
   userType,
   onUpdateCargoRequest
 }: DetailedRequestViewProps) {
+  const { user, profile } = useAuth();
   const [selectedProposalIndex, setSelectedProposalIndex] = useState<number>(0);
   const [mapZoom, setMapZoom] = useState<number>(1);
   const [successModal, setSuccessModal] = useState<string | null>(null);
@@ -375,6 +377,20 @@ export default function DetailedRequestView({
     setBids(newBids);
   };
 
+  // Filter the bids shown based on the user's role: logistics agents cannot see proposals from other agents
+  const visibleBids = useMemo(() => {
+    if (userType === 'logistics') {
+      // Show only current user's bids
+      return bids.filter(prop => prop.userId === user?.uid);
+    }
+    // Buyers/Suppliers see all bids (default simulated ones + actual user submitted ones)
+    return bids;
+  }, [bids, userType, user?.uid]);
+
+  const selectedBid = useMemo(() => {
+    return visibleBids[selectedProposalIndex] || visibleBids[0] || null;
+  }, [visibleBids, selectedProposalIndex]);
+
   // Add carrier bid proposal manually
   const submitCarrierBid = (e: React.FormEvent) => {
     e.preventDefault();
@@ -382,13 +398,14 @@ export default function DetailedRequestView({
     const bidObj: CarrierProposal = {
       id: `BP-0${bids.length + 1}`,
       cargoId: selectedRequestId,
-      name: newCarrierBid.name,
+      name: userType === 'logistics' ? (profile?.companyName || user?.displayName || newCarrierBid.name) : newCarrierBid.name,
       rating: 4.9,
       deliverTime: newCarrierBid.deliverTime,
       price: parsedPrice,
       trips: 1,
       insurance: newCarrierBid.insurance,
-      conditions: newCarrierBid.conditions
+      conditions: newCarrierBid.conditions,
+      userId: user?.uid || 'anonymous'
     };
 
     const updated = [...bids, bidObj];
@@ -1014,6 +1031,10 @@ export default function DetailedRequestView({
               ? (language === 'PT' ? '💬 Responder ao Remetente' : '💬 Respond to Requester')
               : (language === 'PT' ? '💬 Chat & Negociação' : '💬 Negotiation & Chat')
           },
+          ...((requestObj.status === 'Em concurso' || visibleBids.length > 0) ? [{
+            id: 'bids',
+            label: language === 'PT' ? `🏆 Concurso de Fretes [${visibleBids.length}]` : `🏆 Freight Concourse [${visibleBids.length}]`
+          }] : []),
           { id: 'occurrences', label: language === 'PT' ? `⚠️ Ocorrências Registadas [${filteredOccurrences.length}]` : `⚠️ Incidents [${filteredOccurrences.length}]` },
           { id: 'documents', label: language === 'PT' ? '📄 Documentos Digitais / PoD' : '📄 Digital Vault / PoD' },
           { id: 'review', label: language === 'PT' ? '⭐ Feedback & Avaliação' : '⭐ Post-Delivery Feedback' }
@@ -1672,7 +1693,7 @@ export default function DetailedRequestView({
         )}
 
         {/* TAB 2: FEEDBACK BIDDING PORTAL (CONCURSO) */}
-        {activeTab === 'bids' && false && (
+        {activeTab === 'bids' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             
             {/* List and Submission Panel */}
@@ -1766,38 +1787,48 @@ export default function DetailedRequestView({
               )}
 
               <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-                {bids.map((prop, idx) => {
-                  const isSelected = selectedProposalIndex === idx;
-                  return (
-                    <div
-                      key={prop.id}
-                      onClick={() => setSelectedProposalIndex(idx)}
-                      className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 ${
-                        isSelected
-                          ? 'bg-supplyx-blue/10 border-supplyx-blue ring-2 ring-supplyx-blue/15'
-                          : isDarkMode ? 'bg-zinc-950/40 border-white/5 hover:border-white/10' : 'bg-zinc-55 hover:bg-zinc-100 border-zinc-200'
-                      }`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="text-xs font-black text-white italic truncate leading-none mb-1 flex items-center gap-1.5">
-                            {prop.name}
-                            <span className="flex items-center gap-0.5 bg-amber-500/10 text-amber-500 px-1 py-0.5 rounded text-[7.5px] font-black">
-                              <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
-                              {prop.rating}
-                            </span>
-                          </h4>
-                          <p className="text-[8px] font-bold text-zinc-500 uppercase mt-1">
-                            {prop.trips} viagens feitas no corredor
-                          </p>
+                {visibleBids.length === 0 ? (
+                  <div className="p-8 text-center border border-dashed border-zinc-800 rounded-2xl">
+                    <p className="text-xs font-bold text-zinc-550 uppercase leading-relaxed">
+                      {language === 'PT' 
+                        ? 'Nenhum lance de concorrência enviado por si ainda para esta carga.' 
+                        : 'No bidding proposals submitted by your agency yet.'}
+                    </p>
+                  </div>
+                ) : (
+                  visibleBids.map((prop, idx) => {
+                    const isSelected = selectedProposalIndex === idx;
+                    return (
+                      <div
+                        key={prop.id}
+                        onClick={() => setSelectedProposalIndex(idx)}
+                        className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 ${
+                          isSelected
+                            ? 'bg-supplyx-blue/10 border-supplyx-blue ring-2 ring-supplyx-blue/15'
+                            : isDarkMode ? 'bg-zinc-950/40 border-white/5 hover:border-white/10' : 'bg-zinc-55 hover:bg-zinc-100 border-zinc-200'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="text-xs font-black text-white italic truncate leading-none mb-1 flex items-center gap-1.5">
+                              {prop.name}
+                              <span className="flex items-center gap-0.5 bg-amber-500/10 text-amber-500 px-1 py-0.5 rounded text-[7.5px] font-black">
+                                <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                                {prop.rating}
+                              </span>
+                            </h4>
+                            <p className="text-[8px] font-bold text-zinc-500 uppercase mt-1">
+                              {prop.trips} viagens feitas no corredor
+                            </p>
+                          </div>
+                          <span className="text-xs font-black text-emerald-400 italic">
+                            MT {prop.price.toLocaleString('pt-BR')} MZN
+                          </span>
                         </div>
-                        <span className="text-xs font-black text-emerald-400 italic">
-                          MT {prop.price.toLocaleString('pt-BR')} MZN
-                        </span>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
 
@@ -1809,8 +1840,7 @@ export default function DetailedRequestView({
                 {language === 'PT' ? 'Dossiê da Proposta Ativa' : 'Proposal Term Parameters'}
               </h3>
 
-              {bids[selectedProposalIndex] ? (() => {
-                const selectedBid = bids[selectedProposalIndex];
+              {selectedBid ? (() => {
                 // Math for AI matchmaking scoring
                 const priceScore = Math.max(15, 100 - ((selectedBid.price - 50000) / 700));
                 const ratingScore = (selectedBid.rating || 4.5) * 20;
@@ -1884,34 +1914,44 @@ export default function DetailedRequestView({
                     </div>
 
                     {requestObj.status === 'Em concurso' ? (
-                      <div className="flex flex-col gap-2">
-                        <button 
-                          onClick={() => {
-                            onAssignCarrier(requestObj.id, selectedBid.name, selectedBid.price);
-                            setSuccessModal(selectedBid.name);
-                          }}
-                          className="w-full py-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest transition-all"
-                        >
-                          {language === 'PT' ? 'Fechar Contrato / Atribuir Transportadora' : 'Accept Terms & Sign Agreement'}
-                        </button>
-                        
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            // Automatically select the highest matching score
-                            const bestBid = bids.reduce((prev, current) => {
-                              const scoreP = Math.max(15, 100 - ((prev.price - 50000) / 700)) + (prev.rating * 20);
-                              const scoreC = Math.max(15, 100 - ((current.price - 50000) / 700)) + (current.rating * 20);
-                              return scoreC > scoreP ? current : prev;
-                            });
-                            onAssignCarrier(requestObj.id, bestBid.name, bestBid.price);
-                            setSuccessModal(`🤖 AI Match: ${bestBid.name}`);
-                          }}
-                          className="w-full py-3 rounded-xl bg-zinc-950 border border-supplyx-blue/30 text-supplyx-blue text-[9px] font-black uppercase tracking-widest hover:border-supplyx-blue/70 transition-all text-center"
-                        >
-                          ⚡ Auto-Match Inteligente (Recomendado via IA)
-                        </button>
-                      </div>
+                      userType === 'logistics' ? (
+                        <div className="p-4 bg-supplyx-blue/10 rounded-xl text-center border border-supplyx-blue/20">
+                          <p className="text-[10px] font-black uppercase text-supplyx-blue leading-normal">
+                            {language === 'PT' 
+                              ? '✓ Proposta enviada com sucesso! Aguardando homologação do remetente.' 
+                              : '✓ Proposal successfully submitted! Awaiting client selection.'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          <button 
+                            onClick={() => {
+                              onAssignCarrier(requestObj.id, selectedBid.name, selectedBid.price);
+                              setSuccessModal(selectedBid.name);
+                            }}
+                            className="w-full py-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest transition-all"
+                          >
+                            {language === 'PT' ? 'Fechar Contrato / Atribuir Transportadora' : 'Accept Terms & Sign Agreement'}
+                          </button>
+                          
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              // Automatically select the highest matching score
+                              const bestBid = bids.reduce((prev, current) => {
+                                const scoreP = Math.max(15, 100 - ((prev.price - 50000) / 700)) + (prev.rating * 20);
+                                const scoreC = Math.max(15, 100 - ((current.price - 50000) / 700)) + (current.rating * 20);
+                                return scoreC > scoreP ? current : prev;
+                              });
+                              onAssignCarrier(requestObj.id, bestBid.name, bestBid.price);
+                              setSuccessModal(`🤖 AI Match: ${bestBid.name}`);
+                            }}
+                            className="w-full py-3 rounded-xl bg-zinc-950 border border-supplyx-blue/30 text-supplyx-blue text-[9px] font-black uppercase tracking-widest hover:border-supplyx-blue/70 transition-all text-center"
+                          >
+                            ⚡ Auto-Match Inteligente (Recomendado via IA)
+                          </button>
+                        </div>
+                      )
                     ) : (
                       <div className="p-4 bg-zinc-950/60 rounded-xl text-center border border-white/5">
                         <p className="text-[10px] font-black uppercase text-zinc-500 leading-none">

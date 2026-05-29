@@ -837,6 +837,35 @@ export default function DetailedRequestView({
     });
   };
 
+  const handleAssignToAgent = (rep: any) => {
+    const rawPrice = requestObj.targetPrice ? requestObj.targetPrice.replace(/\D/g, '') : '80000';
+    const numPrice = parseInt(rawPrice, 10) || 80000;
+
+    const assignedName = rep.senderName || 'Operador Logístico';
+    onAssignCarrier(requestObj.id, assignedName, numPrice);
+    onChangeRequestStatus(requestObj.id, 'Atribuído');
+
+    const messageText = `✓ PROPOSTA ACEITA E CONTRATO FIRMADO. Carga atribuída diretamente ao operador "${assignedName}" através de sua proposta de negociação.`;
+    const newReply = {
+      id: `rep-agreed-${Date.now()}`,
+      sender: 'requester',
+      senderName: requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente'),
+      text: messageText,
+      timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}),
+      logisticsUserId: rep.logisticsUserId || 'ops_logistica_default'
+    };
+
+    const updatedReplies = [...(requestObj.logisticsReplies || []), newReply];
+    onUpdateCargoRequest?.(requestObj.id, {
+      logisticsReplies: updatedReplies,
+      status: 'Atribuído',
+      assignedCarrier: assignedName
+    });
+
+    saveMessageToFirestoreChat(messageText);
+    setSuccessModal(assignedName);
+  };
+
   const handleAcceptProposal = () => {
     const rawPrice = requestObj.targetPrice ? requestObj.targetPrice.replace(/\D/g, '') : '80000';
     const numPrice = parseInt(rawPrice, 10) || 80000;
@@ -1220,6 +1249,16 @@ export default function DetailedRequestView({
                           <p className={`text-[11px] font-bold leading-relaxed whitespace-pre-line text-left ${isDarkMode ? 'text-white' : 'text-zinc-800'}`}>
                             {rep.text}
                           </p>
+                          {isLogistics && userType !== 'logistics' && requestObj.status !== 'Atribuído' && requestObj.status !== 'Entregue' && (
+                            <button
+                              type="button"
+                              onClick={() => handleAssignToAgent(rep)}
+                              className="mt-2.5 w-full py-2 px-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/10"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              {language === 'PT' ? 'Atribuir Carga a este Operador / Agente' : 'Assign Cargo to this Agent'}
+                            </button>
+                          )}
                         </div>
                       );
                     })

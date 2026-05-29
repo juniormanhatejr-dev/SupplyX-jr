@@ -69,6 +69,7 @@ export default function DetailedRequestView({
 }: DetailedRequestViewProps) {
   const { user, profile } = useAuth();
   const [selectedProposalIndex, setSelectedProposalIndex] = useState<number>(0);
+  const [selectedLogisticsUserId, setSelectedLogisticsUserId] = useState<string>('');
   const [mapZoom, setMapZoom] = useState<number>(1);
   const [successModal, setSuccessModal] = useState<string | null>(null);
 
@@ -386,6 +387,58 @@ export default function DetailedRequestView({
     // Buyers/Suppliers see all bids (default simulated ones + actual user submitted ones)
     return bids;
   }, [bids, userType, user?.uid]);
+
+  const activeLogisticsPartners = useMemo(() => {
+    const partnersMap = new Map<string, { uid: string; name: string }>();
+
+    // Put some default partners first if needed, or get from replies
+    (requestObj.logisticsReplies || []).forEach((rep: any) => {
+      if (rep.logisticsUserId && rep.logisticsUserId !== 'anonymous') {
+        const name = rep.sender === 'logistics' ? rep.senderName : (rep.logisticsUserName || 'Operador Logístico');
+        partnersMap.set(rep.logisticsUserId, { uid: rep.logisticsUserId, name });
+      }
+    });
+
+    // Also get from bids (Carrier Proposals)
+    bids.forEach((bid: CarrierProposal) => {
+      if (bid.userId && bid.userId !== 'anonymous') {
+        partnersMap.set(bid.userId, { uid: bid.userId, name: bid.name });
+      }
+    });
+
+    return Array.from(partnersMap.values());
+  }, [requestObj.logisticsReplies, bids]);
+
+  const currentLogisticsUserId = useMemo(() => {
+    if (userType === 'logistics') {
+      return user?.uid || 'ops_logistica_default';
+    }
+    if (selectedLogisticsUserId) {
+      return selectedLogisticsUserId;
+    }
+    if (activeLogisticsPartners.length > 0) {
+      return activeLogisticsPartners[0].uid;
+    }
+    return '';
+  }, [userType, user?.uid, selectedLogisticsUserId, activeLogisticsPartners]);
+
+  const visibleReplies = useMemo(() => {
+    const repliesList = requestObj.logisticsReplies || [];
+    if (userType === 'logistics') {
+      const myUid = user?.uid || 'ops_logistica_default';
+      return repliesList.filter((rep: any) => {
+        const pId = rep.logisticsUserId || 'ops_logistica_default';
+        return pId === myUid;
+      });
+    }
+    // Buyers/Suppliers see replies filtered by their currently selected logistics provider
+    // If no logistics provider exists or they haven't selected one, we default to the first active partner
+    const activeUid = currentLogisticsUserId || 'ops_logistica_default';
+    return repliesList.filter((rep: any) => {
+      const pId = rep.logisticsUserId || 'ops_logistica_default';
+      return pId === activeUid;
+    });
+  }, [requestObj.logisticsReplies, userType, user?.uid, currentLogisticsUserId]);
 
   const selectedBid = useMemo(() => {
     return visibleBids[selectedProposalIndex] || visibleBids[0] || null;
@@ -740,9 +793,13 @@ export default function DetailedRequestView({
     const newReply = {
       id: `rep-${Date.now()}`,
       sender: userType === 'logistics' ? 'logistics' : 'requester',
-      senderName: userType === 'logistics' ? 'Operador Logístico' : (requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente')),
+      senderName: userType === 'logistics' 
+        ? (profile?.companyName || user?.displayName || 'Operador Logístico') 
+        : (requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente')),
       text: formattedText,
-      timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})
+      timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}),
+      logisticsUserId: currentLogisticsUserId || 'ops_logistica_default',
+      logisticsUserName: userType === 'logistics' ? (profile?.companyName || user?.displayName || 'Operador Logístico') : undefined
     };
 
     const updatedReplies = [...(requestObj.logisticsReplies || []), newReply];
@@ -773,8 +830,8 @@ export default function DetailedRequestView({
     setProposedVehicle('');
   };
 
-  const handleDeleteReply = (indexToDelete: number) => {
-    const updatedReplies = (requestObj.logisticsReplies || []).filter((_: any, idx: number) => idx !== indexToDelete);
+  const handleDeleteReply = (idToDelete: string) => {
+    const updatedReplies = (requestObj.logisticsReplies || []).filter((rep: any) => rep.id !== idToDelete);
     onUpdateCargoRequest?.(requestObj.id, {
       logisticsReplies: updatedReplies
     });
@@ -784,27 +841,32 @@ export default function DetailedRequestView({
     const rawPrice = requestObj.targetPrice ? requestObj.targetPrice.replace(/\D/g, '') : '80000';
     const numPrice = parseInt(rawPrice, 10) || 80000;
     
-    onAssignCarrier(requestObj.id, 'SupplyX Logística Consolidated', numPrice);
+    // Determine target assignee name or company name based on current logistics provider
+    const partnerObj = activeLogisticsPartners.find(p => p.uid === currentLogisticsUserId);
+    const assignedName = partnerObj ? partnerObj.name : 'SupplyX Logística Consolidated';
+
+    onAssignCarrier(requestObj.id, assignedName, numPrice);
     onChangeRequestStatus(requestObj.id, 'Atribuído');
 
-    const messageText = '✓ PROPOSTA ACEITA E CONTRATO FIRMADO. Iniciar trâmite de transporte.';
+    const messageText = `✓ PROPOSTA ACEITA E CONTRATO FIRMADO. Iniciar trâmite de transporte com ${assignedName}.`;
     const newReply = {
       id: `rep-agreed-${Date.now()}`,
       sender: 'requester',
       senderName: requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente'),
       text: messageText,
-      timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})
+      timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}),
+      logisticsUserId: currentLogisticsUserId || 'ops_logistica_default'
     };
 
     const updatedReplies = [...(requestObj.logisticsReplies || []), newReply];
     onUpdateCargoRequest?.(requestObj.id, {
       logisticsReplies: updatedReplies,
       status: 'Atribuído',
-      assignedCarrier: 'SupplyX Logística Consolidated'
+      assignedCarrier: assignedName
     });
 
     saveMessageToFirestoreChat(messageText);
-    setSuccessModal('SupplyX Logística Consolidated');
+    setSuccessModal(assignedName);
   };
 
   const handleRejectProposal = () => {
@@ -814,7 +876,8 @@ export default function DetailedRequestView({
       sender: 'requester',
       senderName: requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente'),
       text: messageText,
-      timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})
+      timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}),
+      logisticsUserId: currentLogisticsUserId || 'ops_logistica_default'
     };
     const updatedReplies = [...(requestObj.logisticsReplies || []), newReply];
     onUpdateCargoRequest?.(requestObj.id, {
@@ -1071,18 +1134,62 @@ export default function DetailedRequestView({
                   <span className="text-[8px] font-mono text-zinc-450 uppercase">ID: #{requestObj.id}</span>
                 </div>
 
+                {/* Logistics Partners selector for Requesters (Client/Supplier) */}
+                {userType !== 'logistics' && activeLogisticsPartners.length > 0 && (
+                  <div className="mb-4 flex flex-col gap-1.5 border-b border-white/5 pb-3">
+                    <label className="text-[8.5px] font-bold text-zinc-500 uppercase pl-1">
+                      {language === 'PT' ? 'Selecionar Operador para Negociação Privada:' : 'Select Logistics Partner for Private Chat:'}
+                    </label>
+                    <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                      {activeLogisticsPartners.map((partner) => {
+                        const isSelected = partner.uid === currentLogisticsUserId;
+                        return (
+                          <button
+                            key={partner.uid}
+                            type="button"
+                            onClick={() => setSelectedLogisticsUserId(partner.uid)}
+                            className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider transition-all border whitespace-nowrap ${
+                              isSelected
+                                ? 'bg-supplyx-blue/15 border-supplyx-blue text-supplyx-blue font-black'
+                                : 'bg-zinc-950 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-900 font-bold'
+                            }`}
+                          >
+                            👤 {partner.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Info block if no partners yet */}
+                {userType !== 'logistics' && activeLogisticsPartners.length === 0 && (
+                  <div className="mb-4 p-4 bg-zinc-950/80 border border-white/5 rounded-2xl text-center">
+                    <span className="text-[9px] font-black uppercase text-amber-500 leading-normal block">
+                      {language === 'PT' 
+                        ? '🔒 Nenhuma Proposta Ativa / Aguardando Lances' 
+                        : '🔒 No Active Proposals / Awaiting Bids'}
+                    </span>
+                    <p className="text-[9px] text-zinc-500 font-bold mt-1 leading-normal">
+                      {language === 'PT'
+                        ? 'Assim que uma transportadora enviar um lance na aba "Concurso de Fretes", você poderá negociar privadamente aqui.'
+                        : 'Once an operator submits an offer in the Concourse section, you can start a private negotiation thread.'}
+                    </p>
+                  </div>
+                )}
+
                 {/* Messages Loop */}
-                <div className="space-y-3 overflow-y-auto max-h-[340px] pr-2 no-scrollbar">
-                  {(requestObj.logisticsReplies || []).length === 0 ? (
+                <div className="space-y-3 overflow-y-auto max-h-[280px] pr-2 no-scrollbar">
+                  {visibleReplies.length === 0 ? (
                     <div className="p-8 text-center border border-dashed border-zinc-800 rounded-2xl my-4">
-                      <p className="text-xs font-bold text-zinc-500 uppercase">
+                      <p className="text-xs font-bold text-zinc-500 uppercase leading-relaxed">
                         {language === 'PT' 
-                          ? 'Nenhuma mensagem trocada ainda neste frete. Envie uma resposta oficial ao lado!' 
-                          : 'No business responses matched yet. Type a proposal update to start.'}
+                          ? 'Nenhuma mensagem privada trocada com este operador ainda.' 
+                          : 'No private messages exchanged with this operator yet.'}
                       </p>
                     </div>
                   ) : (
-                    (requestObj.logisticsReplies || []).map((rep: any, idx: number) => {
+                    visibleReplies.map((rep: any, idx: number) => {
                       const isLogistics = rep.sender === 'logistics';
                       return (
                         <div 
@@ -1102,7 +1209,7 @@ export default function DetailedRequestView({
                             </div>
                             <button
                               type="button"
-                              onClick={() => handleDeleteReply(idx)}
+                              onClick={() => handleDeleteReply(rep.id)}
                               className="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-1 px-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1 border border-red-500/15"
                               title={language === 'PT' ? "Eliminar mensagem" : "Delete message"}
                             >
@@ -1125,14 +1232,20 @@ export default function DetailedRequestView({
                 <input
                   type="text"
                   required
-                  placeholder={language === 'PT' ? 'Escreva uma mensagem ou contraproposta...' : 'Type a reply or counter-proposal...'}
+                  disabled={userType !== 'logistics' && !currentLogisticsUserId}
+                  placeholder={
+                    userType !== 'logistics' && !currentLogisticsUserId
+                      ? (language === 'PT' ? 'Escolha um parceiro ou aguarde propostas...' : 'Choose a partner or wait for bids...')
+                      : (language === 'PT' ? 'Escreva uma mensagem ou contraproposta...' : 'Type a reply or counter-proposal...')
+                  }
                   value={typedReplyMessage}
                   onChange={e => setTypedReplyMessage(e.target.value)}
-                  className="flex-grow p-3 bg-zinc-950 border border-white/5 rounded-xl text-xs text-white outline-none focus:border-supplyx-blue/50 transition-colors"
+                  className="flex-grow p-3 bg-zinc-950 border border-white/5 rounded-xl text-xs text-white outline-none focus:border-supplyx-blue/50 transition-colors disabled:opacity-50"
                 />
                 <button
                   type="submit"
-                  className="px-4 bg-supplyx-blue hover:brightness-110 active:scale-95 text-white rounded-xl flex items-center justify-center transition-all"
+                  disabled={userType !== 'logistics' && !currentLogisticsUserId}
+                  className="px-4 bg-supplyx-blue hover:brightness-110 active:scale-95 text-white rounded-xl flex items-center justify-center transition-all disabled:opacity-50"
                 >
                   <Send className="w-4 h-4" />
                 </button>

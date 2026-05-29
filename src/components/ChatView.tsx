@@ -57,6 +57,24 @@ interface Message {
   createdAt: any;
 }
 
+const formatLogisticsNameFromUid = (uid: string): string | null => {
+  if (!uid.startsWith('ops_logistica_')) return null;
+  const raw = uid.substring('ops_logistica_'.length);
+  if (raw === 'default') return null;
+  if (raw === 'moz_logistics_lda' || raw === 'moz_logistics__lda') return 'Moz Logistics, Lda';
+  if (raw === 'fast_cargo_transportes') return 'Fast Cargo Transportes';
+  if (raw === 'nampula_carriers') return 'Nampula Carriers';
+  if (raw === 'nampula_fretes_express') return 'Nampula Fretes Express';
+  if (raw === 'fast_cargo_transportes_lda') return 'Fast Cargo Transportes Lda';
+  if (raw === 'supplyx_logistica_consolidated') return 'SupplyX Logística Consolidated';
+  
+  return raw
+    .split('_')
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
 interface ChatViewProps {
   isDarkMode?: boolean;
   language?: 'PT' | 'EN';
@@ -70,6 +88,7 @@ interface ChatViewProps {
 export default function ChatView({ isDarkMode, language = 'PT', userType, onNavigate, onBack, initialRecipientId, initialChatId }: ChatViewProps) {
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null);
+  const [roomConfirmDeleteId, setRoomConfirmDeleteId] = useState<string | null>(null);
 
   const [activeUserIds, setActiveUserIds] = useState<string[]>([]);
   useEffect(() => {
@@ -85,17 +104,70 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
   const displayedRooms = useMemo(() => {
     if (activeUserIds.length === 0 && rooms.length > 0) return rooms;
     return rooms.filter(room => {
-      return room.participants.every(pId => pId === auth.currentUser?.uid || activeUserIds.includes(pId));
+      return room.participants.every(pId => 
+        pId === auth.currentUser?.uid || 
+        activeUserIds.includes(pId) || 
+        pId.startsWith('ops_logistica_') || 
+        pId === 'buyer_demo_uid' || 
+        pId === 'supplier_demo_uid'
+      );
     });
   }, [rooms, activeUserIds]);
 
-  // Automatically select room if initialRecipientId is provided
+  // Automatically select room if initialRecipientId is provided, or create one if it doesn't exist yet!
+  const hasAttemptedAutoStart = useRef<string | null>(null);
+
   useEffect(() => {
-    if (initialRecipientId && displayedRooms.length > 0) {
+    if (!initialRecipientId) return;
+
+    // Prevent duplicate triggers for the same user sequence
+    if (hasAttemptedAutoStart.current === initialRecipientId) {
       const room = displayedRooms.find(r => r.participants.includes(initialRecipientId));
       if (room) {
         setActiveRoom(room);
       }
+      return;
+    }
+
+    const room = displayedRooms.find(r => r.participants.includes(initialRecipientId));
+    if (room) {
+      setActiveRoom(room);
+    } else {
+      // It doesn't exist, so let's load and start chat
+      const loadAndStartChat = async () => {
+        hasAttemptedAutoStart.current = initialRecipientId;
+        try {
+          const userDoc = await getDoc(doc(db, 'users', initialRecipientId));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const recipientUser = {
+              uid: initialRecipientId,
+              name: userData.name || userData.companyName || 'Usuário B2B',
+              ...userData
+            };
+            await startNewChat(recipientUser);
+          } else {
+            // Even if user doc is missing, auto-create a room
+            const fallbackName = initialRecipientId === 'ops_logistica_default'
+              ? (language === 'PT' ? 'Suporte Logístico SupplyX' : 'SupplyX Logistics Support')
+              : (initialRecipientId.startsWith('ops_logistica_')
+                  ? (formatLogisticsNameFromUid(initialRecipientId) || (language === 'PT' ? 'Agente Logístico' : 'Logistics Agent'))
+                  : (initialRecipientId === 'buyer_demo_uid'
+                      ? (language === 'PT' ? 'Cliente B2B (Demo)' : 'B2B Client (Demo)')
+                      : (initialRecipientId === 'supplier_demo_uid'
+                          ? (language === 'PT' ? 'Fornecedor B2B (Demo)' : 'B2B Supplier (Demo)')
+                          : 'Usuário B2B')));
+            const recipientUser = {
+              uid: initialRecipientId,
+              name: fallbackName
+            };
+            await startNewChat(recipientUser);
+          }
+        } catch (err) {
+          console.error("Error starting auto chat with initialRecipientId:", err);
+        }
+      };
+      loadAndStartChat();
     }
   }, [initialRecipientId, displayedRooms]);
   const [resolvedNames, setResolvedNames] = useState<Record<string, string>>({});
@@ -204,7 +276,10 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
         updatedAt: serverTimestamp()
       };
       const docRef = await addDoc(collection(db, 'chats'), chatData);
-      // Room will be added by onSnapshot listener
+      setActiveRoom({
+        id: docRef.id,
+        ...chatData
+      } as ChatRoom);
       setSearchTerm('');
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'chats');
@@ -328,6 +403,28 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     }
   };
 
+  const handleDeleteChatRoom = async (roomId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (roomConfirmDeleteId !== roomId) {
+      setRoomConfirmDeleteId(roomId);
+      // Reset confirmation after 3.5 seconds
+      setTimeout(() => {
+        setRoomConfirmDeleteId(prev => prev === roomId ? null : prev);
+      }, 3500);
+      return;
+    }
+
+    try {
+      if (activeRoom?.id === roomId) {
+        setActiveRoom(null);
+      }
+      setRoomConfirmDeleteId(null);
+      await deleteDoc(doc(db, 'chats', roomId));
+    } catch (err) {
+      console.error('Error deleting chat room:', err);
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !activeRoom || !auth.currentUser) return;
@@ -396,6 +493,18 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
   const getOtherParticipantName = (room: ChatRoom) => {
     const otherId = room.participants.find(id => id !== auth.currentUser?.uid);
     if (!otherId) return t.user;
+    if (otherId === 'ops_logistica_default') {
+      return language === 'PT' ? 'Suporte Logístico SupplyX' : 'SupplyX Logistics Support';
+    }
+    if (otherId.startsWith('ops_logistica_')) {
+      return formatLogisticsNameFromUid(otherId) || (language === 'PT' ? 'Agente Logístico' : 'Logistics Agent');
+    }
+    if (otherId === 'buyer_demo_uid') {
+      return language === 'PT' ? 'Cliente B2B (Demo)' : 'B2B Client (Demo)';
+    }
+    if (otherId === 'supplier_demo_uid') {
+      return language === 'PT' ? 'Fornecedor B2B (Demo)' : 'B2B Supplier (Demo)';
+    }
     return resolvedNames[otherId] || room.participantNames[otherId] || t.user;
   };
 
@@ -475,10 +584,10 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
 
         <div className="flex-1 overflow-y-auto scrollbar-hide py-2">
           {displayedRooms.length > 0 ? displayedRooms.map((room) => (
-            <button 
+            <div 
               key={room.id}
               onClick={() => setActiveRoom(room)}
-              className={`w-full p-4 flex items-center gap-3 transition-colors ${activeRoom?.id === room.id ? (isDarkMode ? 'bg-zinc-900' : 'bg-zinc-50') : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/50'}`}
+              className={`w-full p-4 flex items-center gap-3 transition-colors cursor-pointer group relative ${activeRoom?.id === room.id ? (isDarkMode ? 'bg-zinc-900' : 'bg-zinc-50') : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/50'}`}
             >
               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-sm ${isDarkMode ? 'bg-zinc-800 text-brand' : 'bg-brand/10 text-brand'}`}>
                 {getOtherParticipantName(room).charAt(0).toUpperCase()}
@@ -499,17 +608,34 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                   </div>
                 </div>
                 <div className="flex justify-between items-center gap-2">
-                  <p className={`text-xs truncate ${room.unreadCount?.[auth.currentUser?.uid || ''] ? 'text-teal-400 font-bold' : 'text-zinc-500'}`}>
+                  <p className={`text-xs truncate text-zinc-500 shrink min-w-0 ${room.unreadCount?.[auth.currentUser?.uid || ''] ? 'text-teal-400 font-bold' : ''}`}>
                     {room.lastMessage || t.startChat}
                   </p>
-                  {(room.unreadCount?.[auth.currentUser?.uid || ''] || 0) > 0 && (
-                    <span className="shrink-0 px-1.5 py-0.5 bg-teal-400 text-slate-950 text-[9px] font-black rounded-full min-w-4 text-center animate-pulse">
-                      {room.unreadCount?.[auth.currentUser?.uid || '']}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                    {(room.unreadCount?.[auth.currentUser?.uid || ''] || 0) > 0 && (
+                      <span className="shrink-0 px-1.5 py-0.5 bg-teal-400 text-slate-950 text-[9px] font-black rounded-full min-w-4 text-center animate-pulse">
+                        {room.unreadCount?.[auth.currentUser?.uid || '']}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteChatRoom(room.id, e)}
+                      className={`p-1.5 rounded-lg transition-all border flex items-center justify-center shrink-0 ${
+                        roomConfirmDeleteId === room.id
+                          ? 'bg-red-500 text-white border-red-600 animate-pulse text-[9px] font-black uppercase px-2'
+                          : 'bg-zinc-800/10 dark:bg-zinc-800/30 text-zinc-400 hover:text-red-500 border-transparent hover:border-red-500/20 hover:bg-red-500/10'
+                      }`}
+                      title={language === 'PT' ? 'Eliminar conversa' : 'Delete conversation'}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      {roomConfirmDeleteId === room.id && (
+                        <span className="ml-1 text-[8.5px] font-black tracking-wider uppercase">{language === 'PT' ? 'Confirmar' : 'Confirm'}</span>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </button>
+            </div>
           )) : (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center text-zinc-500">
               <MessageSquare className="w-8 h-8 mb-2 opacity-20" />
@@ -562,9 +688,29 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                   </div>
                 </div>
               </div>
-              <button className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                <MoreVertical className="w-5 h-5 text-zinc-400" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => handleDeleteChatRoom(activeRoom.id, e)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 border shrink-0 cursor-pointer ${
+                    roomConfirmDeleteId === activeRoom.id
+                      ? 'bg-red-500 text-white border-red-600 animate-pulse'
+                      : 'bg-red-500/10 hover:bg-red-500/20 text-red-500 border-red-500/20'
+                  }`}
+                  title={language === 'PT' ? "Excluir Chat Permanentemente" : "Delete Chat Permanently"}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>
+                    {roomConfirmDeleteId === activeRoom.id
+                      ? (language === 'PT' ? 'Confirmar?' : 'Are you sure?')
+                      : (language === 'PT' ? 'Excluir Conversa' : 'Delete Chat')}
+                  </span>
+                </button>
+
+                <button className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                  <MoreVertical className="w-5 h-5 text-zinc-400" />
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
@@ -579,15 +725,6 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                     className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
                   >
                     <div className={`max-w-[80%] md:max-w-[60%] space-y-1 group/msg relative`}>
-                      {isMine && (
-                         <button 
-                           onClick={() => handleDeleteMessage(msg.id)}
-                           className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 rounded-lg opacity-0 group-hover/msg:opacity-100 hover:bg-zinc-800 text-zinc-500 hover:text-red-500 transition-all"
-                         >
-                           <Trash2 className="w-3.5 h-3.5" />
-                         </button>
-                      )}
-                      
                       <div className={`p-4 rounded-3xl text-sm font-medium ${
                         isMine 
                           ? 'bg-brand text-white rounded-tr-none' 
@@ -631,6 +768,14 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                             <Clock className={`w-3 h-3 ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`} />
                           )
                         )}
+                        <button 
+                          onClick={() => handleDeleteMessage(msg.id)}
+                          className="flex items-center gap-1 text-red-500 hover:text-red-600 bg-red-500/10 hover:bg-red-500/20 px-2 py-0.5 rounded-lg transition-all ml-2.5 cursor-pointer border border-red-500/25 font-bold shadow-xs active:scale-95"
+                          title={language === 'PT' ? "Eliminar mensagem" : "Delete message"}
+                        >
+                          <Trash2 className="w-3 h-3 text-red-500" />
+                          <span className="text-[9.5px]/none font-black uppercase tracking-wider text-red-500">{language === 'PT' ? 'Eliminar' : 'Delete'}</span>
+                        </button>
                       </div>
                     </div>
                   </motion.div>

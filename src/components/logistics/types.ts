@@ -26,6 +26,8 @@ export interface CargoRequest {
   podPhoto?: string;
   hasUserBid?: boolean;
   logisticsReplies?: any[];
+  buyerId?: string;
+  supplierId?: string;
 }
 
 export interface CarrierProposal {

@@ -2848,12 +2848,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             <motion.div 
               key={order.id} 
               whileHover={{ y: -4 }}
-              onClick={() => {
-                if (userType === 'supplier' && order.status === 'pending') {
-                  setIsDirectLogisticsRequest(false);
-                  setRespondingTo(order);
-                }
-              }}
               className={`p-5 sm:p-6 rounded-[28px] sm:rounded-[32px] border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 transition-all cursor-pointer group relative overflow-hidden ${
                 isDarkMode 
                   ? 'bg-supplyx-dark border-white/5 hover:border-supplyx-blue/50 shadow-2xl shadow-black/20' 
@@ -2952,18 +2946,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                     >
                       {downloadingOrderId === order.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                     </button>
-                    {userType === 'supplier' && order.status === 'pending' && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsDirectLogisticsRequest(false);
-                          setRespondingTo(order);
-                        }}
-                        className="px-4 sm:px-5 py-2 sm:py-2.5 bg-supplyx-blue text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-blue-500/20"
-                      >
-                        {t.respond}
-                      </button>
-                    )}
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -3128,18 +3110,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                         {downloadingOrderId === order.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                       </button>
                     )}
-                    {userType === 'supplier' && order.status === t.status.quote && order.id && !order.id.startsWith('DEMO-') && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsDirectLogisticsRequest(false);
-                          setRespondingTo(order);
-                        }}
-                        className="px-4 sm:px-5 py-2 sm:py-2.5 bg-supplyx-blue text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-blue-500/20"
-                      >
-                        {t.respond}
-                      </button>
-                    )}
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -3165,186 +3135,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           <Zap className="absolute right-0 bottom-0 opacity-5 w-32 h-32 -mb-8 -mr-8 group-hover:scale-110 transition-transform" />
         </div>
       </div>
-
-      <AnimatePresence>
-        {respondingTo && userType === 'supplier' && !isDirectLogisticsRequest && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-md">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className={`w-full max-w-lg p-8 rounded-[40px] relative border ${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-2xl'}`}
-            >
-              <button 
-                onClick={() => setRespondingTo(null)}
-                className="absolute top-8 right-8 p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              >
-                <X className="w-5 h-5 text-zinc-400" />
-              </button>
-
-              <div className="mb-8">
-                <div className="flex items-center gap-2 mb-2">
-                  <Brain className="w-4 h-4 text-brand" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-brand">{t.supplierIntelligence}</span>
-                </div>
-                <h3 className={`text-2xl font-black italic uppercase tracking-tighter mb-1 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.respondToQuote}</h3>
-                <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest italic">{respondingTo.id} • {t.priceRequest}</p>
-              </div>
-
-              <div className="space-y-6">
-                <div className={`p-4 rounded-2xl ${isDarkMode ? 'bg-zinc-800/50' : 'bg-zinc-50'}`}>
-                  <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-3">{t.orderSummarySmall}</p>
-                  <div className="space-y-2">
-                    {respondingTo.items?.map((item: any, i: number) => (
-                      <div key={i} className="flex justify-between text-xs font-bold">
-                        <span className="text-zinc-500">{item.material}</span>
-                        <span className={isDarkMode ? 'text-white' : 'text-zinc-900'}>{item.quantity} {item.unit}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.yourProposal}</label>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand font-black italic">MT</span>
-                      <input 
-                        type="number"
-                        value={responseValue}
-                        onChange={(e) => setResponseValue(e.target.value)}
-                        className={`w-full pl-12 pr-4 py-4 rounded-2xl text-lg font-black italic outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand' : 'bg-white border-zinc-100 focus:border-brand shadow-inner'}`}
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.discount}</label>
-                    <div className="relative">
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">%</span>
-                      <input 
-                        type="number"
-                        value={responseDiscount}
-                        onChange={(e) => setResponseDiscount(e.target.value)}
-                        className={`w-full pl-6 pr-10 py-4 rounded-2xl text-lg font-black italic outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand' : 'bg-white border-zinc-100 focus:border-brand shadow-inner'}`}
-                        placeholder="0"
-                        min="0"
-                        max="100"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.clientMessage}</label>
-                  <textarea 
-                    className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all h-24 resize-none ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand' : 'bg-white border-zinc-100 focus:border-brand shadow-inner'}`}
-                    placeholder={t.clientMessagePlaceholder}
-                  />
-                </div>
-              </div>
-
-              <div className="mt-8">
-                <button 
-                  onClick={async () => {
-                    setIsResponding(true);
-                    try {
-                      const isDemo = respondingTo.id && respondingTo.id.startsWith('DEMO-');
-                      
-                      if (!isDemo) {
-                        // Update Firestore document
-                        const val = parseFloat(responseValue) || 0;
-                        const disc = parseFloat(responseDiscount) || 0;
-
-                        const items = respondingTo.items || [];
-                        const originalTotalWithVat = items.reduce((acc: number, it: any) => {
-                          const qty = parseFloat(it.quantity || '0') || 0;
-                          const price = parseFloat(it.unitPrice || '0') || 0;
-                          const vat = it.vatUnitRate !== undefined ? it.vatUnitRate : 16;
-                          return acc + (qty * price * (1 + vat / 100));
-                        }, 0);
-
-                        const scaleFactor = originalTotalWithVat > 0 ? (val / originalTotalWithVat) : null;
-                        const count = items.length || 1;
-
-                        let calculatedTotalWithVat = 0;
-                        const updatedItemsList = items.map((it: any) => {
-                          const qty = parseFloat(it.quantity || '0') || 0;
-                          const vatRate = it.vatUnitRate !== undefined ? it.vatUnitRate : 16;
-                          const currentUnitPrice = scaleFactor !== null 
-                            ? (parseFloat(it.unitPrice || '0') * scaleFactor)
-                            : (val / (1 + vatRate / 100)) / count;
-                          
-                          const itemDiscounted = currentUnitPrice * (1 - disc / 100);
-                          calculatedTotalWithVat += qty * itemDiscounted * (1 + vatRate / 100);
-
-                          return {
-                            ...it,
-                            unitPrice: currentUnitPrice,
-                            vatUnitRate: vatRate
-                          };
-                        });
-
-                        await updateDoc(doc(db, 'quotations', respondingTo.id), {
-                          status: 'responded',
-                          responseValue: val,
-                          discountPercent: disc,
-                          respondedAt: serverTimestamp(),
-                          totalAmount: calculatedTotalWithVat,
-                          items: updatedItemsList
-                        });
-
-                        // Notify buyer
-                        await notificationService.sendNotification({
-                          userId: respondingTo.buyerId,
-                          senderId: auth.currentUser?.uid,
-                          title: language === 'PT' ? 'Proposta Recebida' : 'Proposal Received',
-                          message: language === 'PT' 
-                            ? `O fornecedor ${profile?.name || 'seu fornecedor'} respondeu à sua cotação ${respondingTo.requestId}.` 
-                            : `The supplier ${profile?.name || 'your supplier'} responded to your quote ${respondingTo.requestId}.`,
-                          type: 'success',
-                          metadata: {
-                            requestId: respondingTo.requestId,
-                            quotationId: respondingTo.id
-                          }
-                        });
-                      } else {
-                        // Simulate delay for demo
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                      }
-
-                      setRespondingTo(null);
-                      setResponseValue('');
-                      setResponseDiscount('0');
-                      alert(t.successProposal);
-                    } catch (err) {
-                      console.error('Error responding to quote:', err);
-                      alert(language === 'PT' ? 'Erro ao enviar proposta' : 'Error sending proposal');
-                    } finally {
-                      setIsResponding(false);
-                    }
-                  }}
-                  disabled={!responseValue || isResponding}
-                  className="w-full py-5 bg-[#0052CC] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-brand hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-                >
-                  {isResponding ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      {t.sendingProposal}
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheck className="w-6 h-6" />
-                      {t.sendProposal}
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       <ProfileModal 
         userId={viewingProfileId || ''}

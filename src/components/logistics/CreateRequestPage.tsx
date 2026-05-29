@@ -32,7 +32,7 @@ export default function CreateRequestPage({
   onBack
 }: CreateRequestPageProps) {
   const [loading, setLoading] = useState(false);
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
 
   // States
   const [formData, setFormData] = useState({
@@ -100,6 +100,8 @@ export default function CreateRequestPage({
     e.preventDefault();
     setLoading(true);
 
+    const activeUid = user?.uid || profile?.uid || profile?.id || '';
+
     setTimeout(() => {
       const generatedReq: CargoRequest = {
         id: `TR-2025-${Math.floor(1001 + Math.random() * 8999)}`,
@@ -108,7 +110,9 @@ export default function CreateRequestPage({
         status: 'Em Competição',
         proposalsCount: 4,
         rating: 4.8,
-        targetPrice: language === 'PT' ? 'A definir por lance logístico' : 'To be bid by carrier'
+        targetPrice: language === 'PT' ? 'A definir por lance logístico' : 'To be bid by carrier',
+        buyerId: profile?.type === 'buyer' ? activeUid : undefined,
+        supplierId: profile?.type === 'supplier' ? activeUid : undefined,
       };
       setLoading(false);
       onSuccess(generatedReq);

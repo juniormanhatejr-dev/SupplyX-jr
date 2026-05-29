@@ -233,26 +233,20 @@ export default function LogisticsView({
         });
 
         setCustomRequests((prevRequests) => {
-          const combinedMap = new Map<string, CargoRequest>();
-          
-          prevRequests.forEach((req) => {
-            combinedMap.set(req.id, req);
-          });
-          
-          let hasDiff = false;
-          firestoreList.forEach((req) => {
-            const existing = combinedMap.get(req.id);
-            if (!existing || JSON.stringify(existing) !== JSON.stringify(req)) {
-              combinedMap.set(req.id, req);
-              hasDiff = true;
+          let hasDiff = prevRequests.length !== firestoreList.length;
+          if (!hasDiff) {
+            for (const item of firestoreList) {
+              const prev = prevRequests.find((r) => r.id === item.id);
+              if (!prev || JSON.stringify(prev) !== JSON.stringify(item)) {
+                hasDiff = true;
+                break;
+              }
             }
-          });
-          
+          }
           if (!hasDiff) return prevRequests;
 
-          const result = Array.from(combinedMap.values());
-          localStorage.setItem('supplyx_freight_requests', JSON.stringify(result));
-          return result;
+          localStorage.setItem('supplyx_freight_requests', JSON.stringify(firestoreList));
+          return firestoreList;
         });
       }, (error) => {
         console.error('Firestore real-time sync failed:', error);
@@ -276,23 +270,19 @@ export default function LogisticsView({
     if (userType === 'logistics') {
       return customRequests;
     }
-    // Buyers see their created requests (or requests marked as Client)
+    // Buyers see ONLY their own created requests
     if (userType === 'buyer') {
       return customRequests.filter(req => 
-        req.buyerId === auth.currentUser?.uid || 
-        req.requester === 'Client' ||
-        !req.buyerId
+        req.buyerId === auth.currentUser?.uid
       );
     }
-    // Suppliers see requests related to them (or requests marked as Supplier)
+    // Suppliers see ONLY their own created/assigned requests
     if (userType === 'supplier') {
       return customRequests.filter(req => 
-        req.supplierId === auth.currentUser?.uid || 
-        req.requester === 'Supplier' ||
-        !req.supplierId
+        req.supplierId === auth.currentUser?.uid
       );
     }
-    return customRequests;
+    return [];
   }, [customRequests, userType]);
 
   // If user is registered as logistics, default to carrier_central dashboard, otherwise 'requests_list'
@@ -336,19 +326,20 @@ export default function LogisticsView({
 
   const deleteRequestFromFirestore = async (id: string) => {
     try {
-      const q = query(collection(db, 'freight_orders'), where('id', '==', id));
-      const querySnapshot = await getDocs(q);
-      querySnapshot.forEach(async (docSnap) => {
-        await deleteDoc(docSnap.ref);
-      });
+      await deleteDoc(doc(db, 'freight_orders', id));
     } catch (err) {
       console.warn('Failed to delete cargo request from Firestore:', err);
     }
   };
 
   const handleDeleteRequest = async (id: string) => {
-    const updated = customRequests.filter(r => r.id !== id);
-    syncRequestsToLocalStorage(updated);
+    // Immediately filter local state and local storage so the item disappears instantly and doesn't blink
+    setCustomRequests((prev) => {
+      const updated = prev.filter(r => r.id !== id);
+      localStorage.setItem('supplyx_freight_requests', JSON.stringify(updated));
+      return updated;
+    });
+    // Fire and await the direct atomic Firestore deletion
     await deleteRequestFromFirestore(id);
   };
 
@@ -523,7 +514,6 @@ export default function LogisticsView({
                 { id: 'dashboard', pt: '📊 Cockpit Analítico', en: '📊 Control Dashboard' },
                 { id: 'requests_list', pt: '📋 Monitor de Cargas', en: '📋 Cargo Monitor' },
                 { id: 'drivers', pt: '👤 Frotas & Motoristas', en: '👤 Fleets & Drivers' },
-                { id: 'inventory', pt: '📦 Fulfillment Stock', en: '📦 Fulfillment Stock' },
                 { id: 'financial', pt: '💳 B2B Financeiro Split', en: '💳 B2B Split Fees' }
               ]
             : [
@@ -618,7 +608,13 @@ export default function LogisticsView({
                 onToggleOccurrence={handleToggleOccurrence}
                 onUpdateFeedback={handleUpdateFeedback}
                 onUpdateCargoPod={handleUpdateCargoPod}
-                onNavigateToTab={setActiveSubTab}
+                onNavigateToTab={(tab, payload) => {
+                  if (tab === 'Mensagens') {
+                    onNavigate?.('Mensagens', payload);
+                  } else {
+                    setActiveSubTab(tab);
+                  }
+                }}
                 userType={userType}
                 onUpdateCargoRequest={handleUpdateCargoRequest}
               />
@@ -653,14 +649,6 @@ export default function LogisticsView({
                 language={language}
                 drivers={drivers}
                 onAddDriver={handleAddDriver}
-              />
-            )}
-
-            {activeSubTab === 'inventory' && (
-              <InventoryFulfillment 
-                isDarkMode={isDarkMode}
-                language={language}
-                warehouses={warehouses}
               />
             )}
 

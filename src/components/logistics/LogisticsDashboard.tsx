@@ -90,6 +90,7 @@ export default function LogisticsDashboard({
 
   // Inner navigation: 'overview' | 'control_tower' | 'carrier_matching' | 'fleet' | 'warehouses' | 'logs' | 'ai_assistant'
   const [activeInnerTab, setActiveInnerTab] = useState<'overview' | 'control_tower' | 'carrier_matching' | 'fleet' | 'warehouses' | 'logs' | 'ai_assistant'>('overview');
+  const [isSimulatorExpanded, setIsSimulatorExpanded] = useState(false);
 
   // Multi-lingual terminology
   const t = {
@@ -387,14 +388,29 @@ export default function LogisticsDashboard({
           }
         ].map((item, idx) => {
           const Icon = item.icon;
+          const handleKpiRedirect = () => {
+            if (item.title === t.allOrders || item.title === t.activeOrders || item.title === t.completed) {
+              setActiveSubTab?.('requests_list');
+            } else if (item.title === t.incidents) {
+              setActiveInnerTab('logs');
+            } else if (item.title === t.carriers) {
+              setActiveSubTab?.('drivers');
+            } else if (item.title === t.performance) {
+              setActiveSubTab?.('financial');
+            }
+          };
+
           return (
-            <div 
+            <button 
               key={idx} 
-              className={`p-5 rounded-[24px] border transition-all hover:scale-[1.01] ${
-                isDarkMode ? 'bg-zinc-900 border-white/5 shadow-2xl' : 'bg-white border-zinc-100 shadow-sm'
+              onClick={handleKpiRedirect}
+              className={`p-5 rounded-[24px] border text-left transition-all hover:scale-[1.02] active:scale-[0.98] group cursor-pointer focus:outline-none focus:ring-1 focus:ring-supplyx-blue/35 w-full ${
+                isDarkMode 
+                  ? 'bg-zinc-900 border-white/5 hover:border-supplyx-blue/30 shadow-2xl hover:bg-zinc-900/80' 
+                  : 'bg-white border-zinc-100 hover:border-supplyx-blue/35 shadow-sm hover:bg-zinc-50'
               }`}
             >
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 w-full">
                 <p className="text-[9px] font-black uppercase text-zinc-500 tracking-wider">
                   {item.title}
                 </p>
@@ -409,7 +425,12 @@ export default function LogisticsDashboard({
               <p className={`text-[8px] font-bold uppercase tracking-widest mt-1 ${item.subColor ? item.subColor : 'text-zinc-500'}`}>
                 {item.sub}
               </p>
-            </div>
+
+              <div className="mt-2.5 pt-2 border-t border-white/[0.03] flex justify-between items-center text-[7.5px] font-black uppercase tracking-widest text-zinc-500 group-hover:text-supplyx-blue transition-colors w-full">
+                <span>{language === 'PT' ? 'Abrir Área 🔗' : 'Open Link 🔗'}</span>
+                <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+              </div>
+            </button>
           );
         })}
       </div>
@@ -579,148 +600,163 @@ export default function LogisticsDashboard({
               </div>
 
               {/* INTEGRATED INNER ROUTE OPTIMIZER */}
-              <div className={`p-8 rounded-[40px] border relative overflow-hidden ${
+              <div className={`p-6 sm:p-8 rounded-[40px] border relative overflow-hidden transition-all ${
                 isDarkMode ? 'bg-zinc-950 border-white/5 shadow-2xl' : 'bg-white border-zinc-100 shadow-sm'
               }`}>
                 <div className="absolute right-0 top-0 w-80 h-80 bg-supplyx-blue/15 rounded-full filter blur-[100px] pointer-events-none" />
                 
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-white/5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="p-3 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-white shadow-xl shadow-blue-500/20">
-                      <Sparkles className="w-5 h-5 fill-white" />
+                      <Sparkles className="w-5 h-5 fill-white animate-pulse" />
                     </div>
                     <div>
                       <h3 className="text-sm font-black uppercase tracking-widest text-white leading-none">
                         {language === 'PT' ? 'IA Logística - Otimizador de Rotas de Frete' : 'Logistics Smart Route Simulator'}
                       </h3>
-                      <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest leading-none mt-1.5">
-                        Previsão de frete, delay meteorológico, consumo e alocação de frota automática
+                      <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest leading-none mt-2">
+                        {language === 'PT' ? 'Cálculo de tarifas, delay climático e trajetos meteorológicos integrados' : 'AI-driven tariff estimation & meteo delay metrics'}
                       </p>
                     </div>
                   </div>
 
-                  {/* Selector Corridor Switcher Links */}
-                  <div className="flex gap-1.5 p-1 bg-zinc-900 rounded-xl border border-white/5 shadow-inner">
-                    <button
-                      onClick={() => setSelectedCorridor('corredor-sul')}
-                      className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all select-none ${
-                        selectedCorrider === 'corredor-sul'
-                          ? 'bg-supplyx-blue text-white shadow-md'
-                          : 'text-zinc-500 hover:text-white'
-                      }`}
-                    >
-                      Corredor Sul: Via Beira
-                    </button>
-                    <button
-                      onClick={() => setSelectedCorridor('corredor-centro')}
-                      className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all select-none ${
-                        selectedCorrider === 'corredor-centro'
-                          ? 'bg-supplyx-blue text-white shadow-md'
-                          : 'text-zinc-500 hover:text-white'
-                      }`}
-                    >
-                      Rota Rápida: Tete Bypass
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setIsSimulatorExpanded(!isSimulatorExpanded)}
+                    className="px-4 py-2.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-white border border-white/5 text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 self-start sm:self-auto"
+                  >
+                    {isSimulatorExpanded 
+                      ? (language === 'PT' ? 'Recolher Simulador ▲' : 'Collapse Simulator ▲') 
+                      : (language === 'PT' ? 'Expandir Simulador ▼' : 'Expand Simulator ▼')}
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  {/* Simulation variables column */}
-                  <div className="space-y-6">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Variáveis Computacionais de Simulação:</p>
-                    
-                    <div className="space-y-4">
-                      <div>
-                        <label className="flex justify-between text-[9px] font-black uppercase text-zinc-500 tracking-wider mb-2">
-                          <span>Peso da Carga Alvo:</span>
-                          <span className="text-white font-mono">{cargoWeightTons} Toneladas</span>
-                        </label>
-                        <input 
-                          type="range" 
-                          min={1} 
-                          max={45} 
-                          value={cargoWeightTons} 
-                          onChange={(e) => setCargoWeightTons(parseInt(e.target.value, 10))} 
-                          className="w-full h-1.5 bg-zinc-900 rounded-lg appearance-none cursor-pointer accent-supplyx-blue"
-                        />
-                        <div className="flex justify-between text-[7.5px] font-bold text-zinc-500 mt-1 uppercase">
-                          <span>Leve (1-5 Tons)</span>
-                          <span>Pesado (35+ Tons)</span>
-                        </div>
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3.5">
-                        <div className="flex justify-between text-[9px] font-black uppercase text-zinc-500 tracking-wider">
-                          <span>Diagnóstico do Porto Matola:</span>
-                          <span className="text-amber-400">Gargalo Moderado</span>
-                        </div>
-                        <div className="flex justify-between text-[9px] font-black uppercase text-zinc-500 tracking-wider">
-                          <span>Precipitação Esperada:</span>
-                          <span className="text-emerald-400">Risco Quase Nulo</span>
-                        </div>
-                        <div className="flex justify-between text-[9px] font-black uppercase text-zinc-500 tracking-wider">
-                          <span>Taxa de Seguro Padrão:</span>
-                          <span className="text-teal-400">0.05% Ad Valorem</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Simulation results column */}
-                  <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 p-6 rounded-3xl bg-zinc-900/60 border border-white/5">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center gap-1">
-                        ⚙️ Otimização Dinâmica:
-                      </p>
+                {isSimulatorExpanded && (
+                  <div className="mt-8 pt-6 border-t border-white/5 space-y-8 animate-in fade-in duration-300">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Variáveis Computacionais de Simulação:</p>
                       
-                      <div className="space-y-3">
-                        {[
-                          { label: 'Distância Projetada', val: calculatedRouteData.distance, color: 'text-white' },
-                          { label: 'Duração Logística Estimada', val: calculatedRouteData.duration, color: 'text-supplyx-blue' },
-                          { label: 'Consumo Previsto Fóssil', val: calculatedRouteData.fuel, color: 'text-zinc-350' },
-                          { label: 'Pontuação de Rodovia', val: calculatedRouteData.roadQuality, color: 'text-zinc-350' },
-                          { 
-                            label: 'Previsão de Condições & Risco', 
-                            val: calculatedRouteData.risk, 
-                            color: calculatedRouteData.riskLevel === 'low' ? 'text-emerald-400' : 'text-amber-400' 
-                          }
-                        ].map((item, i) => (
-                          <div key={i} className="flex justify-between items-center text-xs pb-1 border-b border-white/[0.02]">
-                            <span className="font-bold text-zinc-500 uppercase tracking-widest text-[8.5px]">{item.label}</span>
-                            <span className={`font-black text-right ${item.color}`}>{item.val}</span>
-                          </div>
-                        ))}
+                      {/* Selector Corridor Switcher Links */}
+                      <div className="flex gap-1.5 p-1 bg-zinc-900 rounded-xl border border-white/5 shadow-inner">
+                        <button
+                          onClick={() => setSelectedCorridor('corredor-sul')}
+                          className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all select-none ${
+                            selectedCorrider === 'corredor-sul'
+                              ? 'bg-supplyx-blue text-white shadow-md'
+                              : 'text-zinc-500 hover:text-white'
+                          }`}
+                        >
+                          Corredor Sul: Via Beira
+                        </button>
+                        <button
+                          onClick={() => setSelectedCorridor('corredor-centro')}
+                          className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all select-none ${
+                            selectedCorrider === 'corredor-centro'
+                              ? 'bg-supplyx-blue text-white shadow-md'
+                              : 'text-zinc-500 hover:text-white'
+                          }`}
+                        >
+                          Rota Rápida: Tete Bypass
+                        </button>
                       </div>
                     </div>
 
-                    <div className="flex flex-col justify-between">
-                      <div className="space-y-1 mt-1">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">
-                          AUTO-MATCH SUGERIDO PELO ALGORITMO:
-                        </p>
-                        <div className="p-3 bg-zinc-950 rounded-xl border border-white/5 mt-2">
-                          <p className="text-[11px] font-black text-white truncate italic flex items-center gap-1">
-                            🎯 {calculatedRouteData.suggestedCarrier}
-                          </p>
-                          <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest mt-1">
-                            Melhor custo-tempo-reputação index
-                          </p>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                      {/* Simulation variables column */}
+                      <div className="space-y-6">
+                        <div className="space-y-4">
+                          <div>
+                            <label className="flex justify-between text-[9px] font-black uppercase text-zinc-500 tracking-wider mb-2">
+                              <span>Peso da Carga Alvo:</span>
+                              <span className="text-white font-mono">{cargoWeightTons} Toneladas</span>
+                            </label>
+                            <input 
+                              type="range" 
+                              min={1} 
+                              max={45} 
+                              value={cargoWeightTons} 
+                              onChange={(e) => setCargoWeightTons(parseInt(e.target.value, 10))} 
+                              className="w-full h-1.5 bg-zinc-900 rounded-lg appearance-none cursor-pointer accent-supplyx-blue"
+                            />
+                            <div className="flex justify-between text-[7.5px] font-bold text-zinc-500 mt-1 uppercase">
+                              <span>Leve (1-5 Tons)</span>
+                              <span>Pesado (35+ Tons)</span>
+                            </div>
+                          </div>
+
+                          <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3.5">
+                            <div className="flex justify-between text-[9px] font-black uppercase text-zinc-500 tracking-wider">
+                              <span>Diagnóstico do Porto Matola:</span>
+                              <span className="text-amber-400">Gargalo Moderado</span>
+                            </div>
+                            <div className="flex justify-between text-[9px] font-black uppercase text-zinc-500 tracking-wider">
+                              <span>Precipitação Esperada:</span>
+                              <span className="text-emerald-400">Risco Quase Nulo</span>
+                            </div>
+                            <div className="flex justify-between text-[9px] font-black uppercase text-zinc-500 tracking-wider">
+                              <span>Taxa de Seguro Padrão:</span>
+                              <span className="text-teal-400">0.05% Ad Valorem</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="pt-4 border-t border-white/5">
-                        <span className="text-[10px] font-black uppercase text-zinc-500">Tarifa Estimada Inteligente:</span>
-                        <div className="flex items-baseline gap-2 mt-1">
-                          <h4 className="text-xl sm:text-2xl font-black text-emerald-400 italic">
-                            MT {estimatedFreightWithWeight.toLocaleString('pt-BR')}
-                          </h4>
-                          <span className="text-[9px] font-bold text-zinc-500 uppercase">MZN NET</span>
+                      {/* Simulation results column */}
+                      <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 p-6 rounded-3xl bg-zinc-900/60 border border-white/5">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center gap-1">
+                            ⚙️ Otimização Dinâmica:
+                          </p>
+                          
+                          <div className="space-y-3">
+                            {[
+                              { label: 'Distância Projetada', val: calculatedRouteData.distance, color: 'text-white' },
+                              { label: 'Duração Logística Estimada', val: calculatedRouteData.duration, color: 'text-supplyx-blue' },
+                              { label: 'Consumo Previsto Fóssil', val: calculatedRouteData.fuel, color: 'text-zinc-350' },
+                              { label: 'Pontuação de Rodovia', val: calculatedRouteData.roadQuality, color: 'text-zinc-350' },
+                              { 
+                                label: 'Previsão de Condições & Risco', 
+                                val: calculatedRouteData.risk, 
+                                color: calculatedRouteData.riskLevel === 'low' ? 'text-emerald-400' : 'text-amber-400' 
+                              }
+                            ].map((item, i) => (
+                              <div key={i} className="flex justify-between items-center text-xs pb-1 border-b border-white/[0.02]">
+                                <span className="font-bold text-zinc-500 uppercase tracking-widest text-[8.5px]">{item.label}</span>
+                                <span className={`font-black text-right ${item.color}`}>{item.val}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <p className="text-[8px] text-zinc-500 font-bold mt-1 uppercase">Fração Baseada em Cubagem + Peso de {cargoWeightTons}T</p>
+
+                        <div className="flex flex-col justify-between">
+                          <div className="space-y-1 mt-1">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">
+                              AUTO-MATCH SUGERIDO PELO ALGORITMO:
+                            </p>
+                            <div className="p-3 bg-zinc-950 rounded-xl border border-white/5 mt-2">
+                              <p className="text-[11px] font-black text-white truncate italic flex items-center gap-1">
+                                🎯 {calculatedRouteData.suggestedCarrier}
+                              </p>
+                              <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest mt-1">
+                                Melhor custo-tempo-reputação index
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="pt-4 border-t border-white/5">
+                            <span className="text-[10px] font-black uppercase text-zinc-500">Tarifa Estimada Inteligente:</span>
+                            <div className="flex items-baseline gap-2 mt-1">
+                              <h4 className="text-xl sm:text-2xl font-black text-emerald-400 italic">
+                                MT {estimatedFreightWithWeight.toLocaleString('pt-BR')}
+                              </h4>
+                              <span className="text-[9px] font-bold text-zinc-500 uppercase">MZN NET</span>
+                            </div>
+                            <p className="text-[8px] text-zinc-500 font-bold mt-1 uppercase">Fração Baseada em Cubagem + Peso de {cargoWeightTons}T</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* ACTIVE CARGO LIST TABLE */}

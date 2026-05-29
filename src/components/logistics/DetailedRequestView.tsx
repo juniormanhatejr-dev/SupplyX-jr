@@ -20,9 +20,12 @@ import {
   Activity,
   User,
   ThumbsUp,
-  XCircle
+  XCircle,
+  Trash2
 } from 'lucide-react';
 import { CargoRequest, CommercialDriver, CarrierProposal, Occurrence } from './types';
+import { db, auth } from '../../lib/firebase';
+import { collection, query, where, getDocs, getDoc, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 
 interface DetailedRequestViewProps {
   isDarkMode: boolean;
@@ -104,13 +107,6 @@ export default function DetailedRequestView({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [savedSignature, setSavedSignature] = useState<string>('');
-
-  // Safeguard active tab for non-logistics roles
-  useEffect(() => {
-    if (userType !== 'logistics' && activeTab !== 'info') {
-      setActiveTab('info');
-    }
-  }, [userType, activeTab]);
 
   // Match correct cargo request
   const requestObj = useMemo(() => {
@@ -266,15 +262,253 @@ export default function DetailedRequestView({
     });
   };
 
+  const saveMessageToFirestoreChat = async (text: string) => {
+    if (!auth.currentUser) return;
+    try {
+      const myUid = auth.currentUser.uid;
+      let targetUid = '';
+
+      if (userType === 'logistics') {
+        if (requestObj.requester === 'Client') {
+          targetUid = (requestObj as any).buyerId || (requestObj as any).userId || '';
+        } else {
+          targetUid = (requestObj as any).supplierId || '';
+        }
+        if (!targetUid) {
+          const usersRef = collection(db, 'users');
+          const q = query(usersRef, where('type', '==', requestObj.requester === 'Client' ? 'buyer' : 'supplier'));
+          const userSnap = await getDocs(q);
+          if (!userSnap.empty) {
+            targetUid = userSnap.docs[0].id;
+          } else {
+            // Safe fallback
+            targetUid = requestObj.requester === 'Client' ? 'buyer_demo_uid' : 'supplier_demo_uid';
+          }
+        }
+      } else {
+        // Buyer or Supplier chatting back with Logistics Operator
+        const assigned = requestObj.assignedCarrier;
+        let matchedUid = null;
+        
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('type', '==', 'logistics'));
+        const userSnap = await getDocs(q);
+        
+        if (!userSnap.empty) {
+          if (assigned) {
+            const matchedUser = userSnap.docs.find(docSnap => {
+              const uData = docSnap.data();
+              const cName = (uData.companyName || uData.name || uData.fullName || '').toLowerCase().trim();
+              const carrier = assigned.toLowerCase().trim();
+              return cName.includes(carrier) || carrier.includes(cName);
+            });
+            if (matchedUser) {
+              matchedUid = matchedUser.id;
+            }
+          }
+          if (!matchedUid) {
+            matchedUid = userSnap.docs[0].id;
+          }
+        }
+        
+        if (!matchedUid && assigned) {
+          // If no user exists yet in db, create deterministic UID like ops_logistica_moz_logistics_lda
+          const slug = assigned
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/\W+/g, '_')
+            .replace(/^_|_$/g, '');
+          matchedUid = `ops_logistica_${slug}`;
+        }
+        
+        targetUid = matchedUid || 'ops_logistica_default';
+      }
+
+      if (!targetUid || targetUid === myUid) {
+        console.warn('Could not determine targetUid for custom B2B chat or target is self. Falling back to default operator.');
+        targetUid = 'ops_logistica_default';
+      }
+
+      let myName = auth.currentUser.displayName || 'Usuário';
+      let targetName = 'Usuário';
+
+      try {
+        const myDoc = await getDoc(doc(db, 'users', myUid));
+        if (myDoc.exists()) {
+          myName = myDoc.data().name || myName;
+        }
+        const targetDoc = await getDoc(doc(db, 'users', targetUid));
+        if (targetDoc.exists()) {
+          targetName = targetDoc.data().name || targetName;
+        }
+      } catch (e) {
+        console.warn('Error fetching names for chatroom init:', e);
+      }
+
+      const chatsRef = collection(db, 'chats');
+      const qChat = query(chatsRef, where('participants', 'array-contains', myUid));
+      const chatSnap = await getDocs(qChat);
+
+      let chatRoomId = '';
+      let existingRoomData: any = null;
+
+      chatSnap.forEach((d) => {
+        const data = d.data();
+        if (data.participants && data.participants.includes(targetUid)) {
+          chatRoomId = d.id;
+          existingRoomData = data;
+        }
+      });
+
+      if (!chatRoomId) {
+        const newChatData = {
+          participants: [myUid, targetUid],
+          participantNames: {
+            [myUid]: myName,
+            [targetUid]: targetName
+          },
+          unreadCount: {
+            [myUid]: 0,
+            [targetUid]: 1
+          },
+          lastMessage: text,
+          lastMessageSenderId: myUid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+        const addedDoc = await addDoc(chatsRef, newChatData);
+        chatRoomId = addedDoc.id;
+      } else {
+        await updateDoc(doc(db, 'chats', chatRoomId), {
+          lastMessage: text,
+          lastMessageSenderId: myUid,
+          updatedAt: serverTimestamp(),
+          [`unreadCount.${targetUid}`]: ((existingRoomData?.unreadCount?.[targetUid] || 0) + 1)
+        });
+      }
+
+      await addDoc(collection(db, `chats/${chatRoomId}/messages`), {
+        senderId: myUid,
+        participants: [myUid, targetUid],
+        text,
+        createdAt: serverTimestamp()
+      });
+
+      console.log('Synchronized logistics message to B2B Chat room:', chatRoomId);
+    } catch (err) {
+      console.error('Error in saveMessageToFirestoreChat:', err);
+    }
+  };
+
+  const handleB2BChatNavigation = async () => {
+    let targetUid = '';
+    
+    if (userType === 'logistics') {
+      if (requestObj.requester === 'Client') {
+        targetUid = (requestObj as any).buyerId || (requestObj as any).userId || '';
+      } else {
+        targetUid = (requestObj as any).supplierId || '';
+      }
+      if (!targetUid) {
+        try {
+          const usersRef = collection(db, 'users');
+          const q = query(usersRef, where('type', '==', requestObj.requester === 'Client' ? 'buyer' : 'supplier'));
+          const userSnap = await getDocs(q);
+          if (!userSnap.empty) {
+            targetUid = userSnap.docs[0].id;
+          } else {
+            targetUid = requestObj.requester === 'Client' ? 'buyer_demo_uid' : 'supplier_demo_uid';
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    } else {
+      try {
+        const assigned = requestObj.assignedCarrier;
+        let matchedUid = null;
+        
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('type', '==', 'logistics'));
+        const userSnap = await getDocs(q);
+        
+        if (!userSnap.empty) {
+          if (assigned) {
+            const matchedUser = userSnap.docs.find(docSnap => {
+              const uData = docSnap.data();
+              const cName = (uData.companyName || uData.name || uData.fullName || '').toLowerCase().trim();
+              const carrier = assigned.toLowerCase().trim();
+              return cName.includes(carrier) || carrier.includes(cName);
+            });
+            if (matchedUser) {
+              matchedUid = matchedUser.id;
+            }
+          }
+          if (!matchedUid) {
+            matchedUid = userSnap.docs[0].id;
+          }
+        }
+        
+        if (!matchedUid && assigned) {
+          // If no user exists yet in db, create deterministic UID like ops_logistica_moz_logistics_lda
+          const slug = assigned
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/\W+/g, '_')
+            .replace(/^_|_$/g, '');
+          matchedUid = `ops_logistica_${slug}`;
+        }
+        
+        targetUid = matchedUid || 'ops_logistica_default';
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    onNavigateToTab('Mensagens', { userId: targetUid || undefined });
+  };
+
   const handleSendReply = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!typedReplyMessage.trim()) return;
+    const hasValues = typedReplyMessage.trim() || proposedPrice.trim() || proposedDate.trim() || proposedVehicle.trim();
+    if (!hasValues) return;
+
+    let formattedText = typedReplyMessage.trim();
+
+    if (userType === 'logistics') {
+      const parts = [];
+      if (proposedPrice.trim()) {
+        const val = proposedPrice.trim();
+        parts.push(`💰 Preço Otimizado: ${val.includes('MZN') ? val : `${val} MZN`}`);
+      }
+      if (proposedDate.trim()) {
+        parts.push(`📅 Prazo de Entrega: ${proposedDate.trim()}`);
+      }
+      if (proposedVehicle.trim()) {
+        parts.push(`🚚 Veículo Recomendado: ${proposedVehicle.trim()}`);
+      }
+      
+      if (parts.length > 0) {
+        const header = language === 'PT' 
+          ? '📋 NOVA PROPOSTA DE FRETE FORMULADA' 
+          : '📋 NEW LOGISTICS PROPOSAL TERMS';
+        
+        const termsText = parts.join('\n');
+        if (formattedText) {
+          formattedText = `${header}\n${termsText}\n\n💬 Nota Explicativa:\n${formattedText}`;
+        } else {
+          formattedText = `${header}\n${termsText}`;
+        }
+      }
+    }
 
     const newReply = {
       id: `rep-${Date.now()}`,
       sender: userType === 'logistics' ? 'logistics' : 'requester',
       senderName: userType === 'logistics' ? 'Operador Logístico' : (requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente')),
-      text: typedReplyMessage,
+      text: formattedText,
       timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})
     };
 
@@ -285,23 +519,32 @@ export default function DetailedRequestView({
     };
 
     if (userType === 'logistics') {
-      if (proposedPrice) {
-        updatedFields.targetPrice = proposedPrice.includes('MZN') ? proposedPrice : `${proposedPrice} MZN`;
+      if (proposedPrice.trim()) {
+        const val = proposedPrice.trim();
+        updatedFields.targetPrice = val.includes('MZN') ? val : `${val} MZN`;
       }
-      if (proposedDate) {
-        updatedFields.prazoEntrega = proposedDate;
+      if (proposedDate.trim()) {
+        updatedFields.prazoEntrega = proposedDate.trim();
       }
-      if (proposedVehicle) {
-        updatedFields.deliveryMode = proposedVehicle;
+      if (proposedVehicle.trim()) {
+        updatedFields.deliveryMode = proposedVehicle.trim();
       }
       updatedFields.status = 'Em negociação';
     }
 
     onUpdateCargoRequest?.(requestObj.id, updatedFields);
+    saveMessageToFirestoreChat(formattedText);
     setTypedReplyMessage('');
     setProposedPrice('');
     setProposedDate('');
     setProposedVehicle('');
+  };
+
+  const handleDeleteReply = (indexToDelete: number) => {
+    const updatedReplies = (requestObj.logisticsReplies || []).filter((_: any, idx: number) => idx !== indexToDelete);
+    onUpdateCargoRequest?.(requestObj.id, {
+      logisticsReplies: updatedReplies
+    });
   };
 
   const handleAcceptProposal = () => {
@@ -311,11 +554,12 @@ export default function DetailedRequestView({
     onAssignCarrier(requestObj.id, 'SupplyX Logística Consolidated', numPrice);
     onChangeRequestStatus(requestObj.id, 'Atribuído');
 
+    const messageText = '✓ PROPOSTA ACEITA E CONTRATO FIRMADO. Iniciar trâmite de transporte.';
     const newReply = {
       id: `rep-agreed-${Date.now()}`,
       sender: 'requester',
       senderName: requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente'),
-      text: '✓ PROPOSTA ACEITA E CONTRATO FIRMADO. Iniciar trâmite de transporte.',
+      text: messageText,
       timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})
     };
 
@@ -326,15 +570,17 @@ export default function DetailedRequestView({
       assignedCarrier: 'SupplyX Logística Consolidated'
     });
 
+    saveMessageToFirestoreChat(messageText);
     setSuccessModal('SupplyX Logística Consolidated');
   };
 
   const handleRejectProposal = () => {
+    const messageText = '❌ PROPOSTA REJEITADA. Solicitamos revisão dos custos ou prazos.';
     const newReply = {
       id: `rep-rejected-${Date.now()}`,
       sender: 'requester',
       senderName: requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente'),
-      text: '❌ PROPOSTA REJEITADA. Solicitamos revisão dos custos ou prazos.',
+      text: messageText,
       timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})
     };
     const updatedReplies = [...(requestObj.logisticsReplies || []), newReply];
@@ -342,6 +588,7 @@ export default function DetailedRequestView({
       logisticsReplies: updatedReplies,
       status: 'Em concurso'
     });
+    saveMessageToFirestoreChat(messageText);
   };
 
   const handleDrawSignature = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -542,19 +789,24 @@ export default function DetailedRequestView({
       )}
 
       {/* CORE INTERACTIVE SUB-NAVIGATION ACCORDION TABS */}
-      <div className="flex flex-wrap gap-2 pb-1 border-b border-white/5">
+      <div className="flex flex-nowrap overflow-x-auto gap-2 pb-2.5 border-b border-white/5 no-scrollbar select-none w-full">
         {[
           { id: 'info', label: language === 'PT' ? '📋 Detalhes Operacionais' : '📋 Spec & Telemetry' },
-          { id: 'reply', label: language === 'PT' ? '💬 Responder ao Remetente' : '💬 Respond to Requester' },
+          { 
+            id: 'reply', 
+            label: userType === 'logistics'
+              ? (language === 'PT' ? '💬 Responder ao Remetente' : '💬 Respond to Requester')
+              : (language === 'PT' ? '💬 Chat & Negociação' : '💬 Negotiation & Chat')
+          },
           { id: 'bids', label: language === 'PT' ? `💰 Concurso de Lances [${bids.length}]` : `💰 Bids Portal [${bids.length}]` },
           { id: 'occurrences', label: language === 'PT' ? `⚠️ Ocorrências Registadas [${filteredOccurrences.length}]` : `⚠️ Incidents [${filteredOccurrences.length}]` },
           { id: 'documents', label: language === 'PT' ? '📄 Documentos Digitais / PoD' : '📄 Digital Vault / PoD' },
           { id: 'review', label: language === 'PT' ? '⭐ Feedback & Avaliação' : '⭐ Post-Delivery Feedback' }
-        ].filter(tb => tb.id === 'info' || userType === 'logistics').map(tb => (
+        ].map(tb => (
           <button
             key={tb.id}
             onClick={() => setActiveTab(tb.id as any)}
-            className={`px-4 py-2.5 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all border ${
+            className={`px-4 py-2.5 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all border shrink-0 select-none whitespace-nowrap ${
               activeTab === tb.id
                 ? 'bg-supplyx-blue border-supplyx-blue text-white shadow-md'
                 : 'bg-zinc-950 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-900'
@@ -605,13 +857,24 @@ export default function DetailedRequestView({
                               : 'bg-zinc-850 border border-white/5 self-start mr-auto text-left'
                           }`}
                         >
-                          <div className="flex items-center gap-2 mb-1 justify-between">
-                            <span className="text-[8px] font-black uppercase text-zinc-400">
-                              {rep.senderName}
-                            </span>
-                            <span className="text-[7.5px] font-mono text-zinc-500">{rep.timestamp}</span>
+                          <div className="flex items-center gap-2 mb-1 justify-between w-full">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[8px] sm:text-[9px] font-black uppercase text-zinc-400">
+                                {rep.senderName}
+                              </span>
+                              <span className="text-[7.5px] sm:text-[8px] font-mono text-zinc-500">{rep.timestamp}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteReply(idx)}
+                              className="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-1 px-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1 border border-red-500/15"
+                              title={language === 'PT' ? "Eliminar mensagem" : "Delete message"}
+                            >
+                              <Trash2 className="w-3 h-3 text-red-500" />
+                              <span className="text-[8px] font-black uppercase tracking-widest text-red-500">{language === 'PT' ? 'Eliminar' : 'Delete'}</span>
+                            </button>
                           </div>
-                          <p className={`text-[11px] font-bold leading-relaxed ${isDarkMode ? 'text-white' : 'text-zinc-800'}`}>
+                          <p className={`text-[11px] font-bold leading-relaxed whitespace-pre-line text-left ${isDarkMode ? 'text-white' : 'text-zinc-800'}`}>
                             {rep.text}
                           </p>
                         </div>
@@ -735,9 +998,42 @@ export default function DetailedRequestView({
                   ) : (
                     /* CLIENT OR SUPPLIER REQUESTER INTERACTION */
                     <div className="space-y-4 pt-1">
-                      <div className="bg-[#b45309]/10 border border-[#b45309]/20 p-3 rounded-2xl text-[10.5px] font-medium leading-relaxed">
+                      <div className="bg-[#b45309]/10 border border-[#b45309]/20 p-3 rounded-2xl text-[10.5px] font-medium leading-relaxed text-amber-200">
                         ⚠️ {language === 'PT' ? 'Aguardando o aceite ou negociação dos custos com o Operador Logístico.' : 'Pending deal contract review. Apply action below.'}
                       </div>
+
+                      {/* GUIA DE RESPOSTA LOGÍSTICA */}
+                      {language === 'PT' ? (
+                        <div className="bg-zinc-950 border border-white/5 p-4 rounded-2xl space-y-2">
+                          <p className="text-[9px] font-black uppercase text-supplyx-blue tracking-widest">💡 GUIA RÁPIDO: Onde achar a resposta do Logístico?</p>
+                          <p className="text-[10px] text-zinc-400 leading-relaxed font-bold">
+                            Quando o Operador Logístico envia uma resposta ou lance, ela é exibida em dois lugares:
+                          </p>
+                          <ul className="text-[10px] text-zinc-300 space-y-1.5 list-disc pl-4">
+                            <li>
+                              <strong className="text-white">Aqui na Ficha da Carga:</strong> Veja as mensagens na seção <strong className="text-supplyx-blue">"Histórico de Mensagens / Respostas"</strong> (à esquerda) e a proposta de preço formal no painel verde abaixo.
+                            </li>
+                            <li>
+                              <strong className="text-white">Na Central de Mensagens B2B:</strong> As mensagens enviadas pelo dossiê são sincronizadas automaticamente no seu Chat Geral com o Operador Logístico caso exista um perfil cadastrado!
+                            </li>
+                          </ul>
+                        </div>
+                      ) : (
+                        <div className="bg-zinc-950 border border-white/5 p-4 rounded-2xl space-y-2">
+                          <p className="text-[9px] font-black uppercase text-supplyx-blue tracking-widest">💡 HOW TO FIND LOGISTICS RESPONSES?</p>
+                          <p className="text-[10px] text-zinc-400 leading-relaxed font-bold">
+                            When the Logistics Operator submits their response or bid, you can find it in two places:
+                          </p>
+                          <ul className="text-[10px] text-zinc-300 space-y-1.5 list-disc pl-4">
+                            <li>
+                              <strong className="text-white">Under this Freight Dossier:</strong> Check the message flow inside <strong className="text-supplyx-blue">"Message &amp; Negotiation Log"</strong> (on the left) and see their official proposed pricing inside the green pane below.
+                            </li>
+                            <li>
+                              <strong className="text-white">Inside B2B General Messages:</strong> Dossier responses are automatically mirrored into your main B2B Chat once matched!
+                            </li>
+                          </ul>
+                        </div>
+                      )}
 
                       {/* Display the latest operator proposal if available */}
                       {requestObj.status === 'Em negociação' && (
@@ -834,24 +1130,32 @@ export default function DetailedRequestView({
                 </div>
               </div>
 
-              {requestObj.assignedCarrier && (
-                <div className="mt-6 flex flex-col gap-2">
-                  <div className="p-4 bg-supplyx-blue/10 rounded-2xl border border-supplyx-blue/20 flex items-center justify-between">
-                    <div>
-                      <p className="text-[8px] font-black uppercase text-zinc-400">Transportador Consolidado:</p>
-                      <p className="text-[10px] font-black text-white italic">{requestObj.assignedCarrier}</p>
-                    </div>
-                    
-                    <button 
-                      onClick={() => onNavigateToTab('Mensagens')}
-                      className="p-2 bg-supplyx-blue text-white rounded-lg hover:brightness-110 flex items-center gap-1 text-[8px] font-black uppercase tracking-wider"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      Chat B2B
-                    </button>
+              <div className="mt-6 flex flex-col gap-2">
+                <div className="p-4 bg-supplyx-blue/10 rounded-2xl border border-supplyx-blue/20 flex items-center justify-between">
+                  <div>
+                    <p className="text-[8px] font-black uppercase text-zinc-400">
+                      {userType === 'logistics' 
+                        ? (requestObj.requester === 'Client' ? 'Cliente Relacionado:' : 'Fornecedor Relacionado:')
+                        : 'Responsável Técnico:'
+                      }
+                    </p>
+                    <p className="text-[10px] font-black text-white italic truncate max-w-[150px]">
+                      {userType === 'logistics'
+                        ? (requestObj.requester === 'Client' ? (requestObj.requesterName || 'Cliente B2B') : 'Fornecedor B2B')
+                        : (requestObj.assignedCarrier || (language === 'PT' ? 'Suporte Logístico SupplyX' : 'SupplyX Logistics Support'))
+                      }
+                    </p>
                   </div>
+                  
+                  <button 
+                    onClick={handleB2BChatNavigation}
+                    className="p-2 bg-supplyx-blue text-white rounded-lg hover:brightness-110 flex items-center gap-1 text-[8px] font-black uppercase tracking-wider transition-all active:scale-95"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Chat B2B
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Dynamic Abstract Map */}

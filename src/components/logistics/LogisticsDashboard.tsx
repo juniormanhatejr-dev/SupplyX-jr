@@ -257,7 +257,7 @@ export default function LogisticsDashboard({
       } else if (promptLower.includes('efici') || promptLower.includes('custo') || promptLower.includes('match') || promptLower.includes('optimize')) {
         reply = language === 'PT'
           ? '🤖 **RECOMENDAÇÃO INTELIGENTE DE MATCHING:**\nPara carregar 30 Toneladas de cimento paletizado, a recomendação ótima de veículo é **Scania Streamline de eixos duplos (Moz Logistics)**. Isto economizará **12.4% em consumo médio de combustível** em relação a frotas com truques comuns. O SLA de entrega é assegurado no index de 98%.'
-          : '🤖 **SMART PAIRING OPTIMIZATION SUGGESTION:**\nTo haul a payload of 30 Tons of bagged cement, the optimal matched fleet configuration is a **Scania Streamline double-axle (with driver Carlos Langa of Moz Logistics)**. This setup scores **12.4% more fuel efficient** than smaller rigs, maintaining 98% SLA score indices.';
+          : '🤖 **SMART PAIRING OPTIMIZATION SUGGESTION:**\nTo haul a payload of 30 Tons of bagged cement, the optimal matched fleet configuration is a **Scania Double-axle (with driver from registered fleet)**. This setup scores **12.4% more fuel efficient** than smaller rigs, maintaining 98% SLA score indices.';
       } else {
         reply = language === 'PT'
           ? '💡 **DICA DO SUPPLYX COPILOT:**\nExperimente me perguntar sobre: \n- *"Qual o risco de atraso no Corredor de Tete?"*\n- *"Como rebalancear meus estoques do Armazém?"*\n- *"Qual a combinação de frota mais barata para 30 Toneladas?"*'
@@ -276,8 +276,8 @@ export default function LogisticsDashboard({
       const isCoal = targetCargoType === 'Minerals/Solid';
       const score = 98;
       const optimizedCost = Math.round(targetWeight * 3100 + targetVolume * 400);
-      const suggestedTruck = isCoal ? 'Rodotrem Volvo FH 540' : 'Mercedes Actros Heavy Rigs';
-      const allocatedDriverName = isCoal ? 'Mateus Macamo' : 'Armando Nhalungo';
+      const suggestedTruck = drivers && drivers.length > 0 ? drivers[0].vehicle : (isCoal ? 'Rodotrem Volvo FH 540' : 'Scania Heavy Rig');
+      const allocatedDriverName = drivers && drivers.length > 0 ? drivers[0].name : (language === 'PT' ? 'Aguardando Cadastro de Motoristas' : 'Waiting for Driver Registration');
       
       setMatchResponse({
         score,
@@ -1240,52 +1240,55 @@ export default function LogisticsDashboard({
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {[
-                      { id: 'FL-01', plate: 'ML-99-88-MC', driver: 'Carlos Langa', vehicle: 'Volvo FH 540', consum: '32L/100km', nextOil: '12.000km', rating: 4.8, safetyScore: 97, status: 'Disponível' },
-                      { id: 'FL-02', plate: 'AP-44-11-BE', driver: 'Armando Nhalungo', vehicle: 'Scania Streamline', consum: '34L/100km', nextOil: '4.500km', rating: 4.6, safetyScore: 92, status: 'Em Rota' },
-                      { id: 'FL-03', plate: 'XZ-77-22-TT', driver: 'Mateus Macamo', vehicle: 'Mercedes Actros Heavy', consum: '38L/100km', nextOil: '1.200km', rating: 4.5, safetyScore: 89, status: 'Manutenção Preventiva' }
-                    ].map((fleetItem) => (
-                      <div key={fleetItem.id} className="p-4 rounded-2xl bg-zinc-950/40 border border-white/5 space-y-4">
-                        <div className="flex justify-between items-center pb-2 border-b border-white/[0.03]">
-                          <span className="text-[11px] font-black text-white italic">{fleetItem.vehicle}</span>
-                          <span className="text-[8.5px] font-mono text-zinc-500 font-extrabold">{fleetItem.plate}</span>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-xs">
-                            <span className="text-[8.5px] text-zinc-500 uppercase tracking-widest">Motorista</span>
-                            <span className="font-extrabold text-zinc-300">{fleetItem.driver}</span>
+                    {drivers && drivers.length > 0 ? (
+                      drivers.map((fleetItem) => (
+                        <div key={fleetItem.id} className="p-4 rounded-2xl bg-zinc-950/40 border border-white/5 space-y-4">
+                          <div className="flex justify-between items-center pb-2 border-b border-white/[0.03]">
+                            <span className="text-[11px] font-black text-white italic">{fleetItem.vehicle}</span>
+                            <span className="text-[8.5px] font-mono text-zinc-500 font-extrabold">{fleetItem.licenseId}</span>
                           </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-[8.5px] text-zinc-500 uppercase tracking-widest">Consumo Corrente</span>
-                            <span className="font-extrabold font-mono text-white">{fleetItem.consum}</span>
+
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-[8.5px] text-zinc-500 uppercase tracking-widest">Motorista</span>
+                              <span className="font-extrabold text-zinc-300">{fleetItem.name}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-[8.5px] text-zinc-500 uppercase tracking-widest">Capacidade</span>
+                              <span className="font-extrabold font-mono text-white">{fleetItem.capacity}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-[8.5px] text-zinc-550 text-zinc-500 uppercase tracking-widest">Localização</span>
+                              <span className="font-black text-emerald-400 font-mono text-[10px]">{fleetItem.location}</span>
+                            </div>
                           </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-[8.5px] text-zinc-550 text-zinc-500 uppercase tracking-widest">Score de Direção</span>
-                            <span className="font-black text-emerald-400">{fleetItem.safetyScore}/100</span>
+
+                          <div className="pt-2 border-t border-white/[0.03] flex justify-between items-center">
+                            <span className={`px-2 py-0.5 rounded text-[7.5px] font-black uppercase ${
+                              fleetItem.status === 'Disponível' || fleetItem.status === 'Available' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                              fleetItem.status === 'Em Trânsito' || fleetItem.status === 'In Transit' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/10 animate-pulse' :
+                              'bg-zinc-500/10 text-zinc-400 border border-white/5'
+                            }`}>
+                              {fleetItem.status}
+                            </span>
+
+                            <button
+                              onClick={() => {
+                                alert(language === 'PT' ? 'Ficha de Manutenção Preditiva aberta!' : 'Predictive maintenance log accessed!');
+                              }}
+                              className="px-2.5 py-1.5 rounded bg-zinc-900 border border-white/5 text-[8px] font-black uppercase text-zinc-400 hover:text-white"
+                            >
+                              ⚙ Log Manutenção
+                            </button>
                           </div>
                         </div>
-
-                        <div className="pt-2 border-t border-white/[0.03] flex justify-between items-center">
-                          <span className={`px-2 py-0.5 rounded text-[7.5px] font-black uppercase ${
-                            fleetItem.status === 'Disponível' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                            fleetItem.status === 'Em Rota' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/10 animate-pulse' :
-                            'bg-red-500/10 text-red-500 border border-red-500/10'
-                          }`}>
-                            {fleetItem.status}
-                          </span>
-
-                          <button
-                            onClick={() => {
-                              alert(language === 'PT' ? 'Ficha de Manutenção Preditiva aberta!' : 'Predictive maintenance log accessed!');
-                            }}
-                            className="px-2.5 py-1.5 rounded bg-zinc-900 border border-white/5 text-[8px] font-black uppercase text-zinc-400 hover:text-white"
-                          >
-                            ⚙ Log Manutenção
-                          </button>
-                        </div>
+                      ))
+                    ) : (
+                      <div className="md:col-span-2 p-10 text-center bg-zinc-950/20 border border-dashed border-white/5 rounded-2xl">
+                        <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Nenhuma frota ou agente logístico cadastrado por si.</p>
+                        <p className="text-[9px] text-zinc-600 uppercase mt-1">Utilize a aba de Motoristas / Frotas para se cadastrar.</p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
 

@@ -341,6 +341,132 @@ async function startServer() {
     }
   });
 
+  // AI Logistics Weight Estimation API
+  app.post('/api/logistics/estimate', async (req, res) => {
+    const { items } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'items array is required' });
+    }
+
+    try {
+      console.log(`[SERVER] Estimating weight for ${items.length} items with Gemini`);
+      const client = getGeminiClient();
+      const prompt = `
+        Você é um coordenador de logística industrial moçambicano altamente experiente.
+        Analise a lista de materiais a seguir e calcule, em toneladas mecânicas e volume em metros cúbicos (m³), o peso exato ou aproximado de cada item de acordo com suas quantidades e descrições técnicas.
+        A densidade e peso padrão dos produtos de construção comuns na África Austral e Moçambique devem ser respeitados (Ex: Cimento saco = 50kg, Brita = 1.6 t/m³, Areia = 1.5 t/m³, Bloco de 15cm = 18kg, Varão de aço de 12mm por 6m = ~5.3kg).
+
+        Lista de Itens:
+        ${JSON.stringify(items, null, 2)}
+
+        Retorne um objeto JSON que obedeça rigorosamente ao formato estruturado com estimativas numéricas de peso em toneladas e volume em metros cúbicos.
+      `;
+
+      const response = await client.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              estimatedWeightTons: { type: Type.NUMBER },
+              estimatedVolumeM3: { type: Type.NUMBER },
+              items: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    quantity: { type: Type.STRING },
+                    estimatedWeightTons: { type: Type.NUMBER },
+                    estimatedVolumeM3: { type: Type.NUMBER },
+                    explanation: { type: Type.STRING }
+                  },
+                  required: ["name", "quantity", "estimatedWeightTons", "estimatedVolumeM3", "explanation"]
+                }
+              },
+              totalExplanation: { type: Type.STRING }
+            },
+            required: ["estimatedWeightTons", "estimatedVolumeM3", "items", "totalExplanation"]
+          }
+        }
+      });
+
+      const text = response.text || '';
+      let cleaned = text.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+      }
+      const result = JSON.parse(cleaned.trim());
+      console.log(`[SERVER] Estimation result:`, result);
+      res.json(result);
+    } catch (error: any) {
+      console.warn('[SERVER] Gemini weight estimation failed, using local fallback:', error.message || error);
+      
+      // Smart Rule-based local estimation fallback
+      let totalWeight = 0;
+      let totalVolume = 0;
+      const responseItems = items.map(it => {
+        const name = it.name || '';
+        const qtyStr = String(it.quantity || '1');
+        const numQty = parseFloat(qtyStr.replace(/[^0-9.]/g, '')) || 1;
+        const nameLower = name.toLowerCase();
+
+        let itemWeight = 0.5; // default fallback 500kg
+        let itemVolume = 0.5; // default fallback 0.5m³
+        let exp = 'Estimativa de peso padrão aplicada.';
+
+        if (nameLower.includes('cimento')) {
+          // If 50kg bag is assumed
+          const bagWeightTons = 0.05; // 50kg
+          itemWeight = numQty * bagWeightTons;
+          itemVolume = numQty * 0.035; // volume of 1 bag is ~35 liters
+          exp = `${numQty} sacos de cimento de 50kg cada, totalizando ${itemWeight.toFixed(2)} toneladas.`;
+        } else if (nameLower.includes('brita') || nameLower.includes('pedra')) {
+          // Aggregate
+          itemVolume = numQty;
+          itemWeight = numQty * 1.6; // ~1.6 tons/m3
+          exp = `${numQty} m³ de brita/pedra calculada com densidade de 1.6 t/m³, resultando em ~${itemWeight.toFixed(2)} toneladas.`;
+        } else if (nameLower.includes('areia')) {
+          itemVolume = numQty;
+          itemWeight = numQty * 1.5; // ~1.5 tons/m3
+          exp = `${numQty} m³ de areia calculada com densidade de 1.5 t/m³, resultando em ~${itemWeight.toFixed(2)} toneladas.`;
+        } else if (nameLower.includes('bloco') || nameLower.includes('tijolo')) {
+          const blockWeightTons = 0.018; // 18kg per block
+          itemWeight = numQty * blockWeightTons;
+          itemVolume = numQty * 0.012; // 12 liters volume per block
+          exp = `${numQty} blocos de cimento calculados a 18kg cada, totalizando ~${itemWeight.toFixed(2)} toneladas.`;
+        } else if (nameLower.includes('ferro') || nameLower.includes('varão') || nameLower.includes('vontade') || nameLower.includes('aco')) {
+          const steelWeightTons = 0.006; // ~6kg per bar
+          itemWeight = numQty * steelWeightTons;
+          itemVolume = numQty * 0.005;
+          exp = `${numQty} varões de ferro/aço calculados a 6kg cada, totalizando ~${itemWeight.toFixed(2)} toneladas.`;
+        }
+
+        totalWeight += itemWeight;
+        totalVolume += itemVolume;
+
+        return {
+          name,
+          quantity: qtyStr,
+          estimatedWeightTons: parseFloat(itemWeight.toFixed(2)),
+          estimatedVolumeM3: parseFloat(itemVolume.toFixed(2)),
+          explanation: exp
+        };
+      });
+
+      const fallbackResult = {
+        estimatedWeightTons: parseFloat(totalWeight.toFixed(2)),
+        estimatedVolumeM3: parseFloat(totalVolume.toFixed(2)),
+        items: responseItems,
+        totalExplanation: `Cálculo automático efetuado pelo algoritmo local. Peso total estimado em ${totalWeight.toFixed(2)} toneladas e cubagem total em ${totalVolume.toFixed(2)} m³.`
+      };
+
+      res.json(fallbackResult);
+    }
+  });
+
   // API Proxy for Uploads (Bypass CORS)
   app.post('/api/upload', upload.single('file'), async (req: any, res) => {
     try {

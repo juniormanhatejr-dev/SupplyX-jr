@@ -523,6 +523,77 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     { id: '1', name: '', quantity: '1', weight: '' }
   ]);
 
+  const [isEstimatingWeight, setIsEstimatingWeight] = useState(false);
+  const [aiWeightResult, setAiWeightResult] = useState<any>(null);
+
+  const handleEstimateWeight = async () => {
+    setIsEstimatingWeight(true);
+    setAiWeightResult(null);
+
+    let itemsToEstimate: any[] = [];
+
+    if (showLogisticsSpreadsheet) {
+      itemsToEstimate = spreadsheetRows
+        .filter(r => r.name.trim() !== '')
+        .map(r => ({
+          name: r.name,
+          quantity: r.quantity
+        }));
+    } else {
+      const targetResponse = aiResponses[selectedResponseIndex] || respondingTo;
+      if (rows && rows.length > 0 && rows.some(r => r.material)) {
+        itemsToEstimate = rows
+          .filter(r => r.material && r.material.trim() !== '')
+          .map(r => ({
+            name: r.material,
+            quantity: `${r.quantity || '1'} ${r.unit || 'Unid.'}`
+          }));
+      } else if (targetResponse?.items && targetResponse.items.length > 0) {
+        itemsToEstimate = targetResponse.items.map((it: any) => ({
+          name: it.material || it.description,
+          quantity: `${it.quantity || '1'} ${it.unit || 'Unid.'}`
+        }));
+      }
+    }
+
+    if (itemsToEstimate.length === 0) {
+      itemsToEstimate = [{ name: 'Materiais Mistos', quantity: '10 lotes' }];
+    }
+
+    try {
+      const res = await fetch('/api/logistics/estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemsToEstimate })
+      });
+      if (!res.ok) throw new Error('API request failed');
+      const data = await res.json();
+      setAiWeightResult(data);
+
+      // Auto fill form weight/volume
+      if (data.estimatedWeightTons) {
+        if (showLogisticsSpreadsheet) {
+          // Fill weights inside spreadsheet rows if they match names
+          const updatedRows = spreadsheetRows.map(r => {
+            const match = data.items?.find((item: any) => item.name === r.name);
+            return match ? { ...r, weight: String(match.estimatedWeightTons) } : r;
+          });
+          setSpreadsheetRows(updatedRows);
+        } else {
+          setLogisticsFormFields(prev => ({
+            ...prev,
+            peso: String(data.estimatedWeightTons),
+            volume: String(data.estimatedVolumeM3 || prev.volume)
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('AI Estimation Error:', err);
+    } finally {
+      setIsEstimatingWeight(false);
+    }
+  };
+
   const handleAddSpreadsheetRow = () => {
     setSpreadsheetRows([
       ...spreadsheetRows,
@@ -781,6 +852,109 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
   const [rows, setRows] = useState([
     { id: Date.now(), code: 'MAT-101', material: '', quantity: '1', unit: 'Unid.', price: '0', discCmr: '0', discFnc: '0', vat: '16', vatIncluded: true, subtotal: '0', date: new Date().toISOString().split('T')[0] }
+  ]);
+
+  // Automatic Weight and Volume Estimation Effect
+  useEffect(() => {
+    // Only estimate if either modal is visible
+    if (!showLogisticsReqForm && !showLogisticsSpreadsheet) {
+      return;
+    }
+
+    // Determine the items to estimate for this modal state
+    let itemsToEstimate: any[] = [];
+    if (showLogisticsSpreadsheet) {
+      itemsToEstimate = spreadsheetRows
+        .filter(r => r.name.trim() !== '')
+        .map(r => ({
+          name: r.name,
+          quantity: r.quantity
+        }));
+    } else {
+      const targetResponse = aiResponses[selectedResponseIndex] || respondingTo;
+      if (rows && rows.length > 0 && rows.some(r => r.material)) {
+        itemsToEstimate = rows
+          .filter(r => r.material && r.material.trim() !== '')
+          .map(r => ({
+            name: r.material,
+            quantity: `${r.quantity || '1'} ${r.unit || 'Unid.'}`
+          }));
+      } else if (targetResponse?.items && targetResponse.items.length > 0) {
+        itemsToEstimate = targetResponse.items.map((it: any) => ({
+          name: it.material || it.description,
+          quantity: `${it.quantity || '1'} ${it.unit || 'Unid.'}`
+        }));
+      }
+    }
+
+    if (itemsToEstimate.length === 0) {
+      return;
+    }
+
+    // Set up a debounce timer to avoid flooding requests during typing
+    const timer = setTimeout(() => {
+      // Create a local function that calls the API without using or infinite-looping on the states
+      const runAutoEstimation = async () => {
+        setIsEstimatingWeight(true);
+        try {
+          const res = await fetch('/api/logistics/estimate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: itemsToEstimate })
+          });
+          if (!res.ok) throw new Error('API request failed');
+          const data = await res.json();
+          setAiWeightResult(data);
+
+          // Auto fill form weight/volume
+          if (data.estimatedWeightTons) {
+            if (showLogisticsSpreadsheet) {
+              setSpreadsheetRows(prevRows => {
+                // Ensure we only update weights that have changed or are empty to prevent recursive triggers
+                let hasChanged = false;
+                const updated = prevRows.map(r => {
+                  const match = data.items?.find((item: any) => item.name === r.name);
+                  if (match && String(match.estimatedWeightTons) !== r.weight) {
+                    hasChanged = true;
+                    return { ...r, weight: String(match.estimatedWeightTons) };
+                  }
+                  return r;
+                });
+                return hasChanged ? updated : prevRows;
+              });
+            } else {
+              setLogisticsFormFields(prev => {
+                if (prev.peso !== String(data.estimatedWeightTons) || prev.volume !== String(data.estimatedVolumeM3 || prev.volume)) {
+                  return {
+                    ...prev,
+                    peso: String(data.estimatedWeightTons),
+                    volume: String(data.estimatedVolumeM3 || prev.volume)
+                  };
+                }
+                return prev;
+              });
+            }
+          }
+        } catch (err) {
+          console.error('Auto AI Estimation Error:', err);
+        } finally {
+          setIsEstimatingWeight(false);
+        }
+      };
+
+      runAutoEstimation();
+    }, 1000); // 1 second debounce delay
+
+    return () => clearTimeout(timer);
+  }, [
+    showLogisticsReqForm,
+    showLogisticsSpreadsheet,
+    // Serialize spreadsheet row names & quantities to run when items actually change (and avoid weight changes looping back)
+    JSON.stringify(spreadsheetRows.map(r => ({ name: r.name, q: r.quantity }))),
+    // Serialize quote items to run when the active quote changes
+    JSON.stringify(((aiResponses[selectedResponseIndex] || respondingTo)?.items || []).map((it: any) => ({ m: it.material || it.description, q: it.quantity }))),
+    // Serialize input table row materials & quantities
+    JSON.stringify(rows.map(r => ({ m: r.material, q: r.quantity })))
   ]);
 
   const filteredSuppliers = useMemo(() => {
@@ -2274,6 +2448,25 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                       + {language === 'PT' ? 'Adicionar Material' : 'Add Material'}
                                     </button>
                                   </div>
+
+                                  {/* AI helper for Spreadsheet weights */}
+                                  <div className="flex justify-between items-center p-3 rounded-2xl bg-[#0052CC]/5 border border-[#0052CC]/10 mt-3 text-left">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[14px]">🤖</span>
+                                      <div>
+                                        <p className="text-[9px] font-black uppercase text-[#0052CC]">Estimativa Inteligente de Peso</p>
+                                        <p className="text-[8px] text-zinc-500 font-bold uppercase leading-none">Calculado automaticamente via IA enquanto você digita</p>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      disabled={isEstimatingWeight || spreadsheetRows.filter(r => r.name.trim() !== '').length === 0}
+                                      onClick={handleEstimateWeight}
+                                      className="px-4 py-2 bg-[#0052CC] text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:brightness-110 disabled:opacity-50 transition-all font-sans"
+                                    >
+                                      {isEstimatingWeight ? 'Estimando...' : '✦ Calcular Agora'}
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
 
@@ -2381,6 +2574,28 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                   </div>
                                 </div>
 
+                                {/* Relação de Itens e Quantidades */}
+                                <div className="p-4 rounded-xl bg-zinc-950/40 border border-white/5 space-y-2">
+                                  <label className="text-[8px] font-black uppercase text-zinc-400 tracking-wider block">Itens da Carga e Quantidades</label>
+                                  <div className="flex flex-wrap gap-2">
+                                    {(aiResponses[selectedResponseIndex] || respondingTo)?.items?.length > 0 ? (
+                                      (aiResponses[selectedResponseIndex] || respondingTo).items.map((it: any, idx: number) => (
+                                        <span key={idx} className="bg-[#0052CC]/10 text-[#0052CC] text-[10px] font-black px-2.5 py-1.5 rounded-lg border border-[#0052CC]/15">
+                                          📦 {it.material || it.description || 'Produto'} ({it.quantity || '1'} {it.unit || 'Unid.'})
+                                        </span>
+                                      ))
+                                    ) : rows.filter(r => r.material).length > 0 ? (
+                                      rows.filter(r => r.material).map((it: any, idx: number) => (
+                                        <span key={idx} className="bg-[#0052CC]/10 text-[#0052CC] text-[10px] font-black px-2.5 py-1.5 rounded-lg border border-[#0052CC]/15">
+                                          📦 {it.material} ({it.quantity || '1'} {it.unit || 'Unid.'})
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="text-[10px] text-zinc-500 font-bold uppercase">Nenhum item detectado</span>
+                                    )}
+                                  </div>
+                                </div>
+
                                 {/* Row 2: Tipo de Carga, Peso, Volume */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                   <div>
@@ -2416,6 +2631,45 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                       }`}
                                     />
                                   </div>
+
+                                  {/* AI Weight & Volume Calculator trigger */}
+                                  <div className="md:col-span-3 flex justify-between items-center p-3 rounded-2xl bg-[#0052CC]/5 border border-[#0052CC]/10 mt-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[14px]">🤖</span>
+                                      <div className="text-left">
+                                        <p className="text-[9px] font-black uppercase text-[#0052CC]">Estimador de Cubagem & Peso por IA</p>
+                                        <p className="text-[8px] text-zinc-500 font-bold uppercase leading-none">Calcular com base na inteligência artificial do SupplyX</p>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      disabled={isEstimatingWeight}
+                                      onClick={handleEstimateWeight}
+                                      className="px-4 py-2 bg-[#0052CC] text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:brightness-110 disabled:opacity-50 transition-all flex items-center gap-1.5"
+                                    >
+                                      {isEstimatingWeight ? (
+                                        <>Calculando...</>
+                                      ) : (
+                                        <>✦ Calcular com IA</>
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  {/* AI Breakdown */}
+                                  {aiWeightResult && (
+                                    <div className="md:col-span-3 p-4 bg-zinc-950/40 rounded-xl border border-white/5 space-y-2 text-left">
+                                      <p className="text-[8px] font-black uppercase tracking-wider text-emerald-400">Detalhamento Técnico Estimado</p>
+                                      <div className="flex flex-col gap-1">
+                                        {aiWeightResult.items?.map((item: any, idx: number) => (
+                                          <div key={idx} className="flex justify-between items-center text-[10px] py-1 border-b border-white/[0.02]">
+                                            <span className="font-bold text-zinc-300">{item.name} ({item.quantity})</span>
+                                            <span className="font-mono font-black text-white">{item.estimatedWeightTons} T / {item.estimatedVolumeM3} m³</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <p className="text-[9px] text-zinc-400 italic mt-1 leading-relaxed">{aiWeightResult.totalExplanation}</p>
+                                    </div>
+                                  )}
                                 </div>
 
                                 {/* Row 3: Prioridade, Data Desejada, Veículo */}

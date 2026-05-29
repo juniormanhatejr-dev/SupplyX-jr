@@ -158,6 +158,22 @@
         "status": { "type": "string" }
       },
       "required": ["id", "tipoCarga", "quantidade", "origem", "destino", "status"]
+    },
+    "Occurrence": {
+      "title": "Occurrence / Incident",
+      "description": "Logistics occurrences and incidents.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "cargoId": { "type": "string" },
+        "cargoName": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "dateTime": { "type": "string" },
+        "responsible": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "cargoId", "cargoName", "description", "category", "dateTime", "responsible", "status"]
     }
   },
   "firestore": {
@@ -200,6 +216,10 @@
     "freight_orders/{orderId}": {
       "schema": "FreightOrder",
       "description": "Freight logistics and cargo orders."
+    },
+    "occurrences/{occurrenceId}": {
+      "schema": "Occurrence",
+      "description": "Cargo delivery logs and incidents/occurrences."
     }
   }
 }

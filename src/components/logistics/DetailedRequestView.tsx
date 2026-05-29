@@ -134,6 +134,173 @@ export default function DetailedRequestView({
     } as CargoRequest;
   }, [selectedRequestId, requests]);
 
+  // Real-Time GPS and Telemetry Calculations
+  const isAssigned = useMemo(() => {
+    return ['Atribuído', 'Em recolha', 'Em trânsito', 'Entregue'].includes(requestObj.status);
+  }, [requestObj.status]);
+
+  const progressValue = useMemo(() => {
+    if (requestObj.trackProgress !== undefined) return requestObj.trackProgress;
+    if (requestObj.status === 'Atribuído') return 0;
+    if (requestObj.status === 'Em recolha') return 15;
+    if (requestObj.status === 'Em trânsito') return 55;
+    if (requestObj.status === 'Entregue') return 100;
+    return 0;
+  }, [requestObj.trackProgress, requestObj.status]);
+
+  const speedValue = useMemo(() => {
+    if (requestObj.trackSpeed !== undefined) return requestObj.trackSpeed;
+    return requestObj.status === 'Em trânsito' ? 74 : 0;
+  }, [requestObj.trackSpeed, requestObj.status]);
+
+  const tempValue = useMemo(() => {
+    if (requestObj.trackTemp !== undefined) return requestObj.trackTemp;
+    if (requestObj.status === 'Em trânsito') return 12;
+    if (requestObj.status === 'Em recolha') return 17;
+    return 24;
+  }, [requestObj.trackTemp, requestObj.status]);
+
+  const fuelValue = useMemo(() => {
+    if (requestObj.trackFuel !== undefined) return requestObj.trackFuel;
+    if (requestObj.status === 'Atribuído') return 100;
+    if (requestObj.status === 'Em recolha') return 95;
+    if (requestObj.status === 'Em trânsito') return 68;
+    if (requestObj.status === 'Entregue') return 22;
+    return 100;
+  }, [requestObj.trackFuel, requestObj.status]);
+
+  const statusTextValue = useMemo(() => {
+    if (requestObj.trackStatusText) return requestObj.trackStatusText;
+    if (requestObj.status === 'Atribuído') return 'Veículo contratado. Aguardando posicionamento no despachante.';
+    if (requestObj.status === 'Em recolha') return 'Carregamento do material iniciado e conferência fiscal da carga.';
+    if (requestObj.status === 'Em trânsito') return 'Motorista em rota de viagem ativa pela EN1 sentido Norte.';
+    if (requestObj.status === 'Entregue') return 'Carga entregue ao destino. Termo de recebimento assinado digitalmente.';
+    return 'Aguardando início do trâmite de transporte.';
+  }, [requestObj.trackStatusText, requestObj.status]);
+
+  const assignedDriver = useMemo(() => {
+    if (requestObj.driverName) {
+      const match = drivers.find(d => d.name === requestObj.driverName);
+      if (match) return match;
+    }
+    return drivers[0] || {
+      id: 'PENDING',
+      name: language === 'PT' ? 'Sem Motorista Atribuído' : 'No Driver Assigned',
+      licenseId: 'N/A',
+      vehicle: language === 'PT' ? 'Camião Pendente' : 'Truck Pending Selection',
+      capacity: '0 Toneladas',
+      location: '-',
+      status: 'Pendente',
+      rating: 5.0,
+      trips: 0
+    };
+  }, [requestObj.driverName, drivers, language]);
+
+  const getTruckCoords = (progress: number) => {
+    const t = progress / 100;
+    const ax = 152;
+    const ay = 262;
+    const bx = 260;
+    const by = 160;
+    const cx = 385;
+    const cy = 110;
+
+    // Bézier quadratic equation: (1-t)^2 * A + 2*(1-t)*t * B + t^2 * C
+    const tx = (1 - t) * (1 - t) * ax + 2 * (1 - t) * t * bx + t * t * cx;
+    const ty = (1 - t) * (1 - t) * ay + 2 * (1 - t) * t * by + t * t * cy;
+    return { tx, ty };
+  };
+
+  const { tx, ty } = useMemo(() => {
+    return getTruckCoords(progressValue);
+  }, [progressValue]);
+
+  const handleSimulateAdvance = async () => {
+    const nextProg = Math.min(progressValue + 15, 100);
+    const nextSpeed = nextProg === 100 ? 0 : 65 + Math.floor(Math.random() * 20);
+    const nextTemp = nextProg === 100 ? 22 : 10 + Math.floor(Math.random() * 5);
+    const nextFuel = Math.max(fuelValue - Math.floor(5 + Math.random() * 5), 10);
+    
+    let nextStatusText = `Motorista avançou na rodovia EN1. Progresso atual do trajeto: ${nextProg}%.`;
+    if (nextProg === 100) {
+      nextStatusText = 'Entrega efetuada com sucesso no pátio do parceiro em Nampula!';
+    }
+
+    if (onUpdateCargoRequest) {
+      onUpdateCargoRequest(requestObj.id, {
+        status: nextProg === 100 ? 'Entregue' : (requestObj.status === 'Atribuído' ? 'Em recolha' : requestObj.status),
+        trackProgress: nextProg,
+        trackSpeed: nextSpeed,
+        trackTemp: nextTemp,
+        trackFuel: nextFuel,
+        trackStatusText: nextStatusText
+      });
+    }
+
+    // Register active occurrence event
+    const occId = `OC-${Math.floor(1000 + Math.random() * 9000)}`;
+    const now = new Date();
+    const formattedDate = `${now.getDate()} ${now.toLocaleString('pt-BR', { month: 'short' })} ${now.getFullYear()} ${now.getHours()}:${now.getMinutes()}`;
+    const newOccInstance = {
+      id: occId,
+      cargoId: requestObj.id,
+      cargoName: requestObj.tipoCarga,
+      description: `GPS Telemetry Update: Posição avançada. Trajeto: ${nextProg}%. Velocidade atual: ${nextSpeed}km/h. combustível: ${nextFuel}%.`,
+      category: 'Outros incidentes',
+      dateTime: formattedDate,
+      responsible: assignedDriver.name,
+      status: 'Resolvida'
+    };
+    onAddOccurrence?.(newOccInstance);
+  };
+
+  const handleSimulateDriverAlert = (alertType: string) => {
+    let desc = '';
+    let category = 'Outros incidentes';
+    let label = '';
+    
+    if (alertType === 'pesagem') {
+      desc = 'Posto de pesagem e segurança de balança vencidos. Tudo homologado conforme manifesto.';
+      category = 'Outros incidentes';
+      label = 'Pesagem OK';
+    } else if (alertType === 'chuva') {
+      desc = 'Aviso de tempestade severa e baixa visibilidade na EN1. Velocidade preventiva reduzida para 52km/h.';
+      category = 'Atrasos';
+      label = 'Chuva Forte';
+    } else if (alertType === 'parada') {
+      desc = 'Parada estratégica curta no auto-serviço Galp para calibrar pneus e hidratação do condutor.';
+      category = 'Outros incidentes';
+      label = 'Parada Técnica';
+    } else if (alertType === 'anomalia') {
+      desc = 'Aviso de vibração de baixo nível sob chassi suspensão pneumática. Ajustes manuais efetuados.';
+      category = 'Atrasos';
+      label = 'Reparo Curto';
+    }
+
+    if (onUpdateCargoRequest) {
+      onUpdateCargoRequest(requestObj.id, {
+        trackStatusText: `[Alerta ${label}] - ${desc}`,
+        trackSpeed: alertType === 'parada' || alertType === 'anomalia' ? 0 : 52,
+        trackTemp: alertType === 'anomalia' ? 18 : tempValue
+      });
+    }
+
+    const occId = `OC-${Math.floor(1000 + Math.random() * 9000)}`;
+    const now = new Date();
+    const formattedDate = `${now.getDate()} ${now.toLocaleString('pt-BR', { month: 'short' })} ${now.getFullYear()} ${now.getHours()}:${now.getMinutes()}`;
+    const newOccInstance = {
+      id: occId,
+      cargoId: requestObj.id,
+      cargoName: requestObj.tipoCarga,
+      description: `[Simulação Motorista] ${desc}`,
+      category: category,
+      dateTime: formattedDate,
+      responsible: assignedDriver.name,
+      status: 'Aberta'
+    };
+    onAddOccurrence?.(newOccInstance);
+  };
+
   // Stepper timeline - aligned strictly with the requested 7 states
   // We exclude 'Cancelado' because it is a terminal abort state.
   const stepperStates = [
@@ -847,7 +1014,6 @@ export default function DetailedRequestView({
               ? (language === 'PT' ? '💬 Responder ao Remetente' : '💬 Respond to Requester')
               : (language === 'PT' ? '💬 Chat & Negociação' : '💬 Negotiation & Chat')
           },
-          { id: 'bids', label: language === 'PT' ? `💰 Concurso de Lances [${bids.length}]` : `💰 Bids Portal [${bids.length}]` },
           { id: 'occurrences', label: language === 'PT' ? `⚠️ Ocorrências Registadas [${filteredOccurrences.length}]` : `⚠️ Incidents [${filteredOccurrences.length}]` },
           { id: 'documents', label: language === 'PT' ? '📄 Documentos Digitais / PoD' : '📄 Digital Vault / PoD' },
           { id: 'review', label: language === 'PT' ? '⭐ Feedback & Avaliação' : '⭐ Post-Delivery Feedback' }
@@ -1207,58 +1373,306 @@ export default function DetailedRequestView({
               </div>
             </div>
 
-            {/* Dynamic Abstract Map */}
-            <div className={`lg:col-span-2 rounded-[36px] border p-6 flex flex-col justify-between relative overflow-hidden h-[400px] lg:h-auto min-h-[380px] ${
-              isDarkMode ? 'bg-zinc-950 border-white/5 shadow-2xl' : 'bg-zinc-50 border-zinc-200'
-            }`}>
-              <div className="absolute top-6 left-6 z-10 flex flex-col">
-                <p className="text-[8px] font-black uppercase text-supplyx-blue tracking-[0.3em] mb-1">Gps Telemetry Satellite v7.2</p>
-                <p className="text-sm font-black italic uppercase tracking-tighter text-white">Routetrack Maputo ➔ Nampula Corridor</p>
-              </div>
-
-              {/* Map Vector Graphic */}
-              <div className="w-full h-full flex items-center justify-center pt-8">
-                <motion.div 
-                  style={{ scale: mapZoom }} 
-                  transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-                  className="w-full h-full max-w-lg max-h-[260px] relative mt-12"
-                >
-                  <svg viewBox="0 0 500 320" className="w-full h-full text-zinc-800" fill="none" stroke="currentColor">
-                    <path d="M 120 290 C 130 250, 180 230, 210 190 C 240 150, 270 120, 310 80 C 350 40, 420 50, 460 30" stroke="rgba(255,255,255,0.03)" strokeWidth="8" />
-                    <path d="M 152 262 Q 260 160, 385 110" stroke="#3b82f6" strokeWidth="3" strokeDasharray="8 6" id="target-route" />
-                    <motion.circle cx="152" cy="262" r="5" fill="#10b981" className="animate-pulse" />
-                    <motion.circle cx="385" cy="110" r="6" fill="#ef4444" />
-                  </svg>
-
-                  <div className="absolute top-[210px] left-[130px] flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20" />
-                    <span className="text-[9px] font-black text-emerald-400 bg-zinc-950 border border-emerald-500/20 px-2.5 py-1 rounded-md shadow-lg">
-                      Maputo SUL
-                    </span>
+            {/* Dynamic Abstract Map or Full Telemetry Monitoring Cockpit */}
+            {isAssigned ? (
+              <div className="lg:col-span-2 space-y-6">
+                
+                {/* Advanced Map Terminal with interpolations */}
+                <div className={`rounded-[36px] border p-6 flex flex-col justify-between relative overflow-hidden min-h-[380px] ${
+                  isDarkMode ? 'bg-zinc-950 border-white/5 shadow-2xl' : 'bg-zinc-50 border-zinc-200'
+                }`}>
+                  <div className="absolute top-6 left-6 z-10 flex flex-col max-w-[90%] pointer-events-none">
+                    <div className="flex items-center gap-2">
+                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
+                       <p className="text-[8px] font-black uppercase text-emerald-400 tracking-[0.3em] font-mono">Radar Satélite SupplyX v9.8 Ativo</p>
+                    </div>
+                    <p className="text-sm font-black italic uppercase tracking-tighter text-white leading-tight">
+                      {language === 'PT' ? 'Rastreamento de Rota em Tempo Real' : 'Real-time Route Tracking & Coordinates'}
+                    </p>
+                    {/* Live Shared connection indicators for Client, Supplier and Logistics */}
+                    <div className="flex flex-wrap gap-1.5 mt-2 select-none">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[7px] font-black uppercase text-emerald-400 font-mono">
+                        <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                        {language === 'PT' ? 'Cliente: Online' : 'Client: Connected'}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[7px] font-black uppercase text-emerald-400 font-mono">
+                        <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                        {language === 'PT' ? 'Fornecedor: Online' : 'Supplier: Connected'}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[7px] font-black uppercase text-emerald-400 font-mono">
+                        <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                        {language === 'PT' ? 'Operador: Assistindo' : 'Carrier: Syncing'}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="absolute top-[88px] left-[340px] flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-red-400 ring-4 ring-red-400/20" />
-                    <span className="text-[9px] font-black text-red-400 bg-zinc-950 border border-red-500/20 px-2.5 py-1 rounded-md shadow-lg">
-                      Nampula NORT
-                    </span>
-                  </div>
-                </motion.div>
-              </div>
+                  {/* Bezier Route Map Graphic */}
+                  <div className="w-full h-full flex items-center justify-center pt-10">
+                    <motion.div 
+                      style={{ scale: mapZoom }} 
+                      transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+                      className="w-full h-full max-w-lg max-h-[260px] relative mt-12"
+                    >
+                      <svg viewBox="0 0 500 320" className="w-full h-full text-zinc-800" fill="none" stroke="currentColor">
+                        <path d="M 120 290 C 130 250, 180 230, 210 190 C 240 150, 270 120, 310 80 C 350 40, 420 50, 460 30" stroke="rgba(255,255,255,0.03)" strokeWidth="8" />
+                        <path d="M 152 262 Q 260 160, 385 110" stroke="#3b82f6" strokeWidth="3" strokeDasharray="8 6" id="target-route" />
+                        
+                        {/* Map Points */}
+                        <motion.circle cx="152" cy="262" r="5" fill="#10b981" />
+                        <motion.circle cx="385" cy="110" r="6" fill="#ef4444" />
 
-              <div className="flex justify-between items-center text-[9px] font-black text-zinc-500 uppercase mt-4">
-                <span>Servidor Central Mozambique C-Link: Estável</span>
-                <div className="flex gap-2">
-                  <button onClick={() => setMapZoom(prev => Math.min(prev + 0.2, 1.8))} className="px-2 py-0.5 bg-zinc-900 border border-white/5 rounded text-[8px] hover:text-white">Zoom +</button>
-                  <button onClick={() => setMapZoom(1)} className="px-2 py-0.5 bg-zinc-900 border border-white/5 rounded text-[8px] hover:text-white">Reset</button>
+                        {/* Moving Truck Icon along the Bezier curve */}
+                        <g transform={`translate(${tx - 12}, ${ty - 12})`}>
+                          <circle cx="12" cy="12" r="14" fill="none" stroke="#3b82f6" strokeWidth="1.5" className="animate-ping origin-center" />
+                          <circle cx="12" cy="12" r="10" className="fill-supplyx-blue stroke-blue-300 stroke-2" />
+                          <path 
+                            d="M6 15c0 .55.45 1 1 1h1c0 .55.45 1 1 1s1-.45 1-1h4c0 .55.45 1 1 1s1-.45 1-1h1c.55 0 1-.45 1-1h1v-3.5l-2-2.5h-2.5V8c0-.55-.45-1-1-1H7c-.55 0-1 .45-1 1v7zm4-2c0-.55.45-1 1-1s1 .45 1 1-.45 1-1 1-1-.45-1-1zm6 0c0-.55.45-1 1-1s1 .45 1 1-.45 1-1 1-1-.45-1-1z" 
+                            fill="white" 
+                            transform="scale(0.8) translate(3, 3)" 
+                          />
+                        </g>
+                      </svg>
+
+                      {/* Map Badges */}
+                      <div className="absolute top-[210px] left-[130px] flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20" />
+                        <span className="text-[9px] font-black text-emerald-400 bg-zinc-950 border border-emerald-500/20 px-2.5 py-1 rounded-md shadow-lg font-mono">
+                          {requestObj.origem.split(',')[0]} (SUL)
+                        </span>
+                      </div>
+
+                      <div className="absolute top-[88px] left-[340px] flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-red-400 ring-4 ring-red-400/20" />
+                        <span className="text-[9px] font-black text-red-400 bg-zinc-950 border border-red-500/20 px-2.5 py-1 rounded-md shadow-lg font-mono">
+                          {requestObj.destino.split(',')[0]} (NORTE)
+                        </span>
+                      </div>
+
+                      {/* Floating GPS coords indicator */}
+                      <div className="absolute top-[140px] left-[150px] bg-zinc-950/90 border border-white/5 p-2 rounded-xl flex items-center gap-2 shadow-xl shrink-0 select-none pointer-events-none">
+                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                        <span className="text-[8px] font-black text-blue-300 uppercase font-mono tracking-wider">
+                          LAT: {( -25.9573 + (progressValue * (10.1583 / 100)) ).toFixed(4)} / LNG: {(32.5831 + (progressValue * (6.6710 / 100)) ).toFixed(4)}
+                        </span>
+                      </div>
+                    </motion.div>
+                  </div>
+
+                  <div className="flex justify-between items-center text-[9px] font-black text-zinc-500 uppercase mt-4">
+                    <span>
+                      {language === 'PT' 
+                        ? `Progresso da Viagem: ${progressValue}% (${(950 - (progressValue * 9.5)).toFixed(0)} km restantes)` 
+                        : `Transit Journey: ${progressValue}% (${(950 - (progressValue * 9.5)).toFixed(0)} km remaining)`
+                      }
+                    </span>
+                    <div className="flex gap-2">
+                      <button onClick={() => setMapZoom(prev => Math.min(prev + 0.2, 1.8))} className="px-2 py-0.5 bg-zinc-900 border border-white/5 rounded text-[8px] hover:text-white">Zoom +</button>
+                      <button onClick={() => setMapZoom(1)} className="px-2 py-0.5 bg-zinc-900 border border-white/5 rounded text-[8px] hover:text-white">Reset</button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dashboard stats panel  */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* Gauges panel */}
+                  <div className={`p-6 rounded-[32px] border ${isDarkMode ? 'bg-zinc-900/50 border-white/5 shadow-2xl' : 'bg-white border-zinc-100'}`}>
+                    <h4 className="text-[10px] font-black uppercase text-zinc-400 tracking-widest mb-4 flex items-center gap-1.5 font-mono">
+                      <Activity className="w-3.5 h-3.5 text-supplyx-blue" />
+                      {language === 'PT' ? 'Métricas de Telemetria de Cabine' : 'Sensory Cabin Telemetry'}
+                    </h4>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      
+                      {/* Speedometer */}
+                      <div className="p-3 bg-zinc-950 border border-white/5 rounded-2xl flex flex-col items-center justify-center text-center">
+                        <span className="text-[7.5px] font-bold text-zinc-500 uppercase block leading-none mb-1">Velocidade</span>
+                        <div className="font-black font-mono text-zinc-200 text-sm leading-none">
+                          {speedValue} <span className="text-[8px] text-zinc-500">km/h</span>
+                        </div>
+                        <div className="w-full bg-zinc-900 h-1 rounded-full overflow-hidden mt-2">
+                          <div 
+                            className={`h-full transition-all duration-500 ${speedValue === 0 ? 'bg-zinc-700' : speedValue > 80 ? 'bg-red-500' : 'bg-emerald-500'}`} 
+                            style={{ width: `${Math.min((speedValue / 110) * 100, 100)}%` }} 
+                          />
+                        </div>
+                      </div>
+
+                      {/* Temperature Sensor */}
+                      <div className="p-3 bg-zinc-950 border border-white/5 rounded-2xl flex flex-col items-center justify-center text-center">
+                        <span className="text-[7.5px] font-bold text-zinc-500 uppercase block leading-none mb-1">Temperatura</span>
+                        <div className="font-black font-mono text-zinc-200 text-sm leading-none">
+                          {tempValue} <span className="text-[8px] text-zinc-500">°C</span>
+                        </div>
+                        <div className="w-full bg-zinc-900 h-1 rounded-full overflow-hidden mt-2">
+                          <div 
+                            className={`h-full transition-all duration-500 ${tempValue > 18 ? 'bg-amber-500 animate-pulse' : 'bg-sky-500'}`} 
+                            style={{ width: `${Math.min((tempValue / 40) * 100, 100)}%` }} 
+                          />
+                        </div>
+                      </div>
+
+                      {/* Gas meter */}
+                      <div className="p-3 bg-zinc-950 border border-white/5 rounded-2xl flex flex-col items-center justify-center text-center">
+                        <span className="text-[7.5px] font-bold text-zinc-500 uppercase block leading-none mb-1">Combustível</span>
+                        <div className="font-black font-mono text-zinc-200 text-sm leading-none">
+                          {fuelValue} <span className="text-[8px] text-zinc-500">%</span>
+                        </div>
+                        <div className="w-full bg-zinc-900 h-1 rounded-full overflow-hidden mt-2">
+                          <div 
+                            className={`h-full transition-all duration-500 ${fuelValue < 20 ? 'bg-red-500 animate-pulse' : 'bg-blue-500'}`} 
+                            style={{ width: `${fuelValue}%` }} 
+                          />
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* General bulletins status text */}
+                    <div className="mt-4 p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-left">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[7.5px] font-bold text-zinc-500 uppercase tracking-widest font-mono">Boletim de Rota Recebido</span>
+                      </div>
+                      <p className="text-[10px] text-zinc-300 font-bold italic leading-relaxed font-mono">
+                        "{statusTextValue}"
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Operational Controls and Driver Details */}
+                  <div className={`p-6 rounded-[32px] border ${isDarkMode ? 'bg-zinc-900/50 border-white/5 shadow-2xl' : 'bg-white border-zinc-100'}`}>
+                    <div className="flex justify-between items-center mb-4 pb-1 border-b border-white/5">
+                      <h4 className="text-[10px] font-black uppercase text-zinc-400 tracking-widest flex items-center gap-1.5 font-mono">
+                        <User className="w-3.5 h-3.5 text-supplyx-blue" />
+                        {language === 'PT' ? 'Ficha de Tripulação & Controles' : 'Driver Card & Controller'}
+                      </h4>
+                      <span className="text-[8px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded uppercase">
+                        ATUANDO
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3 mb-4 text-left">
+                      <div className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 font-black shrink-0 text-xs">
+                        {assignedDriver.name.split(' ').map((n: string) => n[0]).join('')}
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-black text-white uppercase tracking-wider">{assignedDriver.name}</p>
+                        <p className="text-[8px] font-bold text-zinc-500 uppercase">
+                          {assignedDriver.vehicle} • Placa: {assignedDriver.licenseId}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className="flex items-center gap-0.5">
+                            <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
+                            <span className="text-[9px] font-black text-zinc-300 font-mono">{assignedDriver.rating}</span>
+                          </div>
+                          <span className="text-[8px] text-zinc-500 font-bold">• {assignedDriver.trips || 120} viagens</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Operational controls */}
+                    <div className="space-y-2 text-left">
+                      <button 
+                        onClick={handleSimulateAdvance}
+                        type="button"
+                        className="w-full py-2 px-3 bg-supplyx-blue hover:brightness-110 active:scale-95 text-white/90 text-[8px] font-black uppercase tracking-widest rounded-lg font-mono transition-all flex items-center justify-center gap-1.5"
+                      >
+                        🧭 {language === 'PT' ? 'Atualizar Localização Satélite (+15% Avanço)' : 'Simulate 15% Travel Progress'}
+                      </button>
+
+                      <div className="p-2 bg-zinc-950 border border-zinc-900 rounded-lg">
+                        <p className="text-[7px] font-black text-zinc-500 uppercase tracking-widest mb-1.5 text-left leading-none font-mono">Notificações e Eventos em Tempo Real (Simular Condutor)</p>
+                        <div className="grid grid-cols-2 gap-1 px-0.5">
+                          <button 
+                            onClick={() => handleSimulateDriverAlert('pesagem')} 
+                            type="button"
+                            className="p-1 px-1.5 bg-zinc-900 hover:bg-zinc-800 hover:text-white border border-white/5 rounded text-[7.5px] font-bold uppercase transition-all whitespace-nowrap text-left font-mono"
+                          >
+                            ⚖️ Balança OK
+                          </button>
+                          <button 
+                            onClick={() => handleSimulateDriverAlert('chuva')} 
+                            type="button"
+                            className="p-1 px-1.5 bg-zinc-900 hover:bg-zinc-800 hover:text-white border border-white/5 rounded text-[7.5px] font-bold uppercase transition-all whitespace-nowrap text-left font-mono"
+                          >
+                            🌧️ Alerta Clima
+                          </button>
+                          <button 
+                            onClick={() => handleSimulateDriverAlert('parada')} 
+                            type="button"
+                            className="p-1 px-1.5 bg-zinc-900 hover:bg-zinc-800 hover:text-white border border-white/5 rounded text-[7.5px] font-bold uppercase transition-all whitespace-nowrap text-left font-mono"
+                          >
+                            ⛽ Abastecer
+                          </button>
+                          <button 
+                            onClick={() => handleSimulateDriverAlert('anomalia')} 
+                            type="button"
+                            className="p-1 px-1.5 bg-red-950/30 hover:bg-red-900 hover:text-red-100 border border-red-900/35 rounded text-[7.5px] font-extrabold text-red-400 uppercase transition-all whitespace-nowrap text-left font-mono"
+                          >
+                            ⚠️ Alerta Mecânica
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+            ) : (
+              <div className={`lg:col-span-2 rounded-[36px] border p-6 flex flex-col justify-between relative overflow-hidden h-[400px] lg:h-auto min-h-[380px] ${
+                isDarkMode ? 'bg-zinc-950 border-white/5 shadow-2xl' : 'bg-zinc-50 border-zinc-200'
+              }`}>
+                <div className="absolute top-6 left-6 z-10 flex flex-col">
+                  <p className="text-[8px] font-black uppercase text-supplyx-blue tracking-[0.3em] mb-1">Gps Telemetry Satellite v7.2</p>
+                  <p className="text-sm font-black italic uppercase tracking-tighter text-white">Routetrack Maputo ➔ Nampula Corridor</p>
+                </div>
+
+                {/* Map Vector Graphic */}
+                <div className="w-full h-full flex items-center justify-center pt-8">
+                  <motion.div 
+                    style={{ scale: mapZoom }} 
+                    transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+                    className="w-full h-full max-w-lg max-h-[260px] relative mt-12"
+                  >
+                    <svg viewBox="0 0 500 320" className="w-full h-full text-zinc-800" fill="none" stroke="currentColor">
+                      <path d="M 120 290 C 130 250, 180 230, 210 190 C 240 150, 270 120, 310 80 C 350 40, 420 50, 460 30" stroke="rgba(255,255,255,0.03)" strokeWidth="8" />
+                      <path d="M 152 262 Q 260 160, 385 110" stroke="#3b82f6" strokeWidth="3" strokeDasharray="8 6" id="target-route" />
+                      <motion.circle cx="152" cy="262" r="5" fill="#10b981" className="animate-pulse" />
+                      <motion.circle cx="385" cy="110" r="6" fill="#ef4444" />
+                    </svg>
+
+                    <div className="absolute top-[210px] left-[130px] flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20" />
+                      <span className="text-[9px] font-black text-emerald-400 bg-zinc-950 border border-emerald-500/20 px-2.5 py-1 rounded-md shadow-lg">
+                        Maputo SUL
+                      </span>
+                    </div>
+
+                    <div className="absolute top-[88px] left-[340px] flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-red-400 ring-4 ring-red-400/20" />
+                      <span className="text-[9px] font-black text-red-400 bg-zinc-950 border border-red-500/20 px-2.5 py-1 rounded-md shadow-lg">
+                        Nampula NORT
+                      </span>
+                    </div>
+                  </motion.div>
+                </div>
+
+                <div className="flex justify-between items-center text-[9px] font-black text-zinc-500 uppercase mt-4">
+                  <span>Servidor Central Mozambique C-Link: Estável</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => setMapZoom(prev => Math.min(prev + 0.2, 1.8))} className="px-2 py-0.5 bg-zinc-900 border border-white/5 rounded text-[8px] hover:text-white">Zoom +</button>
+                    <button onClick={() => setMapZoom(1)} className="px-2 py-0.5 bg-zinc-900 border border-white/5 rounded text-[8px] hover:text-white">Reset</button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
         {/* TAB 2: FEEDBACK BIDDING PORTAL (CONCURSO) */}
-        {activeTab === 'bids' && (
+        {activeTab === 'bids' && false && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             
             {/* List and Submission Panel */}

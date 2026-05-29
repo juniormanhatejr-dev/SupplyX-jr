@@ -136,6 +136,18 @@ service cloud.firestore {
              data.createdAt == request.time;
     }
 
+    function isValidOccurrence(data) {
+      return data.keys().hasAll(['id', 'cargoId', 'cargoName', 'description', 'category', 'dateTime', 'responsible', 'status']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.cargoId is string && data.cargoId.size() <= 128 &&
+             data.cargoName is string && data.cargoName.size() <= 500 &&
+             data.description is string && data.description.size() <= 5000 &&
+             data.category is string && data.category.size() <= 100 &&
+             data.dateTime is string && data.dateTime.size() <= 100 &&
+             data.responsible is string && data.responsible.size() <= 200 &&
+             data.status is string && data.status.size() <= 50;
+    }
+
     // ---------------------------------------------------------
     // 3. MATCH BLOCKS (Hardened)
     // ---------------------------------------------------------
@@ -228,6 +240,15 @@ service cloud.firestore {
       allow get: if isSignedIn();
       allow create: if isVerified() && isValidFreightOrder(incoming());
       allow update: if isVerified() && isValidFreightOrder(incoming());
+      allow delete: if isVerified();
+    }
+
+    // OCCURRENCES:
+    match /occurrences/{occurrenceId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isVerified() && isValidOccurrence(incoming());
+      allow update: if isVerified() && isValidOccurrence(incoming());
       allow delete: if isVerified();
     }
   }

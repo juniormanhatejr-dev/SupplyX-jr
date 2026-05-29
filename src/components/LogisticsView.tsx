@@ -18,7 +18,7 @@ import {
   Award,
   ListFilter
 } from 'lucide-react';
-import { auth, db } from '../lib/firebase';
+import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, onSnapshot, query, where, getDocs, setDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 
 // Decoupled sub-system views
@@ -81,14 +81,17 @@ export default function LogisticsView({
   // 2. Active Fleets / Drivers list
   const [drivers, setDrivers] = useState<CommercialDriver[]>(() => {
     const saved = localStorage.getItem('supplyx_drivers');
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Completely exclude pre-existing non-user-registered drivers
+        return parsed.filter((d: any) => d && d.id !== 'DR-01' && d.id !== 'DR-02' && d.id !== 'DR-03');
+      } catch (e) {
+        return [];
+      }
+    }
 
-    const initialDrivers: CommercialDriver[] = [
-      { id: 'DR-01', name: 'Armando Nhalungo', licenseId: 'MC-87983-C', vehicle: 'Volvo FH 540', capacity: '32 Toneladas', location: 'Porto de Maputo', status: 'Disponível', rating: 4.9, trips: 142 },
-      { id: 'DR-02', name: 'Carlos Langa', licenseId: 'MZ-44122-A', vehicle: 'Scania Streamline', capacity: '24 Toneladas', location: 'Beira Terminal', status: 'Em Trânsito', rating: 4.7, trips: 96 },
-      { id: 'DR-03', name: 'Mateus Macamo', licenseId: 'NH-63211-B', vehicle: 'Mercedes Actros', capacity: '30 Toneladas', location: 'Matola Refinery', status: 'Em Descanso', rating: 4.5, trips: 62 }
-    ];
-
+    const initialDrivers: CommercialDriver[] = [];
     localStorage.setItem('supplyx_drivers', JSON.stringify(initialDrivers));
     return initialDrivers;
   });
@@ -168,9 +171,16 @@ export default function LogisticsView({
     return [];
   });
 
-  const syncOccurrencesToLocalStorage = (list: any[]) => {
+  const syncOccurrencesToLocalStorage = async (list: any[]) => {
     localStorage.setItem('supplyx_occurrences', JSON.stringify(list));
     setOccurrences(list);
+    for (const occ of list) {
+      try {
+        await setDoc(doc(db, 'occurrences', occ.id), occ);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `occurrences/${occ.id}`);
+      }
+    }
   };
 
   const syncNotificationsToLocalStorage = (list: any[]) => {
@@ -203,14 +213,18 @@ export default function LogisticsView({
       const q = query(collection(db, 'freight_orders'), where('id', '==', req.id));
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
-        querySnapshot.forEach(async (docSnap) => {
-          await updateDoc(docSnap.ref, { ...req });
+        const updatePromises: Promise<void>[] = [];
+        querySnapshot.forEach((docSnap) => {
+          updatePromises.push(updateDoc(docSnap.ref, { ...req }).catch(e => {
+            handleFirestoreError(e, OperationType.UPDATE, `freight_orders/${docSnap.id}`);
+          }));
         });
+        await Promise.all(updatePromises);
       } else {
         await setDoc(doc(db, 'freight_orders', req.id), req);
       }
     } catch (err) {
-      console.warn('Failed to sync cargo request to Firestore:', err);
+      handleFirestoreError(err, OperationType.WRITE, `freight_orders/${req.id}`);
     }
   };
 
@@ -249,12 +263,35 @@ export default function LogisticsView({
           return firestoreList;
         });
       }, (error) => {
-        console.error('Firestore real-time sync failed:', error);
+        handleFirestoreError(error, OperationType.GET, 'freight_orders');
       });
 
       return () => unsubscribe();
     } catch (err) {
       console.warn('Failed to initialize Firestore listener for freight_orders:', err);
+    }
+  }, []);
+
+  // Real-time listener for occurrences collection
+  useEffect(() => {
+    try {
+      const q = query(collection(db, 'occurrences'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const firestoreList: any[] = [];
+        snapshot.forEach((docSnap) => {
+          firestoreList.push({
+            id: docSnap.id,
+            ...docSnap.data()
+          });
+        });
+        setOccurrences(firestoreList);
+        localStorage.setItem('supplyx_occurrences', JSON.stringify(firestoreList));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, 'occurrences');
+      });
+      return () => unsubscribe();
+    } catch (err) {
+      console.warn('Failed to initialize Firestore listener for occurrences:', err);
     }
   }, []);
 
@@ -326,9 +363,23 @@ export default function LogisticsView({
 
   const deleteRequestFromFirestore = async (id: string) => {
     try {
-      await deleteDoc(doc(db, 'freight_orders', id));
+      // Some orders are stored with auto-generated document IDs (using addDoc) while having item.id = id
+      const q = query(collection(db, 'freight_orders'), where('id', '==', id));
+      const querySnapshot = await getDocs(q);
+      const deletePromises: Promise<void>[] = [];
+      querySnapshot.forEach((docSnap) => {
+        deletePromises.push(deleteDoc(docSnap.ref).catch(e => {
+          handleFirestoreError(e, OperationType.DELETE, `freight_orders/${docSnap.id}`);
+        }));
+      });
+      // In case setDoc was used with doc ID = id directly
+      deletePromises.push(deleteDoc(doc(db, 'freight_orders', id)).catch(e => {
+        handleFirestoreError(e, OperationType.DELETE, `freight_orders/${id}`);
+      }));
+      
+      await Promise.all(deletePromises);
     } catch (err) {
-      console.warn('Failed to delete cargo request from Firestore:', err);
+      handleFirestoreError(err, OperationType.DELETE, `freight_orders/${id}`);
     }
   };
 

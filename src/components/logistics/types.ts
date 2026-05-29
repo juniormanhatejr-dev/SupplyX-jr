@@ -28,6 +28,12 @@ export interface CargoRequest {
   logisticsReplies?: any[];
   buyerId?: string;
   supplierId?: string;
+  trackProgress?: number;
+  trackSpeed?: number;
+  trackTemp?: number;
+  trackFuel?: number;
+  trackStatusText?: string;
+  driverName?: string;
 }
 
 export interface CarrierProposal {

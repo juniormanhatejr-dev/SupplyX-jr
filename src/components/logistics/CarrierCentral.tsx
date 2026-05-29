@@ -473,45 +473,26 @@ export default function CarrierCentral({
                   <div className="mt-6 pt-4 border-t border-white/[0.03] space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-[8px] font-black uppercase text-zinc-550 block leading-none">{language === 'PT' ? 'Proposta de Preço' : 'Price Proposal'}</span>
+                        <span className="text-[8px] font-black uppercase text-zinc-550 block leading-none">{language === 'PT' ? 'Preço do Frete' : 'Freight Price'}</span>
                         <span className="text-sm font-black text-emerald-400 italic">
                           {load.targetPrice && !load.targetPrice.includes('A definir') && !load.targetPrice.includes('definir')
                             ? (load.targetPrice.startsWith('MT') ? load.targetPrice : `MT ${load.targetPrice}`)
-                            : (language === 'PT' ? 'A definir por lance logístico' : 'To be bid by carrier')}
+                            : (language === 'PT' ? 'Preço Contratual' : 'Contract Price')}
                         </span>
                       </div>
                       
                       <div className="flex gap-2">
                         <button
-                          onClick={() => {
-                            if (biddingLoadId === load.id) {
-                              setBiddingLoadId(null);
-                            } else {
-                              setBiddingLoadId(load.id);
-                              const numericPrice = load.targetPrice && !load.targetPrice.includes('A definir') && !load.targetPrice.includes('definir') ? load.targetPrice.replace(/[^0-9]/g, '') : '';
-                              setBidPrice(numericPrice || '68000');
-                            }
-                          }}
-                          className={`px-4 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all flex items-center gap-1 active:scale-95 border ${
-                            load.hasUserBid 
-                              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-                              : 'bg-zinc-950/40 border-white/5 text-zinc-300 hover:text-white hover:bg-zinc-900'
-                          }`}
-                        >
-                          {load.hasUserBid ? '✓ Proposto' : '🤖 Enviar Proposta'}
-                        </button>
-
-                        <button
                           onClick={() => handleAcceptLoad(load.id)}
-                          className="px-4 py-2.5 bg-[#0052CC] text-white rounded-xl font-black text-[9px] uppercase tracking-wider shadow-lg hover:bg-[#0747A6] transition-all flex items-center gap-1.5 active:scale-95"
+                          className="px-5 py-2.5 bg-[#0052CC] text-white rounded-xl font-black text-[9px] uppercase tracking-wider shadow-lg hover:bg-[#0747A6] transition-all flex items-center gap-1.5 active:scale-95 font-sans"
                         >
                           <Truck className="w-3 h-3" />
-                          {language === 'PT' ? 'Arrematar' : 'Accept'}
+                          {language === 'PT' ? 'Arrematar Carga' : 'Accept Load'}
                         </button>
                       </div>
                     </div>
 
-                    {biddingLoadId === load.id && (
+                    {biddingLoadId === load.id && false && (
                       <motion.div 
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}

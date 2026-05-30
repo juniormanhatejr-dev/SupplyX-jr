@@ -79,7 +79,6 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
         { icon: LayoutDashboard, label: nav.dashboard, originalLabel: 'Cockpit Analítico' },
         { icon: Package, label: nav.monitor, originalLabel: 'Monitor de Cargas' },
         { icon: Truck, label: nav.drivers, originalLabel: 'Frotas & Motoristas' },
-        { icon: Package, label: nav.fulfillment, originalLabel: 'Fulfillment Stock' },
         { icon: MessageSquare, label: nav.chat, originalLabel: 'Mensagens' },
         { icon: Settings, label: nav.settings, originalLabel: 'Ajustes' },
         { icon: Info, label: nav.about, originalLabel: 'About' }

@@ -78,6 +78,30 @@ export default function LogisticsView({
     return customRequests[0]?.id || '';
   });
 
+  // Track hidden dossiers specifically for logistics users
+  const [hiddenDossiers, setHiddenDossiers] = useState<string[]>(() => {
+    const saved = localStorage.getItem('supplyx_hidden_dossiers_logistics');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    if (userType === 'logistics' && hiddenDossiers.includes(selectedRequestId)) {
+      const remaining = customRequests.filter(r => !hiddenDossiers.includes(r.id));
+      if (remaining.length > 0) {
+        setSelectedRequestId(remaining[0].id);
+      } else {
+        setSelectedRequestId('');
+      }
+    }
+  }, [hiddenDossiers, selectedRequestId, customRequests, userType]);
+
   // 2. Active Fleets / Drivers list
   const [drivers, setDrivers] = useState<CommercialDriver[]>(() => {
     const saved = localStorage.getItem('supplyx_drivers');
@@ -342,7 +366,7 @@ export default function LogisticsView({
   // Dynamically filter requests based on the user's logged-in role
   const displayedRequests = useMemo(() => {
     if (userType === 'logistics') {
-      return customRequests;
+      return customRequests.filter(req => !hiddenDossiers.includes(req.id));
     }
     // Buyers see ONLY their own created requests
     if (userType === 'buyer') {
@@ -357,7 +381,7 @@ export default function LogisticsView({
       );
     }
     return [];
-  }, [customRequests, userType]);
+  }, [customRequests, userType, hiddenDossiers]);
 
   // If user is registered as logistics, default to carrier_central dashboard, otherwise 'requests_list'
   useEffect(() => {
@@ -421,14 +445,23 @@ export default function LogisticsView({
   };
 
   const handleDeleteRequest = async (id: string) => {
-    // Immediately filter local state and local storage so the item disappears instantly and doesn't blink
-    setCustomRequests((prev) => {
-      const updated = prev.filter(r => r.id !== id);
-      localStorage.setItem('supplyx_freight_requests', JSON.stringify(updated));
-      return updated;
-    });
-    // Fire and await the direct atomic Firestore deletion
-    await deleteRequestFromFirestore(id);
+    if (userType === 'logistics') {
+      // Soft-delete for logistics user specifically (it only disappears for them)
+      setHiddenDossiers((prev) => {
+        const updated = [...prev, id];
+        localStorage.setItem('supplyx_hidden_dossiers_logistics', JSON.stringify(updated));
+        return updated;
+      });
+    } else {
+      // Direct global deletion for client/supplier
+      setCustomRequests((prev) => {
+        const updated = prev.filter(r => r.id !== id);
+        localStorage.setItem('supplyx_freight_requests', JSON.stringify(updated));
+        return updated;
+      });
+      // Fire and await the direct atomic Firestore deletion
+      await deleteRequestFromFirestore(id);
+    }
   };
 
   const handleClearFinancial = (id: string) => {
@@ -747,6 +780,7 @@ export default function LogisticsView({
                 isDarkMode={isDarkMode}
                 language={language}
                 requests={displayedRequests}
+                userType={userType}
                 onSelectRequest={(id) => {
                   setSelectedRequestId(id);
                   setActiveSubTab('detailed_request');

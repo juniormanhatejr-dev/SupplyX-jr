@@ -9,6 +9,7 @@ interface RequestsListPageProps {
   requests: CargoRequest[];
   onSelectRequest: (id: string) => void;
   onDeleteRequest: (id: string) => void;
+  userType?: string;
 }
 
 export default function RequestsListPage({
@@ -16,7 +17,8 @@ export default function RequestsListPage({
   language,
   requests = [],
   onSelectRequest,
-  onDeleteRequest
+  onDeleteRequest,
+  userType
 }: RequestsListPageProps) {
   
   const handleDelete = (id: string, e: React.MouseEvent) => {

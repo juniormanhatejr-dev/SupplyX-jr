@@ -39,7 +39,7 @@ export default function CarrierCentral({
   profileName
 }: CarrierCentralProps) {
   // Setup tabs inside Carrier Central: 'available' | 'active' | 'tracking' | 'chat'
-  const [carrierTab, setCarrierTab] = useState<'available' | 'active' | 'tracking' | 'chat'>('available');
+  const [carrierTab, setCarrierTab] = useState<'available' | 'active' | 'tracking' | 'chat'>('active');
   const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
   
   // Local active updates for manual tracking simulation
@@ -376,7 +376,6 @@ export default function CarrierCentral({
 
           <div className="space-y-1">
             {[
-              { id: 'available', icon: Package, pt: `Disponíveis (${availableLoads.length})`, en: `Available (${availableLoads.length})` },
               { id: 'active', icon: CheckCircle2, pt: `Entregas Ativas (${activeDeliveries.length})`, en: `Active (${activeDeliveries.length})` },
               { id: 'tracking', icon: Activity, pt: 'Rastreio em Tempo-real', en: 'Real-time Tracking' },
               { id: 'chat', icon: MessageSquare, pt: 'Conversas & Alertas', en: 'Conversations / Chats' }
@@ -417,18 +416,34 @@ export default function CarrierCentral({
           ) : (
             <div className="space-y-3.5 max-h-[220px] overflow-y-auto pr-1 no-scrollbar">
               {occurrences.slice(0, 4).map((occ, i) => (
-                <div key={i} className="p-3 rounded-xl bg-zinc-950/30 border border-white/5 space-y-1 text-[10px]">
+                <div 
+                  key={i} 
+                  onClick={() => {
+                    setSelectedLoadId(occ.cargoId);
+                    setCarrierTab('tracking');
+                  }}
+                  title={language === 'PT' ? 'Clique para entrar e gerenciar esta ocorrência' : 'Click to enter and manage this incident'}
+                  className="p-3 rounded-xl bg-zinc-950/30 border border-white/5 space-y-1 text-[10px] cursor-pointer hover:border-red-500/35 hover:bg-zinc-950/50 active:scale-[0.99] transition-all group duration-150"
+                >
                   <div className="flex justify-between items-center text-[8px] font-black uppercase">
-                    <span className="text-amber-500 font-mono">#{occ.cargoId}</span>
+                    <span className="text-amber-500 font-mono group-hover:underline">#{occ.cargoId}</span>
                     <span className="text-zinc-500">{occ.dateTime.split(' ')[0]}</span>
                   </div>
-                  <p className="font-extrabold text-white uppercase tracking-tight truncate">{occ.category}</p>
-                  <p className="text-zinc-400 font-bold truncate leading-none">{occ.description}</p>
-                  <span className={`inline-block text-[7px] font-black uppercase px-2 py-0.5 rounded-full mt-1 ${
-                    occ.status === 'Aberta' ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'
-                  }`}>
-                    {occ.status}
-                  </span>
+                  <p className="font-extrabold text-white uppercase tracking-tight truncate flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    {occ.category}
+                  </p>
+                  <p className="text-zinc-400 font-bold truncate leading-none italic">"{occ.description}"</p>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className={`inline-block text-[7px] font-black uppercase px-2 py-0.5 rounded-full ${
+                      occ.status === 'Aberta' ? 'bg-amber-500/10 text-amber-500 animate-pulse' : 'bg-emerald-500/10 text-emerald-500'
+                    }`}>
+                      {occ.status}
+                    </span>
+                    <span className="text-[7px] font-black uppercase text-supplyx-blue opacity-0 group-hover:opacity-100 transition-opacity">
+                      {language === 'PT' ? 'Entrar ➔' : 'Open ➔'}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -768,10 +783,10 @@ export default function CarrierCentral({
                     {language === 'PT' ? 'Nenhuma entrega ativa em andamento.' : 'No active deliveries currently in progress.'}
                   </p>
                   <button 
-                    onClick={() => setCarrierTab('available')}
+                    onClick={() => setCarrierTab('chat')}
                     className="mt-4 px-6 py-2.5 bg-supplyx-blue text-white font-black text-[9px] uppercase tracking-wider rounded-xl hover:brightness-110 active:scale-95"
                   >
-                    🚀 {language === 'PT' ? 'Adquirir Cargas do Concurso' : 'Acquire Loads'}
+                    💬 {language === 'PT' ? 'Falar com o Gestor no Chat' : 'Chat with Cargo Operations'}
                   </button>
                 </div>
               )}
@@ -987,140 +1002,7 @@ export default function CarrierCentral({
 
         {/* TAB 4: CARGO SPECIFIC DIAL CHAT (CONVERSAS) */}
         {carrierTab === 'chat' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className={`text-xl font-black uppercase italic tracking-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-                💬 {language === 'PT' ? 'Canal Dialógico da Carga' : 'Participated Shipments Chats'}
-              </h2>
-              <p className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-widest mt-1">
-                {language === 'PT' 
-                  ? 'Conecte-se em tempo-real com a gerência recetiva do cliente comprador' 
-                  : 'Frictionless chat conduit for contracted shipment orders'}
-              </p>
-            </div>
-
-            {chatRooms.length > 0 ? (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Rooms selection left column */}
-                <div className="space-y-3.5">
-                  <p className="text-[8.5px] font-black uppercase text-zinc-500 tracking-wider">SALAS DE CONVERSA EXCLUSIVAS:</p>
-                  
-                  {chatRooms.map(room => {
-                    const isSelected = selectedLoadId === room.id;
-                    const messagesList = chatMessages[room.id] || [];
-                    const lastMsg = messagesList[messagesList.length - 1]?.text || 'Sem mensagens...';
-                    
-                    return (
-                      <div
-                        key={room.id}
-                        onClick={() => setSelectedLoadId(room.id)}
-                        className={`p-4 rounded-2xl border cursor-pointer transition-all hover:scale-[1.01] ${
-                          isSelected 
-                            ? 'border-supplyx-blue bg-supplyx-blue/[0.03]' 
-                            : isDarkMode ? 'bg-zinc-900 border-white/5 hover:border-white/10' : 'bg-white border-zinc-150'
-                        }`}
-                      >
-                        <div className="flex justify-between items-start mb-1 text-[8px] font-mono">
-                          <span className="text-supplyx-blue font-black">#{room.id}</span>
-                          <span className="text-zinc-500">B2B CLIENTE</span>
-                        </div>
-                        <h4 className="text-[11px] font-black text-white italic truncate leading-none uppercase">{room.tipoCarga}</h4>
-                        <p className="text-[9.5px] text-zinc-400 truncate mt-2 font-medium italic">"{lastMsg}"</p>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Dialog thread right column */}
-                <div className={`lg:col-span-2 p-6 rounded-[32px] border flex flex-col justify-between h-[480px] ${
-                  isDarkMode ? 'bg-zinc-900 border-white/5 shadow-2xl' : 'bg-white border-zinc-150 shadow-sm'
-                }`}>
-                  
-                  {selectedLoad ? (
-                    <>
-                      {/* Thread Header */}
-                      <div className="pb-4 border-b border-white/[0.03] flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-[#0052CC] text-white font-black flex items-center justify-center italic text-sm">
-                            SX
-                          </div>
-                          <div>
-                            <h4 className="text-xs font-black text-white uppercase tracking-tight">{selectedLoad.tipoCarga}</h4>
-                            <p className="text-[8.5px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
-                              {language === 'PT' ? 'Canal direto com o Comprador' : 'Direct line with Buyer'}
-                            </p>
-                          </div>
-                        </div>
-
-                        <span className="text-[8.5px] font-black uppercase bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded">
-                          Ativo
-                        </span>
-                      </div>
-
-                      {/* Messages Thread Body */}
-                      <div className="flex-1 overflow-y-auto my-4 pr-1 space-y-3.5 no-scrollbar max-h-[300px]">
-                        {(chatMessages[selectedLoad.id] || []).map((msg, i) => {
-                          const isMe = msg.sender === 'carrier';
-                          return (
-                            <div 
-                              key={i} 
-                              className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
-                            >
-                              <div className={`p-4 rounded-3xl max-w-[84%] text-xs font-bold leading-normal ${
-                                isMe 
-                                  ? 'bg-supplyx-blue text-white rounded-br-none' 
-                                  : isDarkMode 
-                                    ? 'bg-zinc-950 text-zinc-200 border border-white/5 rounded-bl-none' 
-                                    : 'bg-zinc-100 text-zinc-800 rounded-bl-none'
-                              }`}>
-                                <p>{msg.text}</p>
-                              </div>
-                              <span className="text-[7.5px] text-zinc-500 font-bold mt-1 uppercase font-mono px-1">
-                                {isMe ? 'TRANSPORTE' : 'B2B CLIENTE'} • {msg.time}
-                              </span>
-                            </div>
-                          );
-                        })}
-                        <div ref={chatEndRef} />
-                      </div>
-
-                      {/* Text typing footer form */}
-                      <form onSubmit={handleSendChatMessage} className="pt-4 border-t border-white/[0.03] flex gap-2">
-                        <input 
-                          type="text" 
-                          value={typedMessage}
-                          onChange={(e) => setTypedMessage(e.target.value)}
-                          placeholder={language === 'PT' ? 'Digite sua mensagem de rastreamento...' : 'Type carrier update message...'}
-                          className={`flex-1 p-3.5 rounded-xl border text-xs font-bold leading-none ${
-                            isDarkMode ? 'bg-zinc-950 border-white/10 text-white placeholder-zinc-500' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
-                          }`}
-                        />
-                        <button
-                          type="submit"
-                          disabled={!typedMessage.trim()}
-                          className="p-3.5 bg-supplyx-blue text-white rounded-xl shadow-lg hover:brightness-110 active:scale-95 disabled:opacity-50 flex items-center justify-center"
-                        >
-                          <Send className="w-4 h-4" />
-                        </button>
-                      </form>
-                    </>
-                  ) : (
-                    <div className="flex-1 flex items-center justify-center text-center">
-                      <p className="text-zinc-500 text-xs font-black uppercase tracking-widest">{language === 'PT' ? 'Selecione uma sala de conversa ao lado.' : 'Select a chat room.'}</p>
-                    </div>
-                  )}
-
-                </div>
-              </div>
-            ) : (
-              <div className="p-12 text-center border-2 border-dashed border-zinc-800 rounded-[32px]">
-                <p className="text-zinc-500 text-xs font-black uppercase tracking-widest">
-                  {language === 'PT' ? 'Nenhuma conversa ativa no momento.' : 'No active collaborated dialogs yet.'}
-                </p>
-              </div>
-            )}
-          </div>
+          <div className="min-h-[400px]" />
         )}
 
       </div>

@@ -34,6 +34,7 @@ export interface CargoRequest {
   trackFuel?: number;
   trackStatusText?: string;
   driverName?: string;
+  items?: { name: string; quantity: string; weight?: string; volume?: string; }[];
 }
 
 export interface CarrierProposal {

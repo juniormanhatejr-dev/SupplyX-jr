@@ -111,6 +111,17 @@ export default function DetailedRequestView({
   const [isDrawing, setIsDrawing] = useState(false);
   const [savedSignature, setSavedSignature] = useState<string>('');
 
+  // Products and quantities sheet states for cubing card
+  const [cubingCardTab, setCubingCardTab] = useState<'spec' | 'products'>('spec');
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [editingProductIndex, setEditingProductIndex] = useState<number | null>(null);
+  const [productForm, setProductForm] = useState({
+    name: '',
+    quantity: '',
+    weight: '',
+    volume: ''
+  });
+
   // Match correct cargo request
   const requestObj = useMemo(() => {
     const matched = requests.find(r => r.id === selectedRequestId);
@@ -136,6 +147,121 @@ export default function DetailedRequestView({
       targetPrice: 'A definir por lance logístico'
     } as CargoRequest;
   }, [selectedRequestId, requests]);
+
+  // Parse products from custom field or dynamic tipoCarga
+  const requestProducts = useMemo(() => {
+    if ((requestObj as any).items && Array.isArray((requestObj as any).items)) {
+      return (requestObj as any).items as { name: string; quantity: string; weight: string; volume: string; }[];
+    }
+    
+    const list: { name: string; quantity: string; weight: string; volume: string; }[] = [];
+    const tc = requestObj.tipoCarga || '';
+    if (tc) {
+      const parts = tc.split(/\s*,\s*/);
+      parts.forEach((part) => {
+        if (!part.trim()) return;
+        const match = part.match(/^(.*?)\s*\((.*?)\)$/);
+        if (match) {
+          const name = match[1].trim();
+          const details = match[2].split(/\s*,\s*/);
+          let qty = '1';
+          let wt = '';
+          if (details[0]) {
+            qty = details[0].replace('x', '').trim();
+          }
+          if (details[1]) {
+            wt = details[1].trim();
+          }
+          list.push({
+            name,
+            quantity: qty,
+            weight: wt || '1 Tonelada',
+            volume: '1 m³'
+          });
+        } else {
+          list.push({
+            name: part.trim(),
+            quantity: requestObj.quantidade || '1 Item',
+            weight: requestObj.peso || '1 Tonelada',
+            volume: requestObj.volume || '1 m³'
+          });
+        }
+      });
+    }
+    return list;
+  }, [requestObj.tipoCarga, requestObj.quantidade, requestObj.peso, requestObj.volume, (requestObj as any).items]);
+
+  const handleSaveProducts = (updatedList: { name: string; quantity: string; weight: string; volume: string; }[]) => {
+    if (!onUpdateCargoRequest) return;
+
+    const newTipoCarga = updatedList.map(it => `${it.name} (${it.quantity}${it.weight ? `, ${it.weight}` : ''})`).join(', ');
+
+    let totalQty = 0;
+    let totalWeight = 0;
+    let totalVolume = 0;
+
+    updatedList.forEach(it => {
+      const qVal = parseFloat(it.quantity.replace(/[^\d.,]+/g, '').replace(',', '.')) || 1;
+      totalQty += qVal;
+
+      const wVal = parseFloat(it.weight.replace(/[^\d.,]+/g, '').replace(',', '.')) || 0;
+      totalWeight += wVal;
+
+      const vVal = parseFloat(it.volume.replace(/[^\d.,]+/g, '').replace(',', '.')) || 0;
+      totalVolume += vVal;
+    });
+
+    onUpdateCargoRequest(requestObj.id, {
+      tipoCarga: newTipoCarga || 'Sem carga',
+      quantidade: `${updatedList.length} Produtos (${totalQty} Unidades)`,
+      peso: totalWeight > 0 ? `${totalWeight} Toneladas` : 'A determinar',
+      volume: totalVolume > 0 ? `${totalVolume} m³` : 'Sob Demanda',
+      items: updatedList as any
+    });
+  };
+
+  const handleAddProductClick = () => {
+    setProductForm({ name: '', quantity: '', weight: '', volume: '' });
+    setEditingProductIndex(null);
+    setShowProductForm(true);
+  };
+
+  const handleEditProductClick = (index: number) => {
+    const p = requestProducts[index];
+    setProductForm({ 
+      name: p.name || '', 
+      quantity: p.quantity || '', 
+      weight: p.weight || '', 
+      volume: p.volume || '' 
+    });
+    setEditingProductIndex(index);
+    setShowProductForm(true);
+  };
+
+  const handleRemoveProduct = (index: number) => {
+    const updated = requestProducts.filter((_, i) => i !== index);
+    handleSaveProducts(updated);
+  };
+
+  const handleProductFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated = [...requestProducts];
+    const newItem = {
+      name: productForm.name.trim() || 'Produto B2B',
+      quantity: productForm.quantity.trim() || '1x',
+      weight: productForm.weight.trim() ? (productForm.weight.includes('T') || productForm.weight.toLowerCase().includes('ton') ? productForm.weight : `${productForm.weight} T`) : '1 T',
+      volume: productForm.volume.trim() ? (productForm.volume.includes('m³') || productForm.volume.toLowerCase().includes('m3') ? productForm.volume : `${productForm.volume} m³`) : '1 m³'
+    };
+
+    if (editingProductIndex !== null) {
+      updated[editingProductIndex] = newItem;
+    } else {
+      updated.push(newItem);
+    }
+
+    handleSaveProducts(updated);
+    setShowProductForm(false);
+  };
 
   // Real-Time GPS and Telemetry Calculations
   const isAssigned = useMemo(() => {
@@ -1142,19 +1268,35 @@ export default function DetailedRequestView({
           { id: 'occurrences', label: language === 'PT' ? `⚠️ Ocorrências Registadas [${filteredOccurrences.length}]` : `⚠️ Incidents [${filteredOccurrences.length}]` },
           { id: 'documents', label: language === 'PT' ? '📄 Documentos Digitais / PoD' : '📄 Digital Vault / PoD' },
           { id: 'review', label: language === 'PT' ? '⭐ Feedback & Avaliação' : '⭐ Post-Delivery Feedback' }
-        ].map(tb => (
-          <button
-            key={tb.id}
-            onClick={() => setActiveTab(tb.id as any)}
-            className={`px-4 py-2.5 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all border shrink-0 select-none whitespace-nowrap ${
-              activeTab === tb.id
-                ? 'bg-supplyx-blue border-supplyx-blue text-white shadow-md'
-                : 'bg-zinc-950 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-900'
-            }`}
-          >
-            {tb.label}
-          </button>
-        ))}
+        ].map(tb => {
+          const isSelected = activeTab === tb.id;
+          const hasActiveOccurrences = tb.id === 'occurrences' && filteredOccurrences.some(o => o.status === 'Aberta');
+          
+          let btnStyle = '';
+          if (isSelected) {
+            if (hasActiveOccurrences) {
+              btnStyle = 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/15';
+            } else {
+              btnStyle = 'bg-supplyx-blue border-supplyx-blue text-white shadow-md';
+            }
+          } else {
+            if (hasActiveOccurrences) {
+              btnStyle = 'bg-red-500/10 border-red-500/30 text-red-400 hover:text-white hover:bg-red-500 animate-pulse font-black';
+            } else {
+              btnStyle = 'bg-zinc-950 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-900';
+            }
+          }
+
+          return (
+            <button
+              key={tb.id}
+              onClick={() => setActiveTab(tb.id as any)}
+              className={`px-4 py-2.5 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all border shrink-0 select-none whitespace-nowrap ${btnStyle}`}
+            >
+              {tb.label}
+            </button>
+          );
+        })}
       </div>
 
       <div className="space-y-6">
@@ -1507,32 +1649,236 @@ export default function DetailedRequestView({
             }`}>
               <div>
                 <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
-                  <h3 className="text-xs font-black uppercase tracking-[0.2em] text-supplyx-blue flex items-center gap-2">
+                  <h3 className="text-xs font-black uppercase tracking-[0.15em] text-supplyx-blue flex items-center gap-2">
                     <Package className="w-4 h-4" />
                     {language === 'PT' ? 'Ficha de Cubagem/Peso' : 'Operational Cargo Spec'}
                   </h3>
+                  
+                  {/* Modern Tab Switcher */}
+                  <div className="flex p-0.5 rounded-lg bg-zinc-950/40 border border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => setCubingCardTab('spec')}
+                      className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-md transition-all ${
+                        cubingCardTab === 'spec' 
+                          ? 'bg-supplyx-blue text-white' 
+                          : 'text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      {language === 'PT' ? 'Geral' : 'Spec'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCubingCardTab('products')}
+                      className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-md transition-all flex items-center gap-1.5 ${
+                        cubingCardTab === 'products' 
+                          ? 'bg-supplyx-blue text-white' 
+                          : 'text-zinc-500 hover:text-zinc-400'
+                      }`}
+                    >
+                      {language === 'PT' ? 'Produtos' : 'Products'}
+                      <span className="bg-white/10 text-[8px] font-mono px-1 rounded-full">{requestProducts.length}</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="space-y-4">
-                  {[
-                    { label: 'Categoria', val: requestObj.tipoCarga },
-                    { label: 'Solicitante', val: requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente' : 'Fornecedor') },
-                    { label: 'Cubagem Estimada', val: requestObj.volume || '35 m³' },
-                    { label: 'Peso bruto real', val: requestObj.peso },
-                    { label: 'Endereço Recolha', val: requestObj.origem },
-                    { label: 'Endereço Destino', val: requestObj.destino },
-                    { label: 'Data de Coleta', val: requestObj.dataColeta || 'A Combinar' },
-                    { label: 'Responsável Custo', val: requestObj.freightResponsibility || 'Client' },
-                    { label: 'Modo Trânsito', val: requestObj.deliveryMode || 'Fretado Livre' },
-                    { label: 'Transportadora Atribuída', val: requestObj.assignedCarrier || (language === 'PT' ? 'Aguardando seleção de lances' : 'Unassigned (Bidding open)') },
-                    { label: 'Observações Fiel', val: requestObj.observacoes || 'Sem notas extras' }
-                  ].map((item, i) => (
-                    <div key={i} className="flex justify-between items-center text-xs pb-1 border-b border-white/[0.02]">
-                      <span className="font-bold text-zinc-500 uppercase tracking-widest text-[8.5px]">{item.label}</span>
-                      <span className="font-black text-white text-right leading-relaxed max-w-[180px] truncate">{item.val}</span>
+                {cubingCardTab === 'spec' && (
+                  <div className="space-y-4">
+                    {[
+                      { label: 'Categoria', val: requestObj.tipoCarga },
+                      { label: 'Solicitante', val: requestObj.requesterName || (requestObj.requester === 'Client' ? 'Cliente' : 'Fornecedor') },
+                      { label: 'Cubagem Estimada', val: requestObj.volume || '35 m³' },
+                      { label: 'Peso bruto real', val: requestObj.peso },
+                      { label: 'Endereço Recolha', val: requestObj.origem },
+                      { label: 'Endereço Destino', val: requestObj.destino },
+                      { label: 'Data de Coleta', val: requestObj.dataColeta || 'A Combinar' },
+                      { label: 'Responsável Custo', val: requestObj.freightResponsibility || 'Client' },
+                      { label: 'Modo Trânsito', val: requestObj.deliveryMode || 'Fretado Livre' },
+                      { label: 'Transportadora Atribuída', val: requestObj.assignedCarrier || (language === 'PT' ? 'Aguardando seleção de lances' : 'Unassigned (Bidding open)') },
+                      { label: 'Observações Fiel', val: requestObj.observacoes || 'Sem notas extras' }
+                    ].map((item, i) => (
+                      <div key={i} className="flex justify-between items-center text-xs pb-1 border-b border-white/[0.02]">
+                        <span className="font-bold text-zinc-500 uppercase tracking-widest text-[8.5px]">{item.label}</span>
+                        <span className="font-black text-white text-right leading-relaxed max-w-[180px] truncate">{item.val}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {cubingCardTab === 'products' && (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">
+                        {language === 'PT' ? 'Lista de Todos os Produtos:' : 'All cargo load items:'}
+                      </span>
+                      {userType === 'logistics' && (
+                        <button
+                          type="button"
+                          onClick={handleAddProductClick}
+                          className="px-2.5 py-1 bg-supplyx-blue/10 border border-supplyx-blue/20 hover:bg-supplyx-blue hover:text-white text-[8.5px] font-black uppercase tracking-wider rounded-lg flex items-center gap-1 transition-all"
+                        >
+                          <Plus className="w-3 h-3" />
+                          {language === 'PT' ? 'Novo Item' : 'New Item'}
+                        </button>
+                      )}
                     </div>
-                  ))}
-                </div>
+
+                    <div className="space-y-2.5 max-h-[280px] overflow-y-auto no-scrollbar pr-1">
+                      {requestProducts.length > 0 ? (
+                        requestProducts.map((prod, index) => (
+                          <div 
+                            key={index}
+                            className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
+                              isDarkMode ? 'bg-zinc-950/40 border-white/5 hover:border-white/10' : 'bg-zinc-50 border-zinc-150'
+                            }`}
+                          >
+                            <div className="space-y-1 max-w-[70%] text-left">
+                              <h4 className="text-[11px] font-black text-white uppercase italic leading-none">{prod.name}</h4>
+                              <div className="flex flex-wrap gap-1.5 pt-1">
+                                <span className="bg-supplyx-blue/10 border border-supplyx-blue/20 text-[7.5px] font-bold uppercase rounded-md px-1.5 py-0.5 text-[#3b82f6]">
+                                  {prod.quantity}
+                                </span>
+                                {prod.weight && (
+                                  <span className="bg-emerald-500/10 border border-emerald-500/20 text-[7.5px] font-bold uppercase rounded-md px-1.5 py-0.5 text-emerald-400">
+                                    ⚖️ {prod.weight}
+                                  </span>
+                                )}
+                                {prod.volume && (
+                                  <span className="bg-purple-500/10 border border-purple-500/20 text-[7.5px] font-bold uppercase rounded-md px-1.5 py-0.5 text-purple-400">
+                                    📦 {prod.volume}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {userType === 'logistics' && (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditProductClick(index)}
+                                  className="p-1 px-1.5 bg-white/5 border border-white/5 text-zinc-400 hover:text-white hover:bg-white/10 rounded-lg text-xs"
+                                  title={language === 'PT' ? 'Editar' : 'Edit'}
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveProduct(index)}
+                                  className="p-1 px-1.5 bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white rounded-lg text-xs"
+                                  title={language === 'PT' ? 'Remover' : 'Remove'}
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="py-8 text-center text-zinc-500 text-[10px] font-black uppercase tracking-widest">
+                          {language === 'PT' ? 'Nenhum produto cadastrado nesta carga' : 'No products found on this charge'}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Inline Form to add/edit a product */}
+                    {showProductForm && (
+                      <div className={`p-4 rounded-3xl border mt-3 ${
+                        isDarkMode ? 'bg-zinc-950 border-white/10' : 'bg-zinc-100 border-zinc-200'
+                      }`}>
+                        <div className="flex justify-between items-center mb-3">
+                          <p className="text-[9px] font-black uppercase text-supplyx-blue tracking-wider">
+                            {editingProductIndex !== null 
+                              ? (language === 'PT' ? 'Editar Produto' : 'Edit Product') 
+                              : (language === 'PT' ? 'Novo Produto da Carga' : 'New Load Product')
+                            }
+                          </p>
+                          <button 
+                            type="button" 
+                            onClick={() => setShowProductForm(false)} 
+                            className="text-zinc-500 hover:text-white text-xs font-black"
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="text-left">
+                            <label className="text-[7.5px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                              {language === 'PT' ? 'Nome do Produto' : 'Product Name'}
+                            </label>
+                            <input
+                              required
+                              type="text"
+                              value={productForm.name}
+                              onChange={e => setProductForm({ ...productForm, name: e.target.value })}
+                              className="w-full p-2 bg-zinc-900 border border-white/5 rounded-xl text-xs text-white"
+                              placeholder="Ex: Cimento CP-IV, Tubos PVC"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 text-left">
+                            <div>
+                              <label className="text-[7.5px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                                {language === 'PT' ? 'Qtd / Unidade' : 'Qty / Unit'}
+                              </label>
+                              <input
+                                required
+                                type="text"
+                                value={productForm.quantity}
+                                onChange={e => setProductForm({ ...productForm, quantity: e.target.value })}
+                                className="w-full p-2 bg-zinc-900 border border-white/5 rounded-xl text-xs text-white"
+                                placeholder="10"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[7.5px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                                {language === 'PT' ? 'Peso Total (T)' : 'Total Weight (T)'}
+                              </label>
+                              <input
+                                required
+                                type="text"
+                                value={productForm.weight}
+                                onChange={e => setProductForm({ ...productForm, weight: e.target.value })}
+                                className="w-full p-2 bg-zinc-900 border border-white/5 rounded-xl text-xs text-white"
+                                placeholder="2T"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[7.5px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                                {language === 'PT' ? 'Cubagem (m³)' : 'Volume (m³)'}
+                              </label>
+                              <input
+                                required
+                                type="text"
+                                value={productForm.volume}
+                                onChange={e => setProductForm({ ...productForm, volume: e.target.value })}
+                                className="w-full p-2 bg-zinc-900 border border-white/5 rounded-xl text-xs text-white"
+                                placeholder="5m³"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 pt-1.5">
+                            <button
+                              type="button"
+                              onClick={handleProductFormSubmit}
+                              className="flex-1 py-1.5 bg-supplyx-blue hover:brightness-110 text-white text-[9px] uppercase font-black tracking-wider rounded-lg transition-all"
+                            >
+                              {language === 'PT' ? 'Confirmar' : 'Confirm'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowProductForm(false)}
+                              className="flex-1 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 text-[9px] uppercase font-black tracking-wider rounded-lg transition-all"
+                            >
+                              {language === 'PT' ? 'Cancelar' : 'Cancel'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 flex flex-col gap-2">

@@ -1452,19 +1452,19 @@ export default function LogisticsDashboard({
             </div>
           )}
 
-          {/* TAB 6: EVENT ARCHITECTURE SEQUENCE SIMULATOR */}
+          {/* TAB 6: EVENT ARCHITECTURE SEQUENCE SIMULATOR AND REAL OCCURRENCES */}
           {activeInnerTab === 'logs' && (
-            <div className={`p-8 rounded-[40px] border ${
+            <div className={`p-8 rounded-[40px] border space-y-8 ${
               isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-100 shadow-sm'
             }`}>
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-8 pb-4 border-b border-white/5">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-white/5">
                 <div>
                   <h3 className="text-xs font-black uppercase tracking-[0.2em] text-supplyx-blue flex items-center gap-2">
                     <Layers className="w-4 h-4 text-supplyx-blue" />
                     B2B Real-Time Logistics Event Architecture Log
                   </h3>
                   <p className="text-[9px] font-semibold text-zinc-500 mt-1 uppercase tracking-widest leading-none">
-                    Barramento de eventos com selagem em custódia inteligente e distribuição de pagamento SAP-like
+                    Barramento de eventos com selagem em custódia inteligente e distribuição de pagamento de frete
                   </p>
                 </div>
 
@@ -1476,35 +1476,107 @@ export default function LogisticsDashboard({
                 </button>
               </div>
 
-              {/* CHRONOLOGICAL EVENTS LIST */}
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                {eventLogs.map((log, idx) => {
-                  const isActiveStep = eventProgress === idx;
-                  return (
-                    <div 
-                      key={log.code} 
-                      className={`p-4 rounded-2xl border transition-all ${
-                        log.isDone 
-                          ? isActiveStep 
-                            ? 'bg-supplyx-blue/15 border-supplyx-blue scale-[1.02] ring-2 ring-supplyx-blue/20'
-                            : 'bg-zinc-950/45 border-emerald-500/10'
-                          : 'bg-zinc-900/10 border-white/[0.02] opacity-55'
-                      }`}
-                    >
-                      <div className="flex justify-between items-center mb-1.5">
-                        <span className={`px-2 py-0.5 rounded text-[7px] font-black uppercase ${
-                          log.isDone ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-900 text-zinc-500'
-                        }`}>
-                          {log.code}
-                        </span>
-                        <span className="text-[8.5px] font-mono text-zinc-500 font-extrabold">{log.time}</span>
-                      </div>
+              {/* REAL-TIME OCCURRENCES / INCIDENTS FILE (CRITICAL USER GAP FIX) */}
+              <div className="p-6 rounded-[32px] border border-red-500/10 bg-red-500/[0.02] space-y-4">
+                <div>
+                  <h4 className="text-[11px] font-black uppercase text-red-400 tracking-wider flex items-center gap-2 leading-none">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse inline-block" />
+                    {language === 'PT' ? '🚨 Painel de Ocorrências Logísticas Reais' : '🚨 Real Logistics Incident Logs'}
+                  </h4>
+                  <p className="text-[8.5px] font-black uppercase tracking-widest text-[#888] mt-1">
+                    {language === 'PT' ? 'Histórico real de desvios, sinistros e avarias reportadas nas rotas dos contratos de frete.' : 'Registered real-time incident responses from actual running shipping files.'}
+                  </p>
+                </div>
 
-                      <h4 className="text-[11.5px] font-black text-zinc-200 mt-2">{log.title}</h4>
-                      <p className="text-[9px] font-bold text-zinc-500 mt-1 tracking-normal uppercase">{log.info}</p>
-                    </div>
-                  );
-                })}
+                {occurrences.length === 0 ? (
+                  <div className="p-8 text-center border border-dashed border-zinc-800/60 rounded-2xl">
+                    <span className="text-lg">💚</span>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mt-2">
+                      {language === 'PT' ? 'Excelente! Zero ocorrências críticas abertas no ecossistema.' : 'Amazing! Operational corridors running on 100% normal flow.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {occurrences.map((occ) => {
+                      const isOpened = occ.status === 'Aberta';
+                      return (
+                        <div 
+                          key={occ.id} 
+                          className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 transition-colors ${
+                            isOpened 
+                              ? 'bg-red-500/5 border-red-500/25 shadow-lg shadow-red-500/5' 
+                              : 'bg-zinc-950/40 border-emerald-500/15'
+                          }`}
+                        >
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-[7.5px] font-black uppercase tracking-widest leading-none">
+                              <span className="text-zinc-500">CONTRATO: <span className="text-white font-mono">#{occ.cargoId}</span></span>
+                              <span className="text-zinc-500">{occ.dateTime}</span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-wider leading-none ${
+                                isOpened ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
+                              }`}>
+                                {occ.status} • {occ.category}
+                              </span>
+                              <span className="text-[8px] font-mono text-zinc-500 font-bold">#{occ.id}</span>
+                            </div>
+
+                            <p className="text-xs font-black text-white leading-relaxed mt-2 italic">"{occ.description}"</p>
+                            <p className="text-[8px] font-bold text-zinc-500 uppercase">Responsável: {occ.responsible}</p>
+                          </div>
+
+                          <button
+                            onClick={() => onSelectRequest(occ.cargoId)}
+                            className="w-full py-2 bg-zinc-950 hover:bg-zinc-900 border border-white/5 hover:border-red-500/40 text-red-400 hover:text-white rounded-xl text-[8.5px] font-black uppercase tracking-widest transition-all text-center flex items-center justify-center gap-1.5 select-none"
+                          >
+                            <span>⚙️ Entrar no Dossiê de Carga</span>
+                            <span>→</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* CHRONOLOGICAL EVENTS LIST */}
+              <div className="space-y-4 pt-4 border-t border-white/5">
+                <div>
+                  <h4 className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">
+                    {language === 'PT' ? '📈 Fluxo Teórico / Simulador de Barramento SAP-like' : '📈 Theoretical Event Bus Sequence & Escrow Ledger Simulation'}
+                  </h4>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                  {eventLogs.map((log, idx) => {
+                    const isActiveStep = eventProgress === idx;
+                    return (
+                      <div 
+                        key={log.code} 
+                        className={`p-4 rounded-2xl border transition-all ${
+                          log.isDone 
+                            ? isActiveStep 
+                              ? 'bg-supplyx-blue/15 border-supplyx-blue scale-[1.02] ring-2 ring-supplyx-blue/20'
+                              : 'bg-zinc-950/45 border-emerald-500/10'
+                            : 'bg-zinc-900/10 border-white/[0.02] opacity-55'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className={`px-2 py-0.5 rounded text-[7px] font-black uppercase ${
+                            log.isDone ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-900 text-zinc-500'
+                          }`}>
+                            {log.code}
+                          </span>
+                          <span className="text-[8.5px] font-mono text-zinc-500 font-extrabold">{log.time}</span>
+                        </div>
+
+                        <h4 className="text-[11.5px] font-black text-zinc-200 mt-2">{log.title}</h4>
+                        <p className="text-[9px] font-bold text-zinc-500 mt-1 tracking-normal uppercase">{log.info}</p>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="p-5 rounded-2xl bg-zinc-950 border border-white/5 mt-8 max-w-2xl">

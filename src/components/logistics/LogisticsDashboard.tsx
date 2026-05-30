@@ -311,7 +311,7 @@ export default function LogisticsDashboard({
       risk: 'Baixo (Tempo Firme)',
       riskLevel: 'low',
       roadQuality: '84% Asfalto Regularizado',
-      suggestedCarrier: 'Moz Logistics, Lda (Classificação 4.8★)',
+      suggestedCarrier: language === 'PT' ? 'Transportador do Concurso' : 'Concourse Carrier',
       basePrice: 2075 * 45 
     },
     'corredor-centro': {
@@ -321,7 +321,7 @@ export default function LogisticsDashboard({
       risk: 'Médio (Instabilidade de Chuvas em Tete)',
       riskLevel: 'medium',
       roadQuality: '68% Pavimento em Obras',
-      suggestedCarrier: 'Fast Cargo Transportes (Classificação 4.6★)',
+      suggestedCarrier: language === 'PT' ? 'Transportador Express' : 'Express Carrier',
       basePrice: 1430 * 48 
     }
   }[selectedCorrider]) || {
@@ -331,7 +331,7 @@ export default function LogisticsDashboard({
     risk: 'Baixo (Tempo Firme)',
     riskLevel: 'low',
     roadQuality: '84% Asfalto Regularizado',
-    suggestedCarrier: 'Moz Logistics, Lda (Classificação 4.8★)',
+    suggestedCarrier: language === 'PT' ? 'Transportador do Concurso' : 'Concourse Carrier',
     basePrice: 2075 * 45
   };
 

@@ -18,6 +18,9 @@ import {
   FileText
 } from 'lucide-react';
 import { CargoRequest } from './types';
+import { db, auth } from '../../lib/firebase';
+import { useAuth } from '../../contexts/AuthContext';
+import { collection, doc, setDoc } from 'firebase/firestore';
 
 interface CarrierCentralProps {
   isDarkMode: boolean;
@@ -38,6 +41,9 @@ export default function CarrierCentral({
   onAddOccurrence,
   profileName
 }: CarrierCentralProps) {
+  const { user, profile } = useAuth();
+  const carrierName = profile?.companyName || profileName || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Minha Transportadora');
+
   // Setup tabs inside Carrier Central: 'available' | 'active' | 'tracking' | 'chat'
   const [carrierTab, setCarrierTab] = useState<'available' | 'active' | 'tracking' | 'chat'>('active');
   const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
@@ -90,7 +96,7 @@ export default function CarrierCentral({
   const [bidVehicle, setBidVehicle] = useState('Volvo FH 540 Globetrotter');
   const [bidInsurance, setBidInsurance] = useState('Incluso (Fidelidade)');
 
-  const handleSubmitBid = (loadId: string) => {
+  const handleSubmitBid = async (loadId: string) => {
     if (!bidPrice.trim()) return;
 
     const numPriceInput = parseInt(bidPrice, 10) || 80000;
@@ -107,11 +113,12 @@ export default function CarrierCentral({
       status: 'Em análise',
       truckType: bidVehicle,
       vehicle: bidVehicle,
-      trips: 184,
-      completedDeliveries: 184,
+      trips: 1,
+      completedDeliveries: 1,
       insurance: bidInsurance,
       remarks: bidRemarks,
-      conditions: bidRemarks || 'Condições comerciais padrão'
+      conditions: bidRemarks || 'Condições comerciais padrão',
+      userId: user?.uid || 'anonymous'
     };
 
     // Load existing bids
@@ -120,50 +127,24 @@ export default function CarrierCentral({
       const stored = localStorage.getItem(`supplyx_bids_${loadId}`);
       if (stored) {
         existingBids = JSON.parse(stored);
-      } else {
-        // Mock competing bids for rich simulation
-        existingBids = [
-          {
-            id: 'PP-102',
-            cargoId: loadId,
-            name: 'Moz Logistics, Lda',
-            price: Math.round(numPriceInput * 1.1),
-            rating: 4.7,
-            deliverTime: `${parseInt(bidDays) + 1} Dias`,
-            timeEstimate: `${parseInt(bidDays) + 1} Dias`,
-            status: 'Em análise',
-            truckType: 'Scania Streamline R440',
-            vehicle: 'Scania Streamline R440',
-            trips: 312,
-            completedDeliveries: 312,
-            insurance: 'Incluso (Standard)',
-            remarks: 'Frota certificada com seguro carga ambiental incluso.',
-            conditions: 'Frota certificada com seguro carga ambiental incluso.'
-          },
-          {
-            id: 'PP-103',
-            cargoId: loadId,
-            name: 'Nampula Fretes Express',
-            price: Math.round(numPriceInput * 0.95),
-            rating: 4.3,
-            deliverTime: `${parseInt(bidDays) + 2} Dias`,
-            timeEstimate: `${parseInt(bidDays) + 2} Dias`,
-            status: 'Em análise',
-            truckType: 'Caminhão Ligeiro Baú',
-            vehicle: 'Caminhão Ligeiro Baú',
-            trips: 64,
-            completedDeliveries: 64,
-            insurance: 'Nenhum',
-            remarks: 'Fretamento flexível.',
-            conditions: 'Fretamento flexível.'
-          }
-        ];
       }
     } catch (e) {}
 
     // Add new user bid to list representatively
     existingBids = [newBid, ...existingBids];
     localStorage.setItem(`supplyx_bids_${loadId}`, JSON.stringify(existingBids));
+
+    // Wait, save real-time bid to Firestore 'carrier_bids' and link to the requesting user too!
+    try {
+      const bidDocRef = doc(collection(db, 'carrier_bids'));
+      const finalBidDoc = {
+        ...newBid,
+        id: bidDocRef.id
+      };
+      await setDoc(bidDocRef, finalBidDoc);
+    } catch (error) {
+      console.error("Error saving bid to Firestore:", error);
+    }
 
     // Update cargo request details: increment proposalsCount, transition status, and record driver bid
     const updated = requests.map(r => {
@@ -181,7 +162,7 @@ export default function CarrierCentral({
     onUpdateRequests(updated);
 
     // Show confirmation and reset
-    alert(language === 'PT' ? 'Proposta logística enviada com sucesso ao cliente! Aguarde a adjudicação no painel.' : 'Logistics bid successfully submitted to the buyer! Awaiting selection.');
+    alert(language === 'PT' ? 'Proposta logística enviada com sucesso! O remetente verá seu lance em tempo real no painel do pedido.' : 'Logistics bid successfully submitted! The sender will see your bid in real-time on their order panel.');
     setBiddingLoadId(null);
     setBidPrice('');
     setBidRemarks('');
@@ -198,8 +179,6 @@ export default function CarrierCentral({
     setChatMessages(updatedChats);
   };
 
-  const carrierName = profileName || 'Fast Cargo Transportes Lda';
-
   // Filters computed based on carrier assignment
   const availableLoads = requests.filter(r => r.status === 'Em concurso');
   
@@ -207,7 +186,7 @@ export default function CarrierCentral({
     r.status !== 'Em concurso' && 
     r.status !== 'Pago' && 
     r.status !== 'Pendente' &&
-    (r.assignedCarrier === carrierName || r.assignedCarrier === 'Fast Cargo Transportes' || r.assignedCarrier === 'Moz Logistics, Lda' || !r.assignedCarrier)
+    (r.assignedCarrier === carrierName || r.assignedCarrier === profileName || !r.assignedCarrier)
   );
 
   // Set first load as default selection if none

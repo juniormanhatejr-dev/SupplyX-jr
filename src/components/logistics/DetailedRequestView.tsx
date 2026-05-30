@@ -26,7 +26,7 @@ import {
 import { CargoRequest, CommercialDriver, CarrierProposal, Occurrence } from './types';
 import { db, auth } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
-import { collection, query, where, getDocs, getDoc, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, getDoc, addDoc, updateDoc, doc, serverTimestamp, onSnapshot, setDoc } from 'firebase/firestore';
 
 interface DetailedRequestViewProps {
   isDarkMode: boolean;
@@ -456,55 +456,50 @@ export default function DetailedRequestView({
     return -1; // e.g. Cancelado
   }, [requestObj.status]);
 
-  // Persisted proposals inside localStorage for interactive Bidding
+  // Persisted proposals inside localStorage and Firestore for interactive Bidding
   const [bids, setBids] = useState<CarrierProposal[]>(() => {
     const stored = localStorage.getItem(`supplyx_bids_${selectedRequestId}`);
     if (stored) return JSON.parse(stored);
-
-    // Initial default bids
-    const initialBids: CarrierProposal[] = [
-      {
-        id: 'BP-01',
-        cargoId: selectedRequestId,
-        name: 'Moz Logistics, Lda',
-        rating: 4.8,
-        deliverTime: '3 dias',
-        price: 78000,
-        trips: 184,
-        insurance: 'Incluso (Fidelidade)',
-        conditions: 'Faturado 15d'
-      },
-      {
-        id: 'BP-02',
-        cargoId: selectedRequestId,
-        name: 'Fast Cargo Transportes',
-        rating: 4.6,
-        deliverTime: '2 dias',
-        price: 85000,
-        trips: 112,
-        insurance: 'Incluso (Standard)',
-        conditions: 'Faturado 30d'
-      },
-      {
-        id: 'BP-03',
-        cargoId: selectedRequestId,
-        name: 'Nampula Carriers',
-        rating: 4.2,
-        deliverTime: '4 dias',
-        price: 72000,
-        trips: 64,
-        insurance: 'Sob Consulta',
-        conditions: '50% Entrada'
-      }
-    ];
-
-    localStorage.setItem(`supplyx_bids_${selectedRequestId}`, JSON.stringify(initialBids));
-    return initialBids;
+    return [];
   });
 
-  const syncBids = (newBids: CarrierProposal[]) => {
-    localStorage.setItem(`supplyx_bids_${selectedRequestId}`, JSON.stringify(newBids));
+  useEffect(() => {
+    if (!selectedRequestId) return;
+    const q = query(
+      collection(db, 'carrier_bids'),
+      where('cargoId', '==', selectedRequestId)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const liveBids: CarrierProposal[] = [];
+      snapshot.forEach((docRef) => {
+        liveBids.push({ id: docRef.id, ...docRef.data() } as CarrierProposal);
+      });
+      setBids(liveBids);
+      localStorage.setItem(`supplyx_bids_${selectedRequestId}`, JSON.stringify(liveBids));
+    }, (error) => {
+      console.warn("Could not load real-time bids:", error);
+    });
+    return () => unsubscribe();
+  }, [selectedRequestId]);
+
+  const syncBids = async (newBids: CarrierProposal[]) => {
     setBids(newBids);
+    localStorage.setItem(`supplyx_bids_${selectedRequestId}`, JSON.stringify(newBids));
+
+    // Upload newly created bid to Firestore 'carrier_bids' if any
+    const latestBid = newBids[newBids.length - 1];
+    if (latestBid) {
+      try {
+        const docRef = doc(collection(db, 'carrier_bids'));
+        await setDoc(docRef, {
+          ...latestBid,
+          id: docRef.id,
+          userId: user?.uid || 'anonymous'
+        });
+      } catch (err) {
+        console.error("Error writing new bid to Firestore:", err);
+      }
+    }
   };
 
   // Filter the bids shown based on the user's role: logistics agents cannot see proposals from other agents
@@ -513,7 +508,7 @@ export default function DetailedRequestView({
       // Show only current user's bids
       return bids.filter(prop => prop.userId === user?.uid);
     }
-    // Buyers/Suppliers see all bids (default simulated ones + actual user submitted ones)
+    // Buyers/Suppliers see all bids (their real submitted user bids)
     return bids;
   }, [bids, userType, user?.uid]);
 
@@ -1190,12 +1185,14 @@ export default function DetailedRequestView({
               </button>
             )}
 
-            <button 
-              onClick={() => onChangeRequestStatus(requestObj.id, 'Cancelado')}
-              className="px-4 py-2.5 rounded-xl bg-red-500/15 border border-red-500/25 text-red-400 hover:bg-red-500 hover:text-white text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer"
-            >
-              ❌ {language === 'PT' ? 'Cancelar Pedido' : 'Abort Order'}
-            </button>
+            {userType !== 'logistics' && (
+              <button 
+                onClick={() => onChangeRequestStatus(requestObj.id, 'Cancelado')}
+                className="px-4 py-2.5 rounded-xl bg-red-500/15 border border-red-500/25 text-red-400 hover:bg-red-500 hover:text-white text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer"
+              >
+                ❌ {language === 'PT' ? 'Cancelar Pedido' : 'Abort Order'}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1711,7 +1708,7 @@ export default function DetailedRequestView({
                       <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">
                         {language === 'PT' ? 'Lista de Todos os Produtos:' : 'All cargo load items:'}
                       </span>
-                      {userType === 'logistics' && (
+                      {userType !== 'logistics' && (
                         <button
                           type="button"
                           onClick={handleAddProductClick}
@@ -1751,7 +1748,7 @@ export default function DetailedRequestView({
                               </div>
                             </div>
 
-                            {userType === 'logistics' && (
+                            {userType !== 'logistics' && (
                               <div className="flex items-center gap-1.5">
                                 <button
                                   type="button"

@@ -105,56 +105,15 @@ export default function LogisticsView({
   // 2. Active Fleets / Drivers list
   const [drivers, setDrivers] = useState<CommercialDriver[]>(() => {
     const saved = localStorage.getItem('supplyx_drivers');
-    const initialDriversList: CommercialDriver[] = [
-      {
-        id: 'DR-101',
-        name: 'Armando Nhacula',
-        licenseId: 'MC-87983-C',
-        vehicle: 'Volvo FH 540 Globetrotter',
-        capacity: '36 Toneladas',
-        location: 'Maputo Port, Moçambique',
-        status: 'Disponível',
-        rating: 4.9,
-        trips: 244,
-        phone: '+258 84 321 0041'
-      },
-      {
-        id: 'DR-102',
-        name: 'Belmiro Soto',
-        licenseId: 'LP-43901-B',
-        vehicle: 'Scania Streamline R440',
-        capacity: '32 Toneladas',
-        location: 'Beira Port, Moçambique',
-        status: 'Em Trânsito',
-        rating: 4.8,
-        trips: 158,
-        phone: '+258 82 543 9122'
-      },
-      {
-        id: 'DR-103',
-        name: 'Nelson Ubisse',
-        licenseId: 'HN-39108-A',
-        vehicle: 'Mercedes Benz Actros',
-        capacity: '40 Toneladas',
-        location: 'Nacala Corridor, Moçambique',
-        status: 'Disponível',
-        rating: 4.7,
-        trips: 193,
-        phone: '+258 87 231 1093'
-      }
-    ];
-
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.length > 0) {
+        if (parsed && Array.isArray(parsed)) {
           return parsed;
         }
       } catch (e) {}
     }
-
-    localStorage.setItem('supplyx_drivers', JSON.stringify(initialDriversList));
-    return initialDriversList;
+    return [];
   });
 
   // 3. Storage Warehouses list

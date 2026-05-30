@@ -82,7 +82,7 @@ export default function RequestsListPage({
               </span>
 
               <div className="flex items-center gap-2">
-                {req.id.startsWith('TR-2025-000') === false && (
+                {req.id.startsWith('TR-2025-000') === false && userType !== 'logistics' && (
                   <button 
                     onClick={(e) => handleDelete(req.id, e)}
                     className="p-1 px-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white text-[8px] font-bold hover:shadow-md transition-all uppercase"

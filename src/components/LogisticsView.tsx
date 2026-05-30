@@ -81,19 +81,56 @@ export default function LogisticsView({
   // 2. Active Fleets / Drivers list
   const [drivers, setDrivers] = useState<CommercialDriver[]>(() => {
     const saved = localStorage.getItem('supplyx_drivers');
+    const initialDriversList: CommercialDriver[] = [
+      {
+        id: 'DR-101',
+        name: 'Armando Nhacula',
+        licenseId: 'MC-87983-C',
+        vehicle: 'Volvo FH 540 Globetrotter',
+        capacity: '36 Toneladas',
+        location: 'Maputo Port, Moçambique',
+        status: 'Disponível',
+        rating: 4.9,
+        trips: 244,
+        phone: '+258 84 321 0041'
+      },
+      {
+        id: 'DR-102',
+        name: 'Belmiro Soto',
+        licenseId: 'LP-43901-B',
+        vehicle: 'Scania Streamline R440',
+        capacity: '32 Toneladas',
+        location: 'Beira Port, Moçambique',
+        status: 'Em Trânsito',
+        rating: 4.8,
+        trips: 158,
+        phone: '+258 82 543 9122'
+      },
+      {
+        id: 'DR-103',
+        name: 'Nelson Ubisse',
+        licenseId: 'HN-39108-A',
+        vehicle: 'Mercedes Benz Actros',
+        capacity: '40 Toneladas',
+        location: 'Nacala Corridor, Moçambique',
+        status: 'Disponível',
+        rating: 4.7,
+        trips: 193,
+        phone: '+258 87 231 1093'
+      }
+    ];
+
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Completely exclude pre-existing non-user-registered drivers
-        return parsed.filter((d: any) => d && d.id !== 'DR-01' && d.id !== 'DR-02' && d.id !== 'DR-03');
-      } catch (e) {
-        return [];
-      }
+        if (parsed && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {}
     }
 
-    const initialDrivers: CommercialDriver[] = [];
-    localStorage.setItem('supplyx_drivers', JSON.stringify(initialDrivers));
-    return initialDrivers;
+    localStorage.setItem('supplyx_drivers', JSON.stringify(initialDriversList));
+    return initialDriversList;
   });
 
   // 3. Storage Warehouses list
@@ -412,10 +449,34 @@ export default function LogisticsView({
     const matchedCargo = customRequests.find(r => r.id === id);
     const cargoName = matchedCargo ? matchedCargo.tipoCarga : 'Carga';
     
-    // Auto-update matched financial ledger carrier name if assigned in cargo
     const updated = customRequests.map(r => {
       if (r.id === id) {
-        return { ...r, status: newStatus };
+        let progression = r.trackProgress || 0;
+        let trackText = r.trackStatusText || '';
+        
+        if (newStatus === 'Atribuído') {
+          progression = 0;
+          trackText = 'Motorista atribuído e aguardando liberação documental.';
+        } else if (newStatus === 'Em recolha') {
+          progression = 25;
+          trackText = 'Carga em recolha / Motorista posicionado para carregamento.';
+        } else if (newStatus === 'Em trânsito') {
+          progression = 55;
+          trackText = 'Carga em trânsito ativa na rodovia EN1.';
+        } else if (newStatus === 'Chegada ao destino' || newStatus === 'Próximo da entrega') {
+          progression = 90;
+          trackText = 'Motorista próximo da entrega / Finalizando documentação.';
+        } else if (newStatus === 'Entregue') {
+          progression = 100;
+          trackText = 'Entrega efetuada com sucesso!';
+        }
+        
+        return { 
+          ...r, 
+          status: newStatus, 
+          trackProgress: progression, 
+          trackStatusText: trackText 
+        };
       }
       return r;
     });

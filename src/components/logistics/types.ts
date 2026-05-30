@@ -71,6 +71,7 @@ export interface CommercialDriver {
   rating: number;
   trips: number;
   avatar?: string;
+  phone?: string;
 }
 
 export interface StorageWarehouse {

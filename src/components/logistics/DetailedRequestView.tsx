@@ -195,7 +195,8 @@ export default function DetailedRequestView({
       location: '-',
       status: 'Pendente',
       rating: 5.0,
-      trips: 0
+      trips: 0,
+      phone: '+258 84 321 0041'
     };
   }, [requestObj.driverName, drivers, language]);
 
@@ -304,15 +305,16 @@ export default function DetailedRequestView({
     onAddOccurrence?.(newOccInstance);
   };
 
-  // Stepper timeline - aligned strictly with the requested 7 states
+  // Stepper timeline - aligned strictly with the requested 7-step states
   // We exclude 'Cancelado' because it is a terminal abort state.
   const stepperStates = [
-    { title: 'Pendente', date: language === 'PT' ? 'Fila Inicial' : 'Fila Inicial', key: 'Pendente' },
-    { title: 'Em concurso', date: language === 'PT' ? 'Propostas do Mercado' : 'Bidding phase', key: 'Em concurso' },
-    { title: 'Atribuído', date: language === 'PT' ? 'Livre Seletivo' : 'Carrier assigned', key: 'Atribuído' },
-    { title: 'Em recolha', date: language === 'PT' ? 'Coleta e Verficação' : 'Pickup depot', key: 'Em recolha' },
-    { title: 'Em trânsito', date: language === 'PT' ? 'Em viagem ativa' : 'On corridor', key: 'Em trânsito' },
-    { title: 'Entregue', date: language === 'PT' ? 'POD Consolidado' : 'Consolidated PoD', key: 'Entregue' }
+    { title: language === 'PT' ? '📦 Pedida' : 'Ordered', date: language === 'PT' ? 'Necessidade Criada' : 'Need Created', key: 'Pendente' },
+    { title: language === 'PT' ? '🚚 Contratada' : 'Allocated', date: language === 'PT' ? 'Concurso Finalizado' : 'Concourse Closed', key: 'Em concurso' },
+    { title: language === 'PT' ? '👨‍✈️ Atribuído' : 'Dispatched', date: language === 'PT' ? 'Motorista Vinculado' : 'Driver Assigned', key: 'Atribuído' },
+    { title: language === 'PT' ? '📍 Recolhida' : 'Picked Up', date: language === 'PT' ? 'Coleta Efetuada' : 'Cargo Loaded', key: 'Em recolha' },
+    { title: language === 'PT' ? '🛣️ Em Trânsito' : 'In Transit', date: language === 'PT' ? 'Viagem Ativa EN1' : 'Active Corridor', key: 'Em trânsito' },
+    { title: language === 'PT' ? '🏁 Chegada' : 'Arrival', date: language === 'PT' ? 'Destino Alcançado' : 'Destination Reached', key: 'Chegada ao destino' },
+    { title: language === 'PT' ? '✅ Entregue' : 'Delivered', date: language === 'PT' ? 'POD Consolidado' : 'Consolidated PoD', key: 'Entregue' }
   ];
 
   // Map active step index logic
@@ -323,7 +325,8 @@ export default function DetailedRequestView({
     if (status === 'Atribuído' || status === 'Negociação') return 2;
     if (status === 'Em recolha' || status === 'Aguardando Coleta') return 3;
     if (status === 'Em trânsito' || status === 'Em Transporte') return 4;
-    if (status === 'Entregue') return 5;
+    if (status === 'Chegada ao destino' || status === 'Próximo da entrega' || status === 'Chegando ao destino') return 5;
+    if (status === 'Entregue') return 6;
     return -1; // e.g. Cancelado
   }, [requestObj.status]);
 
@@ -1019,7 +1022,7 @@ export default function DetailedRequestView({
             {requestObj.status === 'Pendente' && (
               <button 
                 onClick={() => onPublishToConcourse(requestObj.id)}
-                className="px-5 py-2.5 rounded-xl bg-supplyx-blue hover:brightness-110 text-white text-[9.5px] font-black uppercase tracking-wider"
+                className="px-5 py-2.5 rounded-xl bg-supplyx-blue hover:brightness-110 text-white text-[9.5px] font-black uppercase tracking-wider cursor-pointer"
               >
                 📢 {language === 'PT' ? 'Publicar no Canal de Concursos' : 'Publish to Carriers Concourse'}
               </button>
@@ -1028,33 +1031,42 @@ export default function DetailedRequestView({
             {requestObj.status === 'Atribuído' && (
               <button 
                 onClick={() => onChangeRequestStatus(requestObj.id, 'Em recolha')}
-                className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[9.5px] font-black uppercase tracking-wider"
+                className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[9.5px] font-black uppercase tracking-wider cursor-pointer"
               >
-                🚚 {language === 'PT' ? 'Colocar em Recolha' : 'Advance to Recollec'}
+                🚚 {language === 'PT' ? 'Iniciar Coleta (Efetuar Recolha)' : 'Advance to Pickup'}
               </button>
             )}
 
             {requestObj.status === 'Em recolha' && (
               <button 
                 onClick={() => onChangeRequestStatus(requestObj.id, 'Em trânsito')}
-                className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-[9.5px] font-black uppercase tracking-wider"
+                className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-[9.5px] font-black uppercase tracking-wider cursor-pointer"
               >
-                🛣️ {language === 'PT' ? 'Iniciar Viagem (Em trânsito)' : 'Disptach to Corridor'}
+                🛣️ {language === 'PT' ? 'Despachar Camião (Iniciar Viagem)' : 'Dispatch to Transit'}
               </button>
             )}
 
             {requestObj.status === 'Em trânsito' && (
               <button 
-                onClick={() => onChangeRequestStatus(requestObj.id, 'Entregue')}
-                className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[9.5px] font-black uppercase tracking-wider"
+                onClick={() => onChangeRequestStatus(requestObj.id, 'Chegada ao destino')}
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[9.5px] font-black uppercase tracking-wider cursor-pointer"
               >
-                📦 {language === 'PT' ? 'Finalizar Entrega (Entregue)' : 'Confirm Perfect Delivery'}
+                🏁 {language === 'PT' ? 'Confirmar Chegada ao Destino' : 'Confirm Destination'}
+              </button>
+            )}
+
+            {(requestObj.status === 'Chegada ao destino' || requestObj.status === 'Próximo da entrega') && (
+              <button 
+                onClick={() => onChangeRequestStatus(requestObj.id, 'Entregue')}
+                className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[9.5px] font-black uppercase tracking-wider cursor-pointer"
+              >
+                ✅ {language === 'PT' ? 'Finalizar Entrega (POD Consolidado)' : 'Finalize Delivery'}
               </button>
             )}
 
             <button 
               onClick={() => onChangeRequestStatus(requestObj.id, 'Cancelado')}
-              className="px-4 py-2.5 rounded-xl bg-red-500/15 border border-red-500/25 text-red-400 hover:bg-red-500 hover:text-white text-[9px] font-black uppercase tracking-wider transition-all"
+              className="px-4 py-2.5 rounded-xl bg-red-500/15 border border-red-500/25 text-red-400 hover:bg-red-500 hover:text-white text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer"
             >
               ❌ {language === 'PT' ? 'Cancelar Pedido' : 'Abort Order'}
             </button>
@@ -1155,12 +1167,17 @@ export default function DetailedRequestView({
               isDarkMode ? 'bg-zinc-900/50 border-white/5 shadow-2xl' : 'bg-white border-zinc-100 shadow-sm'
             }`}>
               <div>
-                <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/5">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-supplyx-blue" />
-                    {language === 'PT' ? 'Histórico de Mensagens / Respostas' : 'Message & Negotiation Log'}
-                  </h3>
-                  <span className="text-[8px] font-mono text-zinc-450 uppercase">ID: #{requestObj.id}</span>
+                <div className="flex justify-between items-center mb-3 pb-3 border-b border-white/5">
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-[#0052CC] flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4" />
+                      {language === 'PT' ? '💬 Chat da Operação' : '💬 Operations Chat'}
+                    </h3>
+                    <p className="text-[7.5px] uppercase tracking-wider font-extrabold text-zinc-500 mt-1">
+                      {language === 'PT' ? 'Participantes: 🏭 Cliente • 🌾 Fornecedor • 🚚 Transportadora' : 'Members: 🏭 Client • 🌾 Supplier • 🚚 Carrier'}
+                    </p>
+                  </div>
+                  <span className="text-[8px] font-mono bg-zinc-950 px-2 py-1 rounded-md text-zinc-400 border border-white/5">ID: #{requestObj.id}</span>
                 </div>
 
                 {/* Logistics Partners selector for Requesters (Client/Supplier) */}
@@ -1731,16 +1748,21 @@ export default function DetailedRequestView({
                       </div>
                       <div>
                         <p className="text-[11px] font-black text-white uppercase tracking-wider">{assignedDriver.name}</p>
-                        <p className="text-[8px] font-bold text-zinc-500 uppercase">
+                        <p className="text-[8px] font-bold text-zinc-400 uppercase leading-relaxed mt-0.5">
                           {assignedDriver.vehicle} • Placa: {assignedDriver.licenseId}
                         </p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <div className="flex items-center gap-0.5">
-                            <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
-                            <span className="text-[9px] font-black text-zinc-300 font-mono">{assignedDriver.rating}</span>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <div className="flex items-center gap-0.5 bg-zinc-950 px-1.5 py-0.5 rounded text-[7.5px] border border-white/5 font-bold">
+                            <Star className="w-2 h-2 text-amber-500 fill-amber-500" />
+                            <span className="text-[8.5px] font-bold text-zinc-300 font-mono">{assignedDriver.rating}</span>
                           </div>
-                          <span className="text-[8px] text-zinc-500 font-bold">• {assignedDriver.trips || 120} viagens</span>
+                          <span className="text-[7.5px] text-zinc-550 font-bold">• {assignedDriver.trips || 120} viagens</span>
                         </div>
+                        {assignedDriver.phone && (
+                          <p className="text-[8.5px] font-black text-emerald-400 font-mono mt-1.5 flex items-center gap-1">
+                            <span>📞</span> TEL: {assignedDriver.phone}
+                          </p>
+                        )}
                       </div>
                     </div>
 

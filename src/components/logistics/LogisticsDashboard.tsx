@@ -59,12 +59,7 @@ const categoryData = [
   { name: 'Químicos / Fluidos', value: 10, color: '#ec4899' },
 ];
 
-const carrierPerformanceData = [
-  { name: 'Moz Logistics, Lda', onTime: 98, costIndex: 92, fleetSize: 42 },
-  { name: 'Fast Cargo S.A.', onTime: 96, costIndex: 94, fleetSize: 30 },
-  { name: 'Transportes União', onTime: 94, costIndex: 88, fleetSize: 22 },
-  { name: 'Manica Logistics', onTime: 90, costIndex: 90, fleetSize: 15 },
-];
+const carrierPerformanceData: any[] = [];
 
 interface LogisticsDashboardProps {
   isDarkMode: boolean;
@@ -137,9 +132,9 @@ export default function LogisticsDashboard({
 
   // Simulated live trucks along coordinates
   const trucksList = [
-    { id: 'truck-01', name: 'Volvo FH 540 (Carlos)', route: 'Maputo ➔ Nampula', currentPos: 35, speed: '83 km/h', payload: 'Cimento CP-IV', lat: -25.96, lon: 32.58, temp: '22°C', fuel: '78%', status: 'Normal' },
-    { id: 'truck-02', name: 'Scania Streamline (Mateus)', route: 'Beira ➔ Moatize', currentPos: 65, speed: '72 km/h', payload: 'Combustível Especializado', lat: -19.82, lon: 34.83, temp: '27°C', fuel: '42%', status: 'Atraso Meteorológico' },
-    { id: 'truck-03', name: 'Mercedes Actros (Armando)', route: 'Tete ➔ Nacala Port', currentPos: 12, speed: '88 km/h', payload: 'Carvão Bruto', lat: -16.15, lon: 33.58, temp: '31°C', fuel: '92%', status: 'Manutenção Preditiva Alerta' }
+    { id: 'truck-01', name: 'Volvo FH 540', route: 'Maputo ➔ Nampula', currentPos: 35, speed: '83 km/h', payload: 'Cimento CP-IV', lat: -25.96, lon: 32.58, temp: '22°C', fuel: '78%', status: 'Normal' },
+    { id: 'truck-02', name: 'Scania Streamline', route: 'Beira ➔ Moatize', currentPos: 65, speed: '72 km/h', payload: 'Combustível Especializado', lat: -19.82, lon: 34.83, temp: '27°C', fuel: '42%', status: 'Atraso Meteorológico' },
+    { id: 'truck-03', name: 'Mercedes Actros', route: 'Tete ➔ Nacala Port', currentPos: 12, speed: '88 km/h', payload: 'Carvão Bruto', lat: -16.15, lon: 33.58, temp: '31°C', fuel: '92%', status: 'Manutenção Preditiva Alerta' }
   ];
 
   useEffect(() => {
@@ -164,7 +159,7 @@ export default function LogisticsDashboard({
   const [eventLogs, setEventLogs] = useState<any[]>([
     { code: 'ORDER_CREATED', title: 'Ordem de Frete Autuada', info: 'ID #TR-2025-0001 criada no painel.', isDone: true, time: '13:02' },
     { code: 'FREIGHT_CREATED', title: 'Margem Contratual Garantida', info: 'Custódia do frete selada em Escrow digital.', isDone: true, time: '13:05' },
-    { code: 'DRIVER_ASSIGNED', title: 'Transportador Selecionado', info: 'Moz Logistics aceitou por MT 78.000.', isDone: false, time: 'Aguardando' },
+    { code: 'DRIVER_ASSIGNED', title: 'Transportador Selecionado', info: 'Transportador credenciado aceitou por MT 78.000.', isDone: false, time: 'Aguardando' },
     { code: 'PICKUP_CONFIRMED', title: 'Coleta Confirmada', info: 'Carga paletizada carregada pelo veículo Volvo.', isDone: false, time: 'Aguardando' },
     { code: 'IN_TRANSIT', title: 'Em Trânsito - GPS Ativo', info: 'Veículo cruzou posto de portagem de Maputo.', isDone: false, time: 'Aguardando' },
     { code: 'ARRIVED_AT_DESTINATION', title: 'Chegada ao Destino', info: 'Ponto final de descarga em Nampula alcançado.', isDone: false, time: 'Aguardando' },
@@ -256,7 +251,7 @@ export default function LogisticsDashboard({
           : '🏢 **WAREHOUSE MATRIX LOGISTICS OVERVIEW:**\nWarehouse WH-01 (Maputo Terminal) is operating at near peak utility (78% storage occupied). I suggest calling **"Balancear Cargas"** (Smart Rebalancing Matrix) to ship the palletized materials bulk surplus to Nacala rail terminal, cutting B2B tariffs by up to 14.5%.';
       } else if (promptLower.includes('efici') || promptLower.includes('custo') || promptLower.includes('match') || promptLower.includes('optimize')) {
         reply = language === 'PT'
-          ? '🤖 **RECOMENDAÇÃO INTELIGENTE DE MATCHING:**\nPara carregar 30 Toneladas de cimento paletizado, a recomendação ótima de veículo é **Scania Streamline de eixos duplos (Moz Logistics)**. Isto economizará **12.4% em consumo médio de combustível** em relação a frotas com truques comuns. O SLA de entrega é assegurado no index de 98%.'
+          ? '🤖 **RECOMENDAÇÃO INTELIGENTE DE MATCHING:**\nPara carregar 30 Toneladas de cimento paletizado, a recomendação ótima de veículo é **Scania Streamline de eixos duplos (Motorista Credenciado)**. Isto economizará **12.4% em consumo médio de combustível** em relação a frotas com truques comuns. O SLA de entrega é assegurado no index de 98%.'
           : '🤖 **SMART PAIRING OPTIMIZATION SUGGESTION:**\nTo haul a payload of 30 Tons of bagged cement, the optimal matched fleet configuration is a **Scania Double-axle (with driver from registered fleet)**. This setup scores **12.4% more fuel efficient** than smaller rigs, maintaining 98% SLA score indices.';
       } else {
         reply = language === 'PT'

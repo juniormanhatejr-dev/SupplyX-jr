@@ -103,18 +103,7 @@ export default function LogisticsView({
   }, [hiddenDossiers, selectedRequestId, customRequests, userType]);
 
   // 2. Active Fleets / Drivers list
-  const [drivers, setDrivers] = useState<CommercialDriver[]>(() => {
-    const saved = localStorage.getItem('supplyx_drivers');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && Array.isArray(parsed)) {
-          return parsed;
-        }
-      } catch (e) {}
-    }
-    return [];
-  });
+  const [drivers, setDrivers] = useState<CommercialDriver[]>([]);
 
   // 3. Storage Warehouses list
   const [warehouses] = useState<StorageWarehouse[]>(() => {
@@ -259,9 +248,28 @@ export default function LogisticsView({
           const item = docSnap.data();
           const reqId = item.id || docSnap.id;
           if (!demoIds.includes(reqId)) {
+            // Filter out mock carrier names from assignedCarrier
+            let assignedCarrier = item.assignedCarrier;
+            if (assignedCarrier) {
+              const lower = assignedCarrier.toLowerCase();
+              const mockNames = [
+                'moz logistics',
+                'fast cargo',
+                'nampula',
+                'união',
+                'uniao',
+                'manica',
+                'supplyx'
+              ];
+              if (mockNames.some(m => lower.includes(m))) {
+                assignedCarrier = undefined;
+              }
+            }
+
             firestoreList.push({
               id: reqId,
               ...item,
+              assignedCarrier
             } as CargoRequest);
           }
         });
@@ -429,7 +437,7 @@ export default function LogisticsView({
         return {
           ...item,
           status: 'Pago',
-          carrier: item.carrier === 'Bidding em Andamento' ? 'Moz Logistics, Lda' : item.carrier
+          carrier: item.carrier === 'Bidding em Andamento' ? (language === 'PT' ? 'Transportadora Selecionada' : 'Selected Carrier') : item.carrier
         };
       }
       return item;

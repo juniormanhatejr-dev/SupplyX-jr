@@ -504,12 +504,26 @@ export default function DetailedRequestView({
 
   // Filter the bids shown based on the user's role: logistics agents cannot see proposals from other agents
   const visibleBids = useMemo(() => {
+    let filtered = bids;
     if (userType === 'logistics') {
       // Show only current user's bids
-      return bids.filter(prop => prop.userId === user?.uid);
+      filtered = bids.filter(prop => prop.userId === user?.uid);
     }
-    // Buyers/Suppliers see all bids (their real submitted user bids)
-    return bids;
+    // Remove mock carrier names completely
+    const mockNames = [
+      'moz logistics',
+      'fast cargo',
+      'nampula',
+      'união',
+      'uniao',
+      'manica',
+      'supplyx'
+    ];
+    return filtered.filter(prop => {
+      if (!prop.name) return false;
+      const n = prop.name.toLowerCase();
+      return !mockNames.some(m => n.includes(m));
+    });
   }, [bids, userType, user?.uid]);
 
   const activeLogisticsPartners = useMemo(() => {

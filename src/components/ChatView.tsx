@@ -61,12 +61,6 @@ const formatLogisticsNameFromUid = (uid: string): string | null => {
   if (!uid.startsWith('ops_logistica_')) return null;
   const raw = uid.substring('ops_logistica_'.length);
   if (raw === 'default') return null;
-  if (raw === 'moz_logistics_lda' || raw === 'moz_logistics__lda') return 'Moz Logistics, Lda';
-  if (raw === 'fast_cargo_transportes') return 'Fast Cargo Transportes';
-  if (raw === 'nampula_carriers') return 'Nampula Carriers';
-  if (raw === 'nampula_fretes_express') return 'Nampula Fretes Express';
-  if (raw === 'fast_cargo_transportes_lda') return 'Fast Cargo Transportes Lda';
-  if (raw === 'supplyx_logistica_consolidated') return 'SupplyX Logística Consolidated';
   
   return raw
     .split('_')

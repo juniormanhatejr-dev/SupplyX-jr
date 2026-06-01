@@ -1272,10 +1272,6 @@ export default function DetailedRequestView({
               ? (language === 'PT' ? '💬 Responder ao Remetente' : '💬 Respond to Requester')
               : (language === 'PT' ? '💬 Chat & Negociação' : '💬 Negotiation & Chat')
           },
-          ...((requestObj.status === 'Em concurso' || visibleBids.length > 0) ? [{
-            id: 'bids',
-            label: language === 'PT' ? `🏆 Concurso de Fretes [${visibleBids.length}]` : `🏆 Freight Concourse [${visibleBids.length}]`
-          }] : []),
           { id: 'occurrences', label: language === 'PT' ? `⚠️ Ocorrências Registadas [${filteredOccurrences.length}]` : `⚠️ Incidents [${filteredOccurrences.length}]` },
           { id: 'documents', label: language === 'PT' ? '📄 Documentos Digitais / PoD' : '📄 Digital Vault / PoD' },
           { id: 'review', label: language === 'PT' ? '⭐ Feedback & Avaliação' : '⭐ Post-Delivery Feedback' }

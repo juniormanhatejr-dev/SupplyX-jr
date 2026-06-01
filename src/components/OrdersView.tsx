@@ -211,30 +211,7 @@ const OrderRow = memo(({ row, index, isDarkMode, language, t, allProducts, onUpd
            <option value="Saco">SAC</option>
          </select>
       </td>
-      <td className="px-4 py-4">
-         <input 
-           type="number" 
-           value={row.price} 
-           onChange={(e) => onUpdate(row.id, 'price', e.target.value)}
-           className={`w-full bg-transparent border-none text-right text-[13px] font-black italic outline-none ${isDarkMode ? 'text-zinc-300' : 'text-zinc-900'}`}
-         />
-      </td>
-      <td className="px-4 py-4 text-center">
-         <input 
-           type="number" 
-           value={row.discCmr} 
-           onChange={(e) => onUpdate(row.id, 'discCmr', e.target.value)}
-           className={`w-full bg-transparent border-none text-center text-[11px] font-bold outline-none text-red-500`}
-         />
-      </td>
-      <td className="px-4 py-4 text-center">
-         <input 
-           type="number" 
-           value={row.discFnc} 
-           onChange={(e) => onUpdate(row.id, 'discFnc', e.target.value)}
-           className="w-full bg-transparent border-none text-center text-[11px] font-bold outline-none text-blue-500"
-         />
-      </td>
+
       <td className="px-4 py-4 text-center text-[11px] font-bold text-zinc-500">
          {row.vat}%
       </td>
@@ -1797,19 +1774,16 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
                 <div className="flex flex-col gap-8 mb-8">
                   <div className={`flex-grow overflow-x-auto border rounded-[32px] ${isDarkMode ? 'border-zinc-800 bg-zinc-950 shadow-3xl' : 'border-zinc-100 bg-white shadow-xl shadow-zinc-200/50'} relative`}>
-                    <table className="w-full text-left border-collapse min-w-[1200px] table-fixed">
+                    <table className="w-full text-left border-collapse min-w-[750px] table-fixed">
                       <thead className={`${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-100'} border-b sticky top-0 z-20`}>
                         <tr>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-12 text-center">#</th>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-64">{t.headers.material}</th>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-20 text-center">{t.headers.qty}</th>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-24 text-center">{language === 'PT' ? 'Unid.' : 'Unit'}</th>
-                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-28 text-right">{language === 'PT' ? 'Preço Unit.' : 'Unit Price'}</th>
-                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-20 text-center">Desc Cmr</th>
-                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-20 text-center">Desc Fnc</th>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-20 text-center">IVA %</th>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-20 text-center">Inc?</th>
-                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-32 text-right">Sub Total</th>
+                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-30 text-right">Sub Total</th>
                           <th className="px-4 pr-6 w-12"></th>
                         </tr>
                       </thead>

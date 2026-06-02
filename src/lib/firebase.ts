@@ -164,6 +164,48 @@ export function handleFirestoreError(error: any, operationType: OperationType, p
   throw new Error(JSON.stringify({ ...errInfo, userMessage }));
 }
 
+function compressWithCanvas(file: File, maxWidth = 600, maxHeight = 600, quality = 0.4): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Could not get 2D context for canvas compression'));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => reject(new Error('Failed to load image element for canvas compression'));
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error('Failed to read file as data URL'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export async function uploadFile(path: string, file: File): Promise<string> {
   console.log('uploadFile starting...', { path, size: file.size, type: file.type });
   let fileToUpload = file;
@@ -236,27 +278,38 @@ export async function uploadFile(path: string, file: File): Promise<string> {
     // Pillar Check: CORS/Domain Error Detection
     const isCorsError = error.message?.includes('cross-origin') || error.code === 'storage/unauthorized' || error.message?.includes('CORS');
     
-    // Final Fallback: Base64 in Firestore (Small Files Only)
-    if (file.type.startsWith('image/') && fileToUpload.size < 900000) { 
-      console.log('Using Base64 local fallback due to total Storage failure/CORS:', fileToUpload.size);
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64 = reader.result as string;
-          if (base64.length > 1048576) {
-            reject(new Error('Imagem excessivamente grande para o modo de compatibilidade (Vercel/Base64). Tente uma imagem abaixo de 800KB.'));
-          } else {
-            console.log('Base64 fallback successful');
-            resolve(base64);
-          }
-        };
-        reader.onerror = () => reject(new Error('Falha ao processar arquivo para fallback local.'));
-        reader.readAsDataURL(fileToUpload);
-      });
+    // Final Fallback: Base64 in Firestore (Always enabled for images via HTML5 Canvas Compression)
+    if (file.type.startsWith('image/')) {
+      console.log('Resorting to robust Base64 local fallback with Canvas compression...');
+      try {
+        const base64Url = await compressWithCanvas(file);
+        console.log('Base64 Canvas compression fallback successful. URL length:', base64Url.length);
+        return base64Url;
+      } catch (canvasErr) {
+        console.error('Canvas compression fallback also failed, trying basic FileReader:', canvasErr);
+      }
+
+      // If Canvas itself fails, try reading as simple small Base64
+      if (fileToUpload.size < 900000) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64 = reader.result as string;
+            if (base64.length > 1048576) {
+              reject(new Error('Imagem excessivamente grande para o modo de compatibilidade (Vercel/Base64). Tente uma imagem abaixo de 800KB.'));
+            } else {
+              console.log('Simple Base64 reading fallback successful');
+              resolve(base64);
+            }
+          };
+          reader.onerror = () => reject(new Error('Falha ao processar arquivo para fallback local.'));
+          reader.readAsDataURL(fileToUpload);
+        });
+      }
     }
 
     if (isCorsError) {
-      throw new Error('Configuração de Domínio: O carregamento falhou. Tente uma imagem menor (abaixo de 800KB) para usar o modo de compatibilidade automática.');
+      throw new Error('Configuração de Domínio: O carregamento falhou. Tente uma imagem de outro tamanho para usar o modo de compatibilidade automática.');
     } else {
       throw new Error(`Falha no carregamento: ${error.message || 'Erro desconhecido.'}`);
     }

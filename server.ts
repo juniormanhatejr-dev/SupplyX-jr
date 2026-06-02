@@ -497,7 +497,18 @@ async function startServer() {
       console.log(`[SERVER] Upload success: ${publicUrl}`);
       res.json({ url: publicUrl });
     } catch (error: any) {
-      console.error('[SERVER] Upload failed:', error.message);
+      console.warn('[SERVER] Storage bucket upload failed, attempting local Base64 data URL encoding:', error.message);
+      const file = req.file;
+      if (file && file.buffer) {
+        try {
+          const base64 = file.buffer.toString('base64');
+          const dataUrl = `data:${file.mimetype};base64,${base64}`;
+          console.log('[SERVER] Base64 data URL encoded successfully as fallback.');
+          return res.json({ url: dataUrl });
+        } catch (fallbackError: any) {
+          console.error('[SERVER] Base64 encoding fallback failed:', fallbackError.message);
+        }
+      }
       res.status(500).json({ 
         error: error.message || 'Error saving file to Storage'
       });

@@ -31,6 +31,7 @@ import DriversSystem from './logistics/DriversSystem';
 import InventoryFulfillment from './logistics/InventoryFulfillment';
 import LogisticsFinancial from './logistics/LogisticsFinancial';
 import CarrierCentral from './logistics/CarrierCentral';
+import CarriersDirectory from './logistics/CarriersDirectory';
 
 interface LogisticsViewProps {
   isDarkMode: boolean;
@@ -630,6 +631,7 @@ export default function LogisticsView({
               ]
             : [
                 { id: 'requests_list', pt: '📋 Minhas Cargas (Rastreio)', en: '📋 My Cargoes (Tracking)' },
+                { id: 'carriers_directory', pt: '🚚 Empresas de Logística', en: '🚚 Carriers Directory' },
                 { id: 'dashboard', pt: '📊 Painel de Rastreio', en: '📊 Tracking Dashboard' }
               ]
           ).map((tab) => {
@@ -739,6 +741,17 @@ export default function LogisticsView({
                 initialPayload={initialPayload}
                 onBack={() => setActiveSubTab('dashboard')}
                 onSuccess={handleCreateRequest}
+              />
+            )}
+
+            {activeSubTab === 'carriers_directory' && (
+              <CarriersDirectory
+                isDarkMode={isDarkMode}
+                language={language}
+                requests={displayedRequests}
+                onUpdateRequests={syncRequestsToLocalStorage}
+                setActiveSubTab={setActiveSubTab}
+                userType={userType}
               />
             )}
 

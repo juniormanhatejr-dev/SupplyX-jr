@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, limit, doc, getDoc, setDoc, getDocs, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { MessageSquare, Bell, X } from 'lucide-react';
+import { useAuth } from './AuthContext';
 
 interface NotificationContextType {
   permission: NotificationPermission;
@@ -17,6 +18,7 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkMode?: boolean; language?: 'PT' | 'EN' }> = ({ children, isDarkMode = true, language = 'PT' }) => {
+  const { user } = useAuth();
   const [permission, setPermission] = useState<NotificationPermission>(
     typeof window !== 'undefined' ? Notification.permission : 'default'
   );
@@ -39,11 +41,116 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
   };
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!user) return;
 
-    const currentUserId = auth.currentUser.uid;
+    const currentUserId = user.uid;
     
+    // Automatic system alerts constructor to populate Firestore notifications specifically for currentUserId
+    const syncRealtimeAlerts = async () => {
+      try {
+        // 1. Check for suppliers
+        const qSuppliers = query(collection(db, 'users'), where('type', '==', 'supplier'));
+        const suppliersSnap = await getDocs(qSuppliers);
+        for (const sDoc of suppliersSnap.docs) {
+          const supplier = sDoc.data();
+          const supplierId = sDoc.id;
+          const notifId = `notif_new_supplier_${supplierId}_for_${currentUserId}`;
+          
+          const notifDocSnap = await getDoc(doc(db, 'notifications', notifId));
+          if (!notifDocSnap.exists()) {
+            await setDoc(doc(db, 'notifications', notifId), {
+              userId: currentUserId,
+              title: language === 'PT' ? `🆕 Novo Fornecedor Juntou-se` : `🆕 New Supplier Joined`,
+              message: language === 'PT' 
+                ? `O fornecedor ${supplier.name || supplier.companyName || 'Novo Fornecedor'} agora está operando no setor ${supplier.sector || 'Obras'} a partir de ${supplier.city || 'Moçambique'}.`
+                : `Supplier ${supplier.name || supplier.companyName || 'New Supplier'} is now operating in the ${supplier.sector || 'Construction'} sector from ${supplier.city || 'Mozambique'}.`,
+              type: 'supplier',
+              priority: 'medium',
+              read: false,
+              createdAt: serverTimestamp()
+            });
+          }
+        }
+
+        // 2. Check for products on sale
+        const qProducts = query(collection(db, 'products'), where('onSale', '==', true));
+        const productsSnap = await getDocs(qProducts);
+        for (const pDoc of productsSnap.docs) {
+          const product = pDoc.data();
+          const pId = pDoc.id;
+          const notifId = `notif_promo_product_${pId}_for_${currentUserId}`;
+
+          const notifDocSnap = await getDoc(doc(db, 'notifications', notifId));
+          if (!notifDocSnap.exists()) {
+            await setDoc(doc(db, 'notifications', notifId), {
+              userId: currentUserId,
+              title: language === 'PT' ? `⚡ Promoção Especial: ${product.name}` : `⚡ Special Offer: ${product.name}`,
+              message: language === 'PT'
+                ? `Não perca: o produto ${product.name} está em promoção imperdível por apenas MT ${product.salePrice || product.price}!`
+                : `Don't miss out: product ${product.name} is on special sale for just MT ${product.salePrice || product.price}!`,
+              type: 'promotion',
+              priority: 'high',
+              read: false,
+              createdAt: serverTimestamp()
+            });
+          }
+        }
+
+        // 3. Check for high efficiency carriers
+        const qCarriers = query(collection(db, 'users'), where('type', '==', 'logistics'));
+        const carriersSnap = await getDocs(qCarriers);
+        for (const cDoc of carriersSnap.docs) {
+          const carrier = cDoc.data();
+          const carrierId = cDoc.id;
+          const rating = parseFloat(carrier.rating) || 0;
+          if (rating >= 4.7) {
+            const notifId = `notif_featured_carrier_${carrierId}_for_${currentUserId}`;
+            const notifDocSnap = await getDoc(doc(db, 'notifications', notifId));
+            if (!notifDocSnap.exists()) {
+              await setDoc(doc(db, 'notifications', notifId), {
+                userId: currentUserId,
+                title: language === 'PT' ? `🏆 Transportadora de Alta Eficiência` : `🏆 Highlighted Carrier`,
+                message: language === 'PT'
+                  ? `${carrier.companyName || carrier.name} foi classificada com classificação estrelada de ★ ${rating.toFixed(1)} e alta pontualidade!`
+                  : `${carrier.companyName || carrier.name} has been certified with a high rating of ★ ${rating.toFixed(1)} and exceptional on-time index!`,
+                type: 'promotion',
+                priority: 'medium',
+                read: false,
+                createdAt: serverTimestamp()
+              });
+            }
+          }
+        }
+
+        // 4. Check for occurrences
+        const qOccurrences = query(collection(db, 'occurrences'));
+        const occurrencesSnap = await getDocs(qOccurrences);
+        for (const oDoc of occurrencesSnap.docs) {
+          const occurrence = oDoc.data();
+          const occurrenceId = oDoc.id;
+          const notifId = `notif_occurrence_${occurrenceId}_for_${currentUserId}`;
+          const notifDocSnap = await getDoc(doc(db, 'notifications', notifId));
+          if (!notifDocSnap.exists()) {
+            await setDoc(doc(db, 'notifications', notifId), {
+              userId: currentUserId,
+              title: language === 'PT' ? `⚠️ Ocorrência Registada: Cargo ${occurrence.cargoId || occurrence.cargoIdText || 'Geral'}` : `⚠️ Incident Logged: Cargo ${occurrence.cargoId || occurrence.cargoIdText || 'General'}`,
+              message: language === 'PT'
+                ? `Alerta ativo registado: ${occurrence.description || occurrence.desc} com impacto anunciado [${occurrence.type || 'Atraso operacional'}].`
+                : `Active alert logged: ${occurrence.description || occurrence.desc} with announced impact [${occurrence.type || 'Operational delay'}].`,
+              type: 'system',
+              priority: 'high',
+              read: false,
+              createdAt: serverTimestamp()
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Error syncing standard system alerts into notifications:', err);
+      }
+    };
+
     // Listen to chats for messages
+    console.log('[NotificationContext] Subscribing to chats for user ID:', currentUserId);
     const qChats = query(
       collection(db, 'chats'),
       where('participants', 'array-contains', currentUserId)
@@ -58,6 +165,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
           count += data.unreadCount[currentUserId];
         }
       });
+      console.log(`[NotificationContext] Firestore Real-time Chats Snapshot loaded. Active chats count: ${snapshot.docs.length}. Total unread messages count calculated: ${count}`);
       setUnreadMessages(count);
 
       if (isInitialLoadChats) {
@@ -74,28 +182,60 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
               const otherParticipantId = chatData.participants.find((id: string) => id !== currentUserId);
               const senderName = chatData.participantNames[otherParticipantId] || (language === 'PT' ? 'Nova Mensagem' : 'New Message');
               const body = chatData.lastMessage || '';
+              console.log(`[NotificationContext] Dynamic new message alert from ${senderName}: "${body.substring(0, 30)}..."`);
               triggerNotification(senderName, body, change.doc.id);
+
+              // Log standard db notification for message to unify system alerts
+              const msgNotifId = `notif_msg_${change.doc.id}_${updatedAt}_for_${currentUserId}`;
+              getDoc(doc(db, 'notifications', msgNotifId)).then((notifDocSnap) => {
+                if (!notifDocSnap.exists()) {
+                  setDoc(doc(db, 'notifications', msgNotifId), {
+                    userId: currentUserId,
+                    title: language === 'PT' ? `💬 Nova Mensagem de ${senderName}` : `💬 New Message from ${senderName}`,
+                    message: body,
+                    type: 'system',
+                    priority: 'high',
+                    read: false,
+                    createdAt: serverTimestamp()
+                  }).catch(e => console.warn('[NotificationContext] Error saving chat notification doc:', e));
+                }
+              }).catch(e => console.warn('[NotificationContext] Error getting chat notification doc:', e));
             }
           }
         });
       }
     }, (error) => {
-      console.error("Chat listener error:", error);
+      console.error("[NotificationContext] Chat listener error:", error);
     });
 
-    // Listen to general notifications
+    // Listen to general notifications without requiring a custom composite index on Firestore
+    console.log('[NotificationContext] Subscribing to notifications for user ID:', currentUserId);
     const qNotifs = query(
       collection(db, 'notifications'),
-      where('userId', '==', currentUserId),
-      orderBy('createdAt', 'desc'),
-      limit(50)
+      where('userId', '==', currentUserId)
     );
 
     let isInitialLoadNotifs = true;
     const unsubscribeNotifs = onSnapshot(qNotifs, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      
+      // Sort in memory by createdAt descending to avoid index errors
+      fetched.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+        return timeB - timeA;
+      });
+
+      // Limit to 50 items in memory
+      if (fetched.length > 50) {
+        fetched = fetched.slice(0, 50);
+      }
+
+      const unreadCount = fetched.filter((n: any) => !n.read).length;
+      console.log(`[NotificationContext] Firestore Real-time Notifications Snapshot loaded. Total loaded: ${fetched.length}. Unread notifications count count: ${unreadCount}`);
+
       setNotifications(fetched);
-      setUnreadNotifications(fetched.filter((n: any) => !n.read).length);
+      setUnreadNotifications(unreadCount);
 
       if (isInitialLoadNotifs) {
         isInitialLoadNotifs = false;
@@ -103,19 +243,43 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
         snapshot.docChanges().forEach((change) => {
           if (change.type === 'added') {
             const notif = change.doc.data();
+            console.log(`[NotificationContext] Dynamic new system/alert notification received: "${notif.title}"`);
             triggerNotification(notif.title, notif.message);
           }
         });
       }
     }, (error) => {
-      console.error("Notification listener error:", error);
+      console.error("[NotificationContext] Notification listener error:", error);
+    });
+
+    // Real-time synchronization watchers to keep our standard category alerts hydrated
+    console.log('[NotificationContext] Initializing background system alert synchronizers...');
+    const unsubscribeSuppliers = onSnapshot(query(collection(db, 'users'), where('type', '==', 'supplier')), () => {
+      syncRealtimeAlerts();
+    });
+
+    const unsubscribeProducts = onSnapshot(query(collection(db, 'products'), where('onSale', '==', true)), () => {
+      syncRealtimeAlerts();
+    });
+
+    const unsubscribeCarriers = onSnapshot(query(collection(db, 'users'), where('type', '==', 'logistics')), () => {
+      syncRealtimeAlerts();
+    });
+
+    const unsubscribeOccurrences = onSnapshot(query(collection(db, 'occurrences')), () => {
+      syncRealtimeAlerts();
     });
 
     return () => {
+      console.log('[NotificationContext] Cleaning up current users subscriptions.');
       unsubscribeChats();
       unsubscribeNotifs();
+      unsubscribeSuppliers();
+      unsubscribeProducts();
+      unsubscribeCarriers();
+      unsubscribeOccurrences();
     };
-  }, [auth.currentUser?.uid, language]);
+  }, [user?.uid, language]);
 
   const triggerNotification = (title: string, body: string, chatId?: string) => {
     // Play sound
@@ -135,11 +299,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
   };
 
   const markNotificationAsRead = async (notificationId: string) => {
+    console.log(`[NotificationContext] Marking notification ${notificationId} as read...`);
     try {
-      const { doc, updateDoc } = await import('firebase/firestore');
-      await updateDoc(doc(db, 'notifications', notificationId), { read: true });
+      const notifRef = doc(db, 'notifications', notificationId);
+      await updateDoc(notifRef, { read: true });
+      console.log(`[NotificationContext] Notification ${notificationId} marked read dynamically.`);
     } catch (error) {
-      console.error("Error marking notification as read:", error);
+      console.error("[NotificationContext] Error marking notification as read:", error);
     }
   };
 
@@ -187,7 +353,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
       </AnimatePresence>
 
       {/* Permission Prompt - subtle */}
-      {permission === 'default' && auth.currentUser && (
+      {permission === 'default' && user && (
         <div className="fixed bottom-4 left-4 z-50">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}

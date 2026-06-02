@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Info, FileText } from 'lucide-react';
+import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Info, FileText, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
 
@@ -32,7 +32,7 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
     PT: {
       title: 'Notificações',
       markRead: 'Lidas',
-      empty: 'Sem novas atualizações',
+      empty: 'Nenhuma notificação',
       viewAll: 'Ver Todas as Notificações',
       justNow: 'Agora',
       ago: 'atrás'
@@ -40,7 +40,7 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
     EN: {
       title: 'Notifications',
       markRead: 'Read',
-      empty: 'No new updates',
+      empty: 'No notifications',
       viewAll: 'View All Notifications',
       justNow: 'Just now',
       ago: 'ago'
@@ -73,6 +73,8 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
       case 'promotion': return <Tag className="w-5 h-5" />;
       case 'quote_request': return <FileText className="w-5 h-5" />;
       case 'order': return <Clock className="w-5 h-5" />;
+      case 'supplier': return <MapPin className="w-5 h-5" />;
+      case 'system': return <AlertCircle className="w-5 h-5" />;
       default: return <Info className="w-5 h-5" />;
     }
   };
@@ -82,6 +84,8 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
       case 'promotion': return 'bg-amber-500/10 text-amber-500';
       case 'quote_request': return 'bg-supplyx-blue/10 text-supplyx-blue';
       case 'order': return 'bg-violet-500/10 text-violet-500';
+      case 'supplier': return 'bg-emerald-500/10 text-emerald-500';
+      case 'system': return 'bg-rose-500/10 text-rose-500';
       default: return 'bg-blue-500/10 text-blue-500';
     }
   };
@@ -94,9 +98,9 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
           isDarkMode ? 'bg-supplyx-dark border-white/5 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-900'
         }`}
       >
-        <Bell className={`w-5 h-5 transition-colors ${totalUnread > 0 ? 'text-supplyx-blue' : ''}`} />
+        <Bell className={`w-5 h-5 transition-colors ${totalUnread > 0 ? 'text-red-500 animate-pulse' : ''}`} />
         {totalUnread > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-supplyx-blue text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-supplyx-deep">
+          <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 animate-bounce shadow-lg shadow-red-500/30 border-supplyx-deep">
             {totalUnread}
           </span>
         )}

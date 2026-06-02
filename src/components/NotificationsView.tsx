@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Calendar, Gift, Info, FileText } from 'lucide-react';
+import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Calendar, Gift, Info, FileText, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
 
@@ -83,6 +83,8 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
       case 'promotion': return <Gift className="w-6 h-6" />;
       case 'quote_request': return <FileText className="w-6 h-6" />;
       case 'order': return <Clock className="w-6 h-6" />;
+      case 'supplier': return <MapPin className="w-6 h-6" />;
+      case 'system': return <AlertCircle className="w-6 h-6" />;
       default: return <Info className="w-6 h-6" />;
     }
   };
@@ -92,6 +94,8 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
       case 'promotion': return 'bg-amber-500/10 text-amber-500 shadow-amber-500/10';
       case 'quote_request': return 'bg-supplyx-blue/10 text-supplyx-blue shadow-blue-500/10';
       case 'order': return 'bg-violet-500/10 text-violet-500 shadow-violet-500/10';
+      case 'supplier': return 'bg-emerald-500/10 text-emerald-500 shadow-emerald-500/10';
+      case 'system': return 'bg-rose-500/10 text-rose-500 shadow-rose-500/10';
       default: return 'bg-blue-500/10 text-blue-500 shadow-blue-500/10';
     }
   };

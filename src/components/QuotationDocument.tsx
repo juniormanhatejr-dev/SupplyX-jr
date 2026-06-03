@@ -55,31 +55,24 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
   };
 
   const calculateSubtotal = () => {
-    return data.items.reduce((acc, item) => {
-      const preTaxUnitPrice = item.unitPrice / (1 + item.vatPer / 100);
-      return acc + (item.quantity * preTaxUnitPrice);
-    }, 0);
+    return data.items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
   };
 
   const calculateTotalDiscount = () => {
-    return data.items.reduce((acc, item) => {
-      const preTaxUnitPrice = item.unitPrice / (1 + item.vatPer / 100);
-      return acc + (item.quantity * preTaxUnitPrice * (item.discount / 100));
-    }, 0);
+    return data.items.reduce((acc, item) => acc + (item.quantity * item.unitPrice * (item.discount / 100)), 0);
   };
 
   const calculateTotalVAT = () => {
     return data.items.reduce((acc, item) => {
-      const preTaxUnitPrice = item.unitPrice / (1 + item.vatPer / 100);
-      const discountedPreTax = preTaxUnitPrice * (1 - item.discount / 100);
-      return acc + (item.quantity * discountedPreTax * (item.vatPer / 100));
+      const discountedPrice = item.unitPrice * (1 - item.discount / 100);
+      return acc + (item.quantity * discountedPrice * (item.vatPer / 100));
     }, 0);
   };
 
   const subtotal = calculateSubtotal();
   const totalDiscount = calculateTotalDiscount();
   const totalVAT = calculateTotalVAT();
-  const grandTotal = data.items.reduce((acc, item) => acc + (item.quantity * item.unitPrice * (1 - item.discount / 100)), 0);
+  const grandTotal = subtotal - totalDiscount + totalVAT;
   const discountPercent = data.items[0]?.discount || 0;
 
   const formatCurrency = (value: number) => {
@@ -408,7 +401,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                 <td style={{ padding: '10px', textAlign: 'center', fontWeight: 700, textTransform: 'uppercase', fontSize: '9px' }}>{item.unit}</td>
                 <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700 }}>{formatCurrency(item.unitPrice)}</td>
                 <td style={{ padding: '10px', textAlign: 'center', fontWeight: 600 }}>{item.vatPer.toFixed(2)}</td>
-                <td style={{ padding: '10px', textAlign: 'right', fontWeight: 905, color: COLORS.darkBlue }}>{formatCurrency(item.quantity * item.unitPrice * (1 - item.discount / 100))}</td>
+                <td style={{ padding: '10px', textAlign: 'right', fontWeight: 905, color: COLORS.darkBlue }}>{formatCurrency(item.quantity * item.unitPrice * (1 - item.discount / 100) * (1 + item.vatPer / 100))}</td>
               </tr>
             ))}
           </tbody>

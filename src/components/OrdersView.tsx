@@ -223,6 +223,17 @@ const OrderRow = memo(({ row, index, isDarkMode, language, t, allProducts, onUpd
            className="w-4 h-4 rounded border-zinc-300 accent-supplyx-blue"
          />
       </td>
+      <td className="px-4 py-4">
+         <div className="flex items-center justify-center gap-1">
+           <span className="text-[10px] text-zinc-400 font-bold">MT</span>
+           <input 
+             type="text" 
+             value={row.price} 
+             onChange={(e) => onUpdate(row.id, 'price', e.target.value)}
+             className={`w-20 bg-transparent border-none text-center text-[13px] font-black italic outline-none transition-all ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-900'}`}
+           />
+         </div>
+      </td>
       <td className="px-4 py-4 text-right text-[13px] font-black text-brand italic">
          MT {subtotal}
       </td>
@@ -831,6 +842,21 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     { id: Date.now(), code: 'MAT-101', material: '', quantity: '1', unit: 'Unid.', price: '0', discCmr: '0', discFnc: '0', vat: '16', vatIncluded: true, subtotal: '0', date: new Date().toISOString().split('T')[0] }
   ]);
 
+  const totalDraftAmount = useMemo(() => {
+    return rows.reduce((acc, r) => {
+      const qty = parseFloat(r.quantity) || 0;
+      const price = parseFloat(r.price) || 0;
+      const dCmr = parseFloat(r.discCmr) || 0;
+      const dFnc = parseFloat(r.discFnc) || 0;
+      const vat = parseFloat(r.vat) || 16;
+      
+      const base = qty * price;
+      const discounted = base * (1 - dCmr/100) * (1 - dFnc/100);
+      const final = r.vatIncluded ? discounted : discounted * (1 + vat/100);
+      return acc + final;
+    }, 0);
+  }, [rows]);
+
   // Automatic Weight and Volume Estimation Effect
   useEffect(() => {
     // Only estimate if either modal is visible
@@ -994,7 +1020,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   };
 
   const addRow = () => {
-    setRows([...rows, { id: Date.now(), material: '', quantity: '', unit: 'Unid.', date: '' }]);
+    setRows([...rows, { id: Date.now(), code: 'MAT-101', material: '', quantity: '1', unit: 'Unid.', price: '0', discCmr: '0', discFnc: '0', vat: '16', vatIncluded: true, subtotal: '0', date: new Date().toISOString().split('T')[0] }]);
   };
 
   const removeRow = useCallback((id: number) => {
@@ -1004,8 +1030,26 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   }, [rows.length]);
 
   const updateRow = useCallback((id: number, field: string, value: any) => {
-    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
-  }, []);
+    setRows(prev => prev.map(r => {
+      if (r.id === id) {
+        let updatedRow = { ...r, [field]: value };
+        if (field === 'material') {
+          const match = allProducts.find(p => 
+            p.name.toLowerCase().includes(value.toLowerCase()) || 
+            value.toLowerCase().includes(p.name.toLowerCase())
+          );
+          if (match) {
+            updatedRow.price = String(match.price || 0);
+            if (match.vatRate !== undefined) {
+              updatedRow.vat = String(match.vatRate);
+            }
+          }
+        }
+        return updatedRow;
+      }
+      return r;
+    }));
+  }, [allProducts]);
 
   const handleClose = () => {
     setShowForm(false);
@@ -1043,19 +1087,26 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
              row.material.toLowerCase().includes(p.name.toLowerCase()))
           );
 
+          let price = parseFloat(row.price) || 0;
           if (match) {
-            const price = match.price || 0;
-            const quantity = parseFloat(row.quantity || '0');
-            calculatedTotal += price * quantity;
-            itemPrices.push({ material: row.material, price });
+            price = match.price || price || 0;
             itemsFound++;
           } else {
-            // Default fallback
-            const price = 0;
-            const quantity = parseFloat(row.quantity || '0');
-            calculatedTotal += price * quantity;
-            itemPrices.push({ material: row.material, price });
+            // Find price mismatch from any other supplier of same product
+            const fallbackMatch = allProducts.find(p => 
+              p.name.toLowerCase().includes(row.material.toLowerCase()) || 
+              row.material.toLowerCase().includes(p.name.toLowerCase())
+            );
+            if (fallbackMatch) {
+              price = fallbackMatch.price || price || 0;
+              itemsFound++;
+            } else if (price > 0) {
+              itemsFound++;
+            }
           }
+          const quantity = parseFloat(row.quantity || '0');
+          calculatedTotal += price * quantity;
+          itemPrices.push({ material: row.material, price });
         });
 
         // 1. Create a real Quotation document in Firestore for each supplier
@@ -1073,7 +1124,18 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                 (p.name.toLowerCase().includes(r.material.toLowerCase()) || 
                  r.material.toLowerCase().includes(p.name.toLowerCase()))
               );
-              const price = match ? (match.price || 0) : 0;
+              let price = parseFloat(r.price) || 0;
+              if (match) {
+                price = match.price || price || 0;
+              } else {
+                const fallbackMatch = allProducts.find(p => 
+                  p.name.toLowerCase().includes(r.material.toLowerCase()) || 
+                  r.material.toLowerCase().includes(p.name.toLowerCase())
+                );
+                if (fallbackMatch) {
+                  price = fallbackMatch.price || price || 0;
+                }
+              }
               const vatRate = match ? (match.vatRate !== undefined ? match.vatRate : 16) : 16;
               const preTaxPrice = price / (1 + vatRate / 100);
               return {
@@ -1774,7 +1836,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
                 <div className="flex flex-col gap-8 mb-8">
                   <div className={`flex-grow overflow-x-auto border rounded-[32px] ${isDarkMode ? 'border-zinc-800 bg-zinc-950 shadow-3xl' : 'border-zinc-100 bg-white shadow-xl shadow-zinc-200/50'} relative`}>
-                    <table className="w-full text-left border-collapse min-w-[750px] table-fixed">
+                    <table className="w-full text-left border-collapse min-w-[850px] table-fixed">
                       <thead className={`${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-100'} border-b sticky top-0 z-20`}>
                         <tr>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-12 text-center">#</th>
@@ -1783,6 +1845,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-24 text-center">{language === 'PT' ? 'Unid.' : 'Unit'}</th>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-20 text-center">IVA %</th>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-20 text-center">Inc?</th>
+                          <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-28 text-center">{language === 'PT' ? 'Preço Est.' : 'Est. Price'}</th>
                           <th className="px-4 py-4 text-[9px] font-black text-zinc-500 uppercase tracking-widest w-30 text-right">Sub Total</th>
                           <th className="px-4 pr-6 w-12"></th>
                         </tr>
@@ -1802,6 +1865,17 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                           />
                         ))}
                       </tbody>
+                      <tfoot>
+                        <tr className={`${isDarkMode ? 'bg-zinc-950 border-white/5' : 'bg-zinc-50/30 border-zinc-50'} border-t`}>
+                          <td colSpan={7} className="px-4 py-4 text-right text-xs font-black uppercase tracking-widest text-zinc-500">
+                            {language === 'PT' ? 'Valor Total Estimado:' : 'Total Estimated Value:'}
+                          </td>
+                          <td className="px-4 py-4 text-right text-[15px] font-black text-[#0052CC] italic">
+                            MT {totalDraftAmount.toLocaleString('pt-MZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
                     </table>
                       <div className="p-4 border-t border-zinc-100 flex items-center justify-between">
                         <button 

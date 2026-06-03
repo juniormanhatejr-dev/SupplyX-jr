@@ -40,25 +40,35 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
   const [loading, setLoading] = useState(true);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
 
+  const [showClearSuccess, setShowClearSuccess] = useState(false);
+  const [confirmingClear, setConfirmingClear] = useState(false);
+
   const handleClearAllSuppliers = async () => {
-    if (window.confirm(language === 'PT' ? 'Deseja mesmo remover todos os fornecedores cadastrados na base de dados do Firestore?' : 'Do you want to clear all registered suppliers from the Firestore database?')) {
-      try {
-        setLoading(true);
-        const q = query(collection(db, 'users'), where('type', '==', 'supplier'));
-        const querySnapshot = await getDocs(q);
-        for (const docSnap of querySnapshot.docs) {
-          // Keep current logged-in user if they are a supplier
-          if (docSnap.id !== auth.currentUser?.uid) {
-            await deleteDoc(doc(db, 'users', docSnap.id));
-          }
+    if (!confirmingClear) {
+      setConfirmingClear(true);
+      setTimeout(() => {
+        setConfirmingClear(false);
+      }, 5000); // Reset after 5 seconds of inactivity
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const q = query(collection(db, 'users'), where('type', '==', 'supplier'));
+      const querySnapshot = await getDocs(q);
+      for (const docSnap of querySnapshot.docs) {
+        // Keep current logged-in user if they are a supplier
+        if (docSnap.id !== auth.currentUser?.uid) {
+          await deleteDoc(doc(db, 'users', docSnap.id));
         }
-        alert(language === 'PT' ? 'Todos os fornecedores terceiros foram excluídos com sucesso!' : 'All third-party suppliers have been successfully deleted!');
-      } catch (err) {
-        console.error("Error deleting documents:", err);
-        alert(language === 'PT' ? 'Erro ao apagar fornecedores: ' + err : 'Error clearing suppliers: ' + err);
-      } finally {
-        setLoading(false);
       }
+      setShowClearSuccess(true);
+      setTimeout(() => setShowClearSuccess(false), 3000);
+    } catch (err) {
+      console.error("Error deleting documents:", err);
+    } finally {
+      setConfirmingClear(false);
+      setLoading(false);
     }
   };
 
@@ -346,13 +356,21 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
             onClick={handleClearAllSuppliers}
             title={language === 'PT' ? 'Remover todos os fornecedores cadastrados' : 'Clear all registered suppliers'}
             className={`p-2.5 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all shrink-0 uppercase tracking-wider ${
-              isDarkMode 
-                ? 'bg-zinc-900 border-rose-500/10 hover:bg-rose-500/10 hover:border-rose-500/30 text-rose-450 hover:text-rose-400' 
-                : 'bg-white border-zinc-200 hover:bg-rose-50 text-rose-500 shadow-sm'
+              confirmingClear
+                ? 'bg-rose-500 hover:bg-rose-600 text-white border-rose-600'
+                : isDarkMode 
+                  ? 'bg-zinc-900 border-rose-500/10 hover:bg-rose-500/10 hover:border-rose-500/30 text-rose-450 hover:text-rose-400' 
+                  : 'bg-white border-zinc-200 hover:bg-rose-50 text-rose-500 shadow-sm'
             }`}
           >
             <Trash2 className="w-4 h-4" />
-            <span className="hidden md:inline">{language === 'PT' ? 'Limpar Tudo' : 'Clear All'}</span>
+            <span className="hidden md:inline">
+              {confirmingClear 
+                ? (language === 'PT' ? 'Confirmar?' : 'Are you sure?') 
+                : showClearSuccess 
+                  ? (language === 'PT' ? 'Limpo!' : 'Cleared!') 
+                  : (language === 'PT' ? 'Limpar Tudo' : 'Clear All')}
+            </span>
           </button>
         </div>
       </div>

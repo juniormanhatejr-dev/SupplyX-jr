@@ -67,6 +67,48 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
     return date.toLocaleDateString(language === 'PT' ? 'pt-PT' : 'en-US');
   };
 
+  const handleNotificationClick = async (n: any) => {
+    if (!n.read) {
+      await markNotificationAsRead(n.id);
+    }
+    setIsOpen(false);
+
+    let targetTab = '';
+    let payload: any = undefined;
+
+    const id = n.id || '';
+    const type = n.type || '';
+    const title = (n.title || '').toLowerCase();
+
+    if (id.startsWith('notif_msg_') || title.includes('mensagem') || title.includes('message') || title.includes('💬')) {
+      targetTab = 'Mensagens';
+      if (id.startsWith('notif_msg_')) {
+        const parts = id.split('_');
+        if (parts.length > 2) {
+          payload = { chatId: parts[2] };
+        }
+      }
+    } else if (id.startsWith('notif_occurrence_') || title.includes('ocorrência') || title.includes('incident') || title.includes('⚠️')) {
+      targetTab = 'Logística';
+    } else if (id.startsWith('notif_featured_carrier_') || title.includes('transportadora') || title.includes('carrier') || title.includes('🏆')) {
+      targetTab = 'Logística';
+    } else if (id.startsWith('notif_promo_product_') || type === 'promotion') {
+      targetTab = 'Produtos / Materiais';
+    } else if (id.startsWith('notif_new_supplier_') || type === 'supplier') {
+      targetTab = 'Fornecedores';
+    } else if (type === 'quote_request' || title.includes('cotação') || title.includes('quote') || title.includes('pedido') || title.includes('order')) {
+      targetTab = 'Pedidos / Cotações';
+      if (n.metadata?.requestId) {
+        payload = { requestId: n.metadata.requestId };
+      }
+    }
+
+    if (targetTab) {
+      const event = new CustomEvent('navigate-to-tab', { detail: { tab: targetTab, payload } });
+      window.dispatchEvent(event);
+    }
+  };
+
   const toggleOpen = () => {
     setIsOpen(!isOpen);
   };
@@ -121,7 +163,7 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                 isDarkMode ? 'border-white/5' : 'bg-white border-zinc-100'
               }`}
             >
-              <div className={`p-6 border-b flex justify-between items-center ${isDarkMode ? 'border-white/5 bg-white/5' : 'border-zinc-50'}`}>
+              <div className={`p-6 border-b flex justify-between items-center ${isDarkMode ? 'border-white/5 bg-white/5' : 'border-zinc-100 bg-zinc-50/50'}`}>
                 <h3 className={`font-black uppercase italic tracking-[0.2em] text-[11px] ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-900'}`}>
                   {t.title}
                 </h3>
@@ -129,7 +171,9 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                   {totalUnread > 0 && (
                     <button 
                       onClick={() => markAllNotificationsAsRead()}
-                      className="text-[10px] font-black uppercase text-zinc-400 hover:text-white transition-colors flex items-center gap-1"
+                      className={`text-[10px] font-black uppercase transition-colors flex items-center gap-1 ${
+                        isDarkMode ? 'text-zinc-400 hover:text-white' : 'text-zinc-600 hover:text-zinc-900'
+                      }`}
                       title={t.markRead}
                     >
                       <CheckCheck className="w-3.5 h-3.5" />
@@ -139,7 +183,9 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                   {notifications.length > 0 && (
                     <button 
                       onClick={() => deleteAllNotifications()}
-                      className="text-[10px] font-black uppercase text-rose-400 hover:text-rose-300 transition-colors flex items-center gap-1"
+                      className={`text-[10px] font-black uppercase transition-colors flex items-center gap-1 ${
+                        isDarkMode ? 'text-rose-400 hover:text-rose-300' : 'text-rose-600 hover:text-rose-700'
+                      }`}
                       title={t.clearAll}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -160,27 +206,29 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                     </p>
                   </div>
                 ) : (
-                  <div className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-zinc-100'}`}>
+                  <div className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-zinc-200'}`}>
                     {notifications.map((n) => (
                       <div 
                         key={n.id} 
-                        onClick={() => !n.read && markNotificationAsRead(n.id)}
+                        onClick={() => handleNotificationClick(n)}
                         className={`p-6 flex gap-6 transition-all relative group cursor-pointer ${
-                          !n.read ? (isDarkMode ? 'bg-supplyx-blue/5' : 'bg-supplyx-blue/5') : ''
-                        } ${isDarkMode ? 'hover:bg-white/[0.02]' : 'hover:bg-zinc-50'}`}
+                          !n.read 
+                            ? (isDarkMode ? 'bg-supplyx-blue/5 border-l-2 border-supplyx-blue' : 'bg-blue-50/70 border-l-2 border-supplyx-blue') 
+                            : ''
+                        } ${isDarkMode ? 'hover:bg-white/[0.02]' : 'hover:bg-zinc-100/60'}`}
                       >
                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${getColorClass(n.type)}`}>
                           {getIcon(n.type)}
                         </div>
                         <div className="flex-1 min-w-0 pr-8">
-                          <p className={`text-[12px] font-black uppercase italic leading-tight mb-1 ${isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                          <p className={`text-[12px] font-black uppercase italic leading-tight mb-1 ${isDarkMode ? 'text-zinc-100' : 'text-zinc-950 font-extrabold'}`}>
                             {n.title}
                           </p>
-                          <p className={`text-[11px] font-medium leading-relaxed mb-3 line-clamp-2 ${isDarkMode ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                          <p className={`text-[11px] font-semibold leading-relaxed mb-3 line-clamp-2 ${isDarkMode ? 'text-zinc-500' : 'text-zinc-850 font-medium'}`}>
                             {n.message}
                           </p>
-                          <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest flex items-center gap-2">
-                             <Clock className="w-3 h-3" /> {formatTime(n.createdAt)}
+                          <span className={`text-[9.5px] font-black uppercase tracking-widest flex items-center gap-2 ${isDarkMode ? 'text-zinc-600' : 'text-zinc-500'}`}>
+                             <Clock className="w-3 h-3 text-supplyx-blue" /> {formatTime(n.createdAt)}
                           </span>
                         </div>
                         <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-40 sm:group-hover:opacity-100 transition-opacity flex items-center gap-2 z-10">
@@ -190,7 +238,7 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                               deleteNotification(n.id);
                             }}
                             className={`p-2 rounded-lg transition-colors ${
-                              isDarkMode ? 'hover:bg-rose-500/10 text-zinc-500 hover:text-rose-500' : 'hover:bg-rose-50 text-zinc-400 hover:text-rose-500'
+                              isDarkMode ? 'hover:bg-rose-500/10 text-zinc-500 hover:text-rose-500' : 'hover:bg-rose-50 text-zinc-500 hover:text-rose-600'
                             }`}
                             title={language === 'PT' ? 'Eliminar' : 'Delete'}
                           >

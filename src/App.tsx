@@ -91,6 +91,16 @@ export default function App() {
     return () => window.removeEventListener('navigate-to-messages', handleNavigate);
   }, []);
 
+  useEffect(() => {
+    const handleGenericNavigate = (e: any) => {
+      if (e.detail?.tab) {
+        handleNavigateWithPayload(e.detail.tab, e.detail.payload);
+      }
+    };
+    window.addEventListener('navigate-to-tab', handleGenericNavigate);
+    return () => window.removeEventListener('navigate-to-tab', handleGenericNavigate);
+  }, [activeTab]);
+
   // If supplier or logistics, default to their specific dashboards
   useEffect(() => {
     if (profile?.type === 'supplier' && activeTab === 'Dashboard') {
@@ -306,7 +316,7 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 relative overflow-hidden ${isDarkMode ? 'dark bg-supplyx-deep' : 'bg-zinc-50'}`}>
+    <div className={`min-h-screen transition-colors duration-500 relative overflow-hidden ${isDarkMode ? 'dark bg-supplyx-deep text-slate-200' : 'bg-zinc-50 text-zinc-900'}`}>
         {/* Background Ambience */}
         <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-0">
           <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-supplyx-blue/5 blur-[120px] rounded-full animate-pulse-slow" />

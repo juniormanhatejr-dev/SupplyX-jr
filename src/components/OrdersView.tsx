@@ -1137,12 +1137,11 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                 }
               }
               const vatRate = match ? (match.vatRate !== undefined ? match.vatRate : 16) : 16;
-              const preTaxPrice = price / (1 + vatRate / 100);
               return {
                 material: r.material,
                 quantity: parseFloat(r.quantity || '0'),
                 unit: r.unit,
-                unitPrice: preTaxPrice,
+                unitPrice: price,
                 vatUnitRate: vatRate,
                 requestedDate: r.date
               };
@@ -1684,25 +1683,22 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           
           if (!isViewOnly) {
             // Live-scaling in the modal
-            const originalTotalWithVat = (targetQuote.items || []).reduce((acc: number, it: any) => {
+            const originalTotal = (targetQuote.items || []).reduce((acc: number, it: any) => {
               const qty = parseFloat(it.quantity || '0') || 0;
               const unitPriceVal = parseFloat(it.unitPrice || '0') || 0;
-              const vat = it.vatUnitRate !== undefined ? it.vatUnitRate : 16;
-              return acc + (qty * unitPriceVal * (1 + vat / 100));
+              return acc + (qty * unitPriceVal);
             }, 0);
             
-            if (originalTotalWithVat > 0) {
-              finalUnitPrice = (row.unitPrice || 0) * (currentTotal / originalTotalWithVat);
+            if (originalTotal > 0) {
+              finalUnitPrice = (row.unitPrice || 0) * (currentTotal / originalTotal);
             } else {
               const count = targetQuote.items.length || 1;
-              const vat = row.vatUnitRate !== undefined ? row.vatUnitRate : 16;
-              finalUnitPrice = (currentTotal / (1 + vat / 100)) / count;
+              finalUnitPrice = currentTotal / count;
             }
           } else if (!finalUnitPrice) {
             // Read-only but no unitPrice saved (older records)
             const count = targetQuote.items.length || 1;
-            const vat = row.vatUnitRate !== undefined ? row.vatUnitRate : 16;
-            finalUnitPrice = (currentTotal / (1 + vat / 100)) / count;
+            finalUnitPrice = currentTotal / count;
           }
 
           const vatPerItem = row.vatUnitRate !== undefined 
@@ -1766,7 +1762,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           description: row.material,
           quantity: parseFloat(row.quantity || '0'),
           unit: row.unit,
-          unitPrice: itemPrice / (1 + itemVatRate / 100),
+          unitPrice: itemPrice,
           discount: 0,
           vatPer: itemVatRate
         };

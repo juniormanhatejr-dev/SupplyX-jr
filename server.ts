@@ -57,11 +57,54 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Synchronize icons for maskable purpose to ensure installable WebAPK doesn't fail
+  try {
+    const publicDir = path.join(process.cwd(), 'public');
+    const sourceIcon = path.join(publicDir, 'icon-512.png');
+    const targetIcon = path.join(publicDir, 'icon-512-maskable.png');
+    if (fs.existsSync(sourceIcon) && !fs.existsSync(targetIcon)) {
+      fs.copyFileSync(sourceIcon, targetIcon);
+      console.log('[SERVER] Successfully created icon-512-maskable.png in public/');
+    }
+  } catch (err) {
+    console.error('[SERVER] Failed to copy maskable icon in public/ directory:', err);
+  }
+
   // Support JSON request bodies
   app.use(express.json());
 
   // Performance improvements
   app.use(compression());
+
+  // Override PWA asset routing to ensure immediate update/discovery on Android without Chrome browser wrapping
+  app.get(['/manifest.json', '/sw.js', '/service-worker.js', '/icon-192.png', '/icon-512.png', '/icon-512-maskable.png'], (req, res, next) => {
+    const assetPath = req.path;
+    const searchPaths = [
+      path.join(process.cwd(), 'dist', assetPath),
+      path.join(process.cwd(), 'public', assetPath)
+    ];
+
+    let foundPath = '';
+    for (const p of searchPaths) {
+      if (fs.existsSync(p)) {
+        foundPath = p;
+        break;
+      }
+    }
+
+    if (foundPath) {
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      if (assetPath.endsWith('.json')) {
+        res.type('application/manifest+json');
+      } else if (assetPath.endsWith('.js')) {
+        res.type('application/javascript');
+      } else if (assetPath.endsWith('.png')) {
+        res.type('image/png');
+      }
+      return res.sendFile(foundPath);
+    }
+    next();
+  });
 
   // Use multer for memory storage
   const upload = multer({
@@ -530,6 +573,12 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     
+    // Serve PWA assets with absolute no-cache headers to ensure immediate updates are detected
+    app.get(['/manifest.json', '/sw.js', '/service-worker.js'], (req, res) => {
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.sendFile(path.join(distPath, req.path));
+    });
+
     // Cache static assets (images, fonts) for a year
     app.use(express.static(distPath, {
       maxAge: '1y',

@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Calendar, Gift, Info, FileText, AlertCircle } from 'lucide-react';
+import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Calendar, Gift, Info, FileText, AlertCircle, Trash2, CheckCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
 
@@ -24,7 +24,13 @@ interface NotificationsViewProps {
 }
 
 export default function NotificationsView({ isDarkMode, language, userType }: NotificationsViewProps) {
-  const { notifications, markNotificationAsRead } = useNotifications();
+  const { 
+    notifications, 
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    deleteNotification,
+    deleteAllNotifications
+  } = useNotifications();
 
   const t = {
     PT: {
@@ -32,7 +38,9 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
       subtitle: 'Fique por dentro das últimas promoções e atualizações do mercado.',
       empty: 'Sua caixa de entrada está vazia.',
       markRead: 'Marcar como lida',
+      markAllRead: 'Marcar todas como lidas',
       delete: 'Excluir',
+      deleteAll: 'Limpar tudo',
       priority: 'Prioridade',
       new: 'NOVO',
       justNow: 'Agora',
@@ -48,7 +56,9 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
       subtitle: 'Stay updated with the latest market promotions and updates.',
       empty: 'Your inbox is empty.',
       markRead: 'Mark as read',
+      markAllRead: 'Mark all as read',
       delete: 'Delete',
+      deleteAll: 'Delete all',
       priority: 'Priority',
       new: 'NEW',
       justNow: 'Just now',
@@ -112,6 +122,34 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
             {t.title}
           </h2>
           <p className="text-zinc-500 text-[11px] font-black uppercase tracking-[0.2em] mt-2">{t.subtitle}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          {notifications.some(n => !n.read) && (
+            <button 
+              onClick={() => markAllNotificationsAsRead()}
+              className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg border ${
+                isDarkMode 
+                  ? 'bg-white/5 hover:bg-white/10 text-zinc-300 border-white/5' 
+                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-zinc-200'
+              }`}
+            >
+              <CheckCheck className="w-4 h-4 text-supplyx-blue" />
+              {t.markAllRead}
+            </button>
+          )}
+          {notifications.length > 0 && (
+            <button 
+              onClick={() => deleteAllNotifications()}
+              className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg border ${
+                isDarkMode 
+                  ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/10' 
+                  : 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-100'
+              }`}
+            >
+              <Trash2 className="w-4 h-4" />
+              {t.deleteAll}
+            </button>
+          )}
         </div>
       </div>
 
@@ -183,6 +221,18 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
                           {t.markRead}
                         </button>
                       )}
+                      <button 
+                        onClick={() => deleteNotification(n.id)}
+                        className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all hover:scale-105 active:scale-95 flex items-center gap-2 ${
+                          isDarkMode 
+                            ? 'bg-rose-500/5 border-rose-500/20 text-rose-400 hover:bg-rose-500/10' 
+                            : 'bg-rose-50 border-rose-100 text-rose-600 hover:bg-rose-100'
+                        }`}
+                        title={t.delete}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        {t.delete}
+                      </button>
                     </div>
                   </div>
                 </div>

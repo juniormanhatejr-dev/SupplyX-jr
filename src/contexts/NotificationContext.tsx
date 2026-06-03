@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { collection, query, where, onSnapshot, orderBy, limit, doc, getDoc, setDoc, getDocs, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, limit, doc, getDoc, setDoc, getDocs, serverTimestamp, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { MessageSquare, Bell, X } from 'lucide-react';
@@ -13,6 +13,9 @@ interface NotificationContextType {
   totalUnread: number;
   notifications: any[];
   markNotificationAsRead: (notificationId: string) => Promise<void>;
+  markAllNotificationsAsRead: () => Promise<void>;
+  deleteNotification: (notificationId: string) => Promise<void>;
+  deleteAllNotifications: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -309,6 +312,52 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
     }
   };
 
+  const markAllNotificationsAsRead = async () => {
+    if (!user) return;
+    console.log('[NotificationContext] Marking all notifications as read...');
+    try {
+      const unread = notifications.filter(n => !n.read);
+      if (unread.length === 0) return;
+      const batch = writeBatch(db);
+      unread.forEach((n) => {
+        const ref = doc(db, 'notifications', n.id);
+        batch.update(ref, { read: true });
+      });
+      await batch.commit();
+      console.log(`[NotificationContext] All ${unread.length} notifications marked as read.`);
+    } catch (error) {
+      console.error('[NotificationContext] Error marking all notifications as read:', error);
+    }
+  };
+
+  const deleteNotification = async (notificationId: string) => {
+    console.log(`[NotificationContext] Deleting notification ${notificationId}...`);
+    try {
+      const ref = doc(db, 'notifications', notificationId);
+      await deleteDoc(ref);
+      console.log(`[NotificationContext] Notification ${notificationId} deleted successfully.`);
+    } catch (error) {
+      console.error('[NotificationContext] Error deleting notification:', error);
+    }
+  };
+
+  const deleteAllNotifications = async () => {
+    if (!user) return;
+    console.log('[NotificationContext] Deleting all notifications...');
+    try {
+      if (notifications.length === 0) return;
+      const batch = writeBatch(db);
+      notifications.forEach((n) => {
+        const ref = doc(db, 'notifications', n.id);
+        batch.delete(ref);
+      });
+      await batch.commit();
+      console.log(`[NotificationContext] All ${notifications.length} notifications deleted successfully.`);
+    } catch (error) {
+      console.error('[NotificationContext] Error deleting all notifications:', error);
+    }
+  };
+
   return (
     <NotificationContext.Provider value={{ 
       permission, 
@@ -317,7 +366,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
       unreadNotifications,
       totalUnread: unreadMessages + unreadNotifications,
       notifications,
-      markNotificationAsRead
+      markNotificationAsRead,
+      markAllNotificationsAsRead,
+      deleteNotification,
+      deleteAllNotifications
     }}>
       {children}
       

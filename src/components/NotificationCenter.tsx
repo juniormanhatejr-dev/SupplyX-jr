@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Info, FileText, AlertCircle } from 'lucide-react';
+import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Info, FileText, AlertCircle, Trash2, CheckCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
 
@@ -23,7 +23,14 @@ interface NotificationCenterProps {
 }
 
 export default function NotificationCenter({ isDarkMode, language, onViewAll, userType }: NotificationCenterProps) {
-  const { unreadNotifications, notifications, markNotificationAsRead } = useNotifications();
+  const { 
+    unreadNotifications, 
+    notifications, 
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    deleteNotification,
+    deleteAllNotifications
+  } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
   
   const totalUnread = unreadNotifications;
@@ -31,7 +38,8 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
   const t = {
     PT: {
       title: 'Notificações',
-      markRead: 'Lidas',
+      markRead: 'Todas Lidas',
+      clearAll: 'Limpar',
       empty: 'Nenhuma notificação',
       viewAll: 'Ver Todas as Notificações',
       justNow: 'Agora',
@@ -39,7 +47,8 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
     },
     EN: {
       title: 'Notifications',
-      markRead: 'Read',
+      markRead: 'Mark all read',
+      clearAll: 'Clear all',
       empty: 'No notifications',
       viewAll: 'View All Notifications',
       justNow: 'Just now',
@@ -56,12 +65,6 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
     if (diff < 3600) return `${Math.floor(diff / 60)}m ${t.ago}`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ${t.ago}`;
     return date.toLocaleDateString(language === 'PT' ? 'pt-PT' : 'en-US');
-  };
-
-  const markAllAsRead = async () => {
-    for (const n of notifications) {
-      if (!n.read) await markNotificationAsRead(n.id);
-    }
   };
 
   const toggleOpen = () => {
@@ -118,18 +121,32 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                 isDarkMode ? 'border-white/5' : 'bg-white border-zinc-100'
               }`}
             >
-              <div className={`p-8 border-b flex justify-between items-center ${isDarkMode ? 'border-white/5 bg-white/5' : 'border-zinc-50'}`}>
+              <div className={`p-6 border-b flex justify-between items-center ${isDarkMode ? 'border-white/5 bg-white/5' : 'border-zinc-50'}`}>
                 <h3 className={`font-black uppercase italic tracking-[0.2em] text-[11px] ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-900'}`}>
                   {t.title}
                 </h3>
-                {totalUnread > 0 && (
-                  <button 
-                    onClick={markAllAsRead}
-                    className="text-[10px] font-black uppercase text-zinc-400 hover:text-white transition-colors"
-                  >
-                    {t.markRead}
-                  </button>
-                )}
+                <div className="flex items-center gap-4">
+                  {totalUnread > 0 && (
+                    <button 
+                      onClick={() => markAllNotificationsAsRead()}
+                      className="text-[10px] font-black uppercase text-zinc-400 hover:text-white transition-colors flex items-center gap-1"
+                      title={t.markRead}
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">{t.markRead}</span>
+                    </button>
+                  )}
+                  {notifications.length > 0 && (
+                    <button 
+                      onClick={() => deleteAllNotifications()}
+                      className="text-[10px] font-black uppercase text-rose-400 hover:text-rose-300 transition-colors flex items-center gap-1"
+                      title={t.clearAll}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">{t.clearAll}</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="max-h-[500px] overflow-y-auto">
@@ -155,7 +172,7 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${getColorClass(n.type)}`}>
                           {getIcon(n.type)}
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 pr-8">
                           <p className={`text-[12px] font-black uppercase italic leading-tight mb-1 ${isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>
                             {n.title}
                           </p>
@@ -165,6 +182,20 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                           <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest flex items-center gap-2">
                              <Clock className="w-3 h-3" /> {formatTime(n.createdAt)}
                           </span>
+                        </div>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-40 sm:group-hover:opacity-100 transition-opacity flex items-center gap-2 z-10">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteNotification(n.id);
+                            }}
+                            className={`p-2 rounded-lg transition-colors ${
+                              isDarkMode ? 'hover:bg-rose-500/10 text-zinc-500 hover:text-rose-500' : 'hover:bg-rose-50 text-zinc-400 hover:text-rose-500'
+                            }`}
+                            title={language === 'PT' ? 'Eliminar' : 'Delete'}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     ))}

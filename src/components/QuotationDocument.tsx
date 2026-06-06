@@ -401,7 +401,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                 <td style={{ padding: '10px', textAlign: 'center', fontWeight: 700, textTransform: 'uppercase', fontSize: '9px' }}>{item.unit}</td>
                 <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700 }}>{formatCurrency(item.unitPrice)}</td>
                 <td style={{ padding: '10px', textAlign: 'center', fontWeight: 600 }}>{item.vatPer.toFixed(2)}</td>
-                <td style={{ padding: '10px', textAlign: 'right', fontWeight: 905, color: COLORS.darkBlue }}>{formatCurrency(item.quantity * item.unitPrice * (1 - item.discount / 100) * (1 + item.vatPer / 100))}</td>
+                <td style={{ padding: '10px', textAlign: 'right', fontWeight: 900, color: COLORS.darkBlue }}>{formatCurrency(item.quantity * item.unitPrice * (1 + item.vatPer / 100))}</td>
               </tr>
             ))}
           </tbody>

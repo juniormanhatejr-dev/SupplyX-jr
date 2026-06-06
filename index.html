@@ -1,36 +1,37 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
     <title>SupplyX</title>
-    <!-- PWA configuration -->
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0055ff">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="SupplyX">
-    <link rel="apple-touch-icon" href="/icon-192.png">
     
-    <!-- Service Worker Registration -->
     <script>
+      // Self-Healing Protocol: Force removal of legacy Service Workers and caches
       if ('serviceWorker' in navigator) {
-        const registerSW = () => {
-          navigator.serviceWorker.register('/service-worker.js')
-            .then(reg => {
-              console.log('[PWA] Service Worker registered successfully:', reg.scope);
-              reg.update();
-            })
-            .catch(err => {
-              console.error('[PWA] Service Worker registration failed:', err);
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          if (registrations && registrations.length > 0) {
+            console.log('[SupplyX] Legacy Service Worker detected! Initiating deep-purge and reload...');
+            var promises = [];
+            for (var i = 0; i < registrations.length; i++) {
+              promises.push(registrations[i].unregister());
+            }
+            if ('caches' in window) {
+              promises.push(
+                caches.keys().then(function(keys) {
+                  return Promise.all(keys.map(function(key) {
+                    return caches.delete(key);
+                  }));
+                })
+              );
+            }
+            Promise.all(promises).then(function() {
+              console.log('[SupplyX] Purge completed! Standardizing page state...');
+              setTimeout(function() {
+                window.location.reload(true);
+              }, 300);
             });
-        };
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {
-          registerSW();
-        } else {
-          window.addEventListener('load', registerSW);
-        }
+          }
+        });
       }
     </script>
   </head>
@@ -39,4 +40,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

@@ -737,11 +737,12 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                             ) : (
                               <a 
                                 href={msg.fileUrl} 
+                                download={msg.fileName || 'Arquivo'}
                                 target="_blank" 
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-2 underline"
+                                className="flex items-center gap-2 underline cursor-pointer hover:brightness-110 transition-all font-bold"
                               >
-                                <Paperclip className="w-4 h-4" />
+                                <Paperclip className="w-4 h-4 shrink-0" />
                                 {msg.fileName || 'Arquivo'}
                               </a>
                             )}

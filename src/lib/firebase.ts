@@ -307,6 +307,25 @@ export async function uploadFile(path: string, file: File): Promise<string> {
           reader.readAsDataURL(fileToUpload);
         });
       }
+    } else {
+      // Robust Base64 Local Fallback for non-image documents (PDFs, Word docs, spreadsheets, etc.)
+      if (fileToUpload.size < 900000) {
+        console.log('Resorting to Base64 FileReader fallback for non-image file:', file.name);
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64 = reader.result as string;
+            if (base64.length > 1048576) {
+              reject(new Error('Documento excessivamente grande para o modo de compatibilidade sem Firebase Storage. Tente um arquivo abaixo de 750KB.'));
+            } else {
+              console.log('Document Base64 reading fallback successful');
+              resolve(base64);
+            }
+          };
+          reader.onerror = () => reject(new Error('Falha ao processar arquivo para fallback local.'));
+          reader.readAsDataURL(fileToUpload);
+        });
+      }
     }
 
     if (isCorsError) {

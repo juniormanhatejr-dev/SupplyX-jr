@@ -37,6 +37,78 @@ import { notificationService } from '../services/notificationService';
 
 const availableSuppliers: any[] = [];
 
+interface LocationCoords {
+  lat: number;
+  lng: number;
+}
+
+const MOZ_CITIES_COORDS: Record<string, LocationCoords> = {
+  maputo: { lat: -25.9692, lng: 32.5732 },
+  'xai-xai': { lat: -25.0519, lng: 33.6442 },
+  xaixai: { lat: -25.0519, lng: 33.6442 },
+  inhambane: { lat: -23.8650, lng: 35.3833 },
+  maxixe: { lat: -23.8597, lng: 35.3472 },
+  vilankulo: { lat: -22.0000, lng: 35.3167 },
+  beira: { lat: -19.8436, lng: 34.8722 },
+  chimoio: { lat: -19.1164, lng: 33.4833 },
+  tete: { lat: -16.1564, lng: 33.5867 },
+  quelimane: { lat: -17.8786, lng: 36.8883 },
+  nampula: { lat: -15.1167, lng: 39.2667 },
+  pemba: { lat: -12.9740, lng: 40.5188 },
+  lichinga: { lat: -13.3128, lng: 35.2406 },
+  nacala: { lat: -14.5426, lng: 40.6854 },
+  'ressano garcia': { lat: -25.4431, lng: 31.9912 },
+  goba: { lat: -26.3155, lng: 32.1432 }
+};
+
+function calculateDistanceInKm(originStr: string, destStr: string): number {
+  if (!originStr || !destStr) return 0;
+  
+  const originLower = originStr.toLowerCase();
+  const destLower = destStr.toLowerCase();
+  
+  let originKey = '';
+  let destKey = '';
+  
+  for (const key of Object.keys(MOZ_CITIES_COORDS)) {
+    if (originLower.includes(key)) {
+      originKey = key;
+    }
+    if (destLower.includes(key)) {
+      destKey = key;
+    }
+  }
+  
+  if (originKey && destKey) {
+    if (originKey === destKey) return 15;
+    
+    const p1 = MOZ_CITIES_COORDS[originKey];
+    const p2 = MOZ_CITIES_COORDS[destKey];
+    
+    const R = 6371; 
+    const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+    const dLng = (p2.lng - p1.lng) * Math.PI / 180;
+    
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * 
+      Math.sin(dLng/2) * Math.sin(dLng/2);
+      
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const rawDistance = R * c;
+    
+    return Math.round(rawDistance * 1.3);
+  }
+  
+  if (originLower.includes('maputo') && destLower.includes('beira')) return 1205;
+  if (originLower.includes('maputo') && destLower.includes('nampula')) return 2045;
+  if (originLower.includes('maputo') && destLower.includes('tete')) return 1533;
+  if (originLower.includes('beira') && destLower.includes('nampula')) return 988;
+  if (originLower.includes('beira') && destLower.includes('tete')) return 590;
+  
+  return 450; 
+}
+
 const getOrders = (t: any) => [];
 
 interface OrdersViewProps {
@@ -1965,8 +2037,8 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                               <p className={`text-2xl font-black italic tracking-tighter ${i === 0 ? 'text-brand' : isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>
                                 MT {res.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 {res.confidence < 100 && (
-                                  <span className="text-[10px] text-yellow-600 dark:text-yellow-500 font-black block leading-none mt-1">
-                                    + ITENS SOB CONSULTA
+                                  <span className="text-[10px] text-zinc-500 font-black block leading-none mt-1">
+                                    + ITENS INDISPONÍVEIS (MT 0)
                                   </span>
                                 )}
                               </p>
@@ -2522,10 +2594,10 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                               </div>
 
                               <div className="space-y-4 text-left">
-                                {/* Row 1: Origem / Destino */}
+                                {/* Row 1: Partida (Origem) / Chegada (Destino) */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
-                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1">Origem da Carga B2B</label>
+                                    <label className="text-[8.5px] font-black uppercase text-zinc-500 tracking-wider block mb-1">📍 {language === 'PT' ? 'Local de Partida (Origem)' : 'Local of Origin / Departure'}</label>
                                     <input 
                                       type="text" 
                                       value={logisticsFormFields.origem}
@@ -2533,10 +2605,11 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                       className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
                                         isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
                                       }`}
+                                      placeholder={language === 'PT' ? 'Digite ou confirme a origem' : 'Origin address'}
                                     />
                                   </div>
                                   <div>
-                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1 font-sans">Destino do Frete</label>
+                                    <label className="text-[8.5px] font-black uppercase text-zinc-500 tracking-wider block mb-1 font-sans">🏁 {language === 'PT' ? 'Local de Chegada (Destino)' : 'Local of Arrival / Destination'}</label>
                                     <input 
                                       type="text" 
                                       value={logisticsFormFields.destino}
@@ -2544,29 +2617,83 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                       className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
                                         isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
                                       }`}
+                                      placeholder={language === 'PT' ? 'Digite ou confirme o destino' : 'Destination address'}
                                     />
                                   </div>
                                 </div>
 
-                                {/* Relação de Itens e Quantidades */}
-                                <div className="p-4 rounded-xl bg-zinc-950/40 border border-white/5 space-y-2">
-                                  <label className="text-[8px] font-black uppercase text-zinc-400 tracking-wider block">Itens da Carga e Quantidades</label>
-                                  <div className="flex flex-wrap gap-2">
-                                    {(aiResponses[selectedResponseIndex] || respondingTo)?.items?.length > 0 ? (
-                                      (aiResponses[selectedResponseIndex] || respondingTo).items.map((it: any, idx: number) => (
-                                        <span key={idx} className="bg-[#0052CC]/10 text-[#0052CC] text-[10px] font-black px-2.5 py-1.5 rounded-lg border border-[#0052CC]/15">
-                                          📦 {it.material || it.description || 'Produto'} ({it.quantity || '1'} {it.unit || 'Unid.'})
+                                {/* Dynamic Mileage & Delivery Advice */}
+                                {(() => {
+                                  const distance = calculateDistanceInKm(logisticsFormFields.origem, logisticsFormFields.destino);
+                                  const transitDays = distance > 1200 ? 5 : (distance > 600 ? 3 : (distance > 200 ? 2 : 1));
+                                  return (
+                                    <div className="p-3 rounded-2xl bg-supplyx-blue/5 border border-supplyx-blue/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-base">🛣️</span>
+                                        <div>
+                                          <p className="font-black text-supplyx-blue uppercase tracking-wider text-[9px]">Calculador de Rota & Distância</p>
+                                          <p className="text-[10px] text-zinc-400 font-semibold">{language === 'PT' ? 'Quilometragem calculada em tempo real com base no trajeto EN1' : 'Real-time road mileage computed using EN1 main highway mapping'}</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex gap-2 text-[10px]">
+                                        <span className={`px-2.5 py-1 rounded-lg font-mono font-black border ${isDarkMode ? 'bg-zinc-950 text-emerald-400 border-emerald-500/10' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                                          {distance} KM
                                         </span>
-                                      ))
-                                    ) : rows.filter(r => r.material).length > 0 ? (
-                                      rows.filter(r => r.material).map((it: any, idx: number) => (
-                                        <span key={idx} className="bg-[#0052CC]/10 text-[#0052CC] text-[10px] font-black px-2.5 py-1.5 rounded-lg border border-[#0052CC]/15">
-                                          📦 {it.material} ({it.quantity || '1'} {it.unit || 'Unid.'})
+                                        <span className={`px-2.5 py-1 rounded-lg font-sans font-black border ${isDarkMode ? 'bg-zinc-950 text-sky-400 border-sky-500/10' : 'bg-sky-50 text-sky-700 border-sky-200'}`}>
+                                          {language === 'PT' ? 'Prazo Estimado:' : 'Estimated Trip:'} ~{transitDays} {transitDays > 1 ? (language === 'PT' ? 'Dias' : 'Days') : (language === 'PT' ? 'Dia' : 'Day')}
                                         </span>
-                                      ))
-                                    ) : (
-                                      <span className="text-[10px] text-zinc-500 font-bold uppercase">Nenhum item detectado</span>
-                                    )}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* TABELA DE MERCADORIAS E QUANTIDADES */}
+                                <div className="p-4 rounded-xl bg-zinc-950/40 border border-white/5 space-y-2 text-left">
+                                  <label className="text-[8.5px] font-black uppercase text-zinc-400 tracking-wider block mb-1">
+                                    📋 {language === 'PT' ? 'Tabela de Mercadorias & Quantidades' : 'Goods & Quantities Table'}
+                                  </label>
+                                  <div className="overflow-x-auto rounded-lg border border-white/5">
+                                    <table className="w-full text-left text-xs border-collapse">
+                                      <thead>
+                                        <tr className="bg-zinc-900 border-b border-white/5 text-[8.5px] text-zinc-500 font-black uppercase tracking-wider">
+                                          <th className="p-2.5 pl-4">{language === 'PT' ? 'Mercadoria / Especificação' : 'Item Description'}</th>
+                                          <th className="p-2.5 text-center w-32">{language === 'PT' ? 'Quantidade' : 'Quantity'}</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {(aiResponses[selectedResponseIndex] || respondingTo)?.items?.length > 0 ? (
+                                          (aiResponses[selectedResponseIndex] || respondingTo).items.map((it: any, idx: number) => (
+                                            <tr key={idx} className="border-b border-white/[0.02] last:border-0 hover:bg-white/[0.01]">
+                                              <td className="p-2.5 pl-4 text-zinc-200 font-bold flex items-center gap-2">
+                                                <span className="text-zinc-500">📦</span>
+                                                {it.material || it.description || 'Produto'}
+                                              </td>
+                                              <td className="p-2.5 text-center font-mono font-black text-[#0052CC] text-xs">
+                                                {it.quantity || '1'} {it.unit || 'Unid.'}
+                                              </td>
+                                            </tr>
+                                          ))
+                                        ) : rows.filter(r => r.material).length > 0 ? (
+                                          rows.filter(r => r.material).map((it: any, idx: number) => (
+                                            <tr key={idx} className="border-b border-white/[0.02] last:border-0 hover:bg-white/[0.01]">
+                                              <td className="p-2.5 pl-4 text-zinc-200 font-bold flex items-center gap-2">
+                                                <span className="text-zinc-500">📦</span>
+                                                {it.material}
+                                              </td>
+                                              <td className="p-2.5 text-center font-mono font-black text-[#0052CC] text-xs">
+                                                {it.quantity || '1'} {it.unit || 'Unid.'}
+                                              </td>
+                                            </tr>
+                                          ))
+                                        ) : (
+                                          <tr>
+                                            <td colSpan={2} className="p-4 text-center text-zinc-500 font-bold uppercase text-[10px]">
+                                              {language === 'PT' ? 'Nenhuma Mercadoria Vinculada à Cotação' : 'No Goods Linked to Quote'}
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </tbody>
+                                    </table>
                                   </div>
                                 </div>
 

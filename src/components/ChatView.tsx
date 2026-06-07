@@ -786,7 +786,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                   ref={fileInputRef} 
                   className="hidden" 
                   onChange={handleFileUpload}
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.csv"
                 />
                 <div className="flex items-center gap-2">
                   <button 

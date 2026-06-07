@@ -76,7 +76,6 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
   const discountPercent = data.items[0]?.discount || 0;
 
   const formatCurrency = (value: number) => {
-    if (value === 0) return 'Sob Consulta';
     return value.toLocaleString('pt-MZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' MT';
   };
 

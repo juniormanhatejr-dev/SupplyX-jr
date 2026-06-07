@@ -164,7 +164,7 @@ export function handleFirestoreError(error: any, operationType: OperationType, p
   throw new Error(JSON.stringify({ ...errInfo, userMessage }));
 }
 
-function compressWithCanvas(file: File, maxWidth = 600, maxHeight = 600, quality = 0.4): Promise<string> {
+function compressWithCanvas(file: File, maxWidth = 2048, maxHeight = 2048, quality = 0.85): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -215,15 +215,16 @@ export async function uploadFile(path: string, file: File): Promise<string> {
     try {
       console.log('Starting image compression...');
       const options = {
-        maxSizeMB: 0.2,
-        maxWidthOrHeight: 1024,
+        maxSizeMB: 8.0, // High quality limit (up to 8MB)
+        maxWidthOrHeight: 4096, // Retain extreme resolution
         useWebWorker: true,
-        initialQuality: 0.6
+        initialQuality: 0.95 // Keep compression quality premium
       };
       
       if (path.includes('photo_') || path.includes('avatar')) {
-        options.maxSizeMB = 0.1;
+        options.maxSizeMB = 0.15;
         options.maxWidthOrHeight = 400;
+        options.initialQuality = 0.7;
       }
 
       fileToUpload = await imageCompression(file, options);

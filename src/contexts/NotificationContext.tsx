@@ -29,6 +29,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [localDeletedIds, setLocalDeletedIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('supplyx_deleted_notifications_blacklist');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -222,7 +230,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
     const unsubscribeNotifs = onSnapshot(qNotifs, (snapshot) => {
       let fetched = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() as any }))
-        .filter((n: any) => !n.deleted);
+        .filter((n: any) => !n.deleted && !localDeletedIds.includes(n.id));
       
       // Sort in memory by createdAt descending to avoid index errors
       fetched.sort((a, b) => {
@@ -248,7 +256,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
         snapshot.docChanges().forEach((change) => {
           if (change.type === 'added') {
             const notif = change.doc.data();
-            if (!notif.deleted) {
+            if (!notif.deleted && !localDeletedIds.includes(change.doc.id)) {
               console.log(`[NotificationContext] Dynamic new system/alert notification received: "${notif.title}"`);
               triggerNotification(notif.title, notif.message);
             }
@@ -286,7 +294,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
       unsubscribeCarriers();
       unsubscribeOccurrences();
     };
-  }, [user?.uid, language]);
+  }, [user?.uid, language, localDeletedIds]);
 
   const triggerNotification = (title: string, body: string, chatId?: string) => {
     // Play sound
@@ -336,18 +344,29 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
 
   const deleteNotification = async (notificationId: string) => {
     console.log(`[NotificationContext] Soft-deleting notification ${notificationId}...`);
+    setLocalDeletedIds(prev => {
+      const updated = [...new Set([...prev, notificationId])];
+      localStorage.setItem('supplyx_deleted_notifications_blacklist', JSON.stringify(updated));
+      return updated;
+    });
     try {
        const ref = doc(db, 'notifications', notificationId);
        await updateDoc(ref, { deleted: true });
        console.log(`[NotificationContext] Notification ${notificationId} soft-deleted successfully.`);
     } catch (error) {
-      console.error('[NotificationContext] Error soft-deleting notification:', error);
+       console.error('[NotificationContext] Error soft-deleting notification:', error);
     }
   };
 
   const deleteAllNotifications = async () => {
     if (!user) return;
     console.log('[NotificationContext] Soft-deleting all notifications...');
+    const currentIds = notifications.map(n => n.id);
+    setLocalDeletedIds(prev => {
+      const updated = [...new Set([...prev, ...currentIds])];
+      localStorage.setItem('supplyx_deleted_notifications_blacklist', JSON.stringify(updated));
+      return updated;
+    });
     try {
       if (notifications.length === 0) return;
       const batch = writeBatch(db);

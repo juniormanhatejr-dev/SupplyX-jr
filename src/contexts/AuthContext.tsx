@@ -26,6 +26,10 @@ interface UserProfile {
   mobileWallets?: { provider: string; number: string; name: string }[];
   signatureURL?: string;
   stampURL?: string;
+  fleetSize?: string | number;
+  specialization?: string;
+  companyName?: string;
+  id?: string;
 }
 
 interface AuthContextType {
@@ -113,7 +117,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           setLoading(false);
         }, (error) => {
-          handleFirestoreError(error, OperationType.GET, docPath);
+          console.error("[AuthContext] Profile subscription failed:", error.message || error);
+          setProfile(null);
           setLoading(false);
         });
       } else {

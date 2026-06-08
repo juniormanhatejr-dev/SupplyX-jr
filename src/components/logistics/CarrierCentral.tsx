@@ -15,8 +15,7 @@ import {
   TrendingUp, 
   MapPinOff,
   Navigation,
-  FileText,
-  Search
+  FileText
 } from 'lucide-react';
 import { CargoRequest } from './types';
 import { db, auth } from '../../lib/firebase';
@@ -180,36 +179,6 @@ export default function CarrierCentral({
     setChatMessages(updatedChats);
   };
 
-  // Flexible match for assigned carriers to handle testing and small casing mismatches
-  const isCarrierMatched = (assigned: string | undefined | null) => {
-    if (!assigned) return true; // If no assigned carrier, open to everyone
-    
-    const assignedLower = assigned.toLowerCase();
-    const currentLower = carrierName.toLowerCase();
-    const profileLower = profileName ? profileName.toLowerCase() : '';
-    
-    // Exact match
-    if (assignedLower === currentLower || (profileLower && assignedLower === profileLower)) {
-      return true;
-    }
-    
-    // Broad match for demo/fallback purposes - if current carrier is "Minha Transportadora"
-    // we should also show them the assigned tasks so they don't disappear under testing!
-    if (currentLower.includes('minha transportadora') || currentLower.includes('anonymous')) {
-      return true;
-    }
-    
-    // Partial substring match e.g. "moz logistics" in "Moz Logistics & Transportes Lda"
-    if (assignedLower.includes(currentLower) || currentLower.includes(assignedLower)) {
-      return true;
-    }
-    if (profileLower && (assignedLower.includes(profileLower) || profileLower.includes(assignedLower))) {
-      return true;
-    }
-    
-    return false;
-  };
-
   // Filters computed based on carrier assignment
   const availableLoads = requests.filter(r => r.status === 'Em concurso');
   
@@ -217,7 +186,7 @@ export default function CarrierCentral({
     r.status !== 'Em concurso' && 
     r.status !== 'Pago' && 
     r.status !== 'Pendente' &&
-    isCarrierMatched(r.assignedCarrier)
+    (r.assignedCarrier === carrierName || r.assignedCarrier === profileName || !r.assignedCarrier)
   );
 
   // Set first load as default selection if none
@@ -386,7 +355,6 @@ export default function CarrierCentral({
 
           <div className="space-y-1">
             {[
-              { id: 'available', icon: Search, pt: `Concursos Disponíveis (${availableLoads.length})`, en: `Concourse Tenders (${availableLoads.length})` },
               { id: 'active', icon: CheckCircle2, pt: `Entregas Ativas (${activeDeliveries.length})`, en: `Active (${activeDeliveries.length})` },
               { id: 'tracking', icon: Activity, pt: 'Rastreio em Tempo-real', en: 'Real-time Tracking' },
               { id: 'chat', icon: MessageSquare, pt: 'Conversas & Alertas', en: 'Conversations / Chats' }

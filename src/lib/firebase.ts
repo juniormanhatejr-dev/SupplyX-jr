@@ -164,7 +164,7 @@ export function handleFirestoreError(error: any, operationType: OperationType, p
   throw new Error(JSON.stringify({ ...errInfo, userMessage }));
 }
 
-function compressWithCanvas(file: File, maxWidth = 2048, maxHeight = 2048, quality = 0.85): Promise<string> {
+function compressWithCanvas(file: File, maxWidth = 600, maxHeight = 600, quality = 0.4): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -215,16 +215,15 @@ export async function uploadFile(path: string, file: File): Promise<string> {
     try {
       console.log('Starting image compression...');
       const options = {
-        maxSizeMB: 8.0, // High quality limit (up to 8MB)
-        maxWidthOrHeight: 4096, // Retain extreme resolution
+        maxSizeMB: 0.2,
+        maxWidthOrHeight: 1024,
         useWebWorker: true,
-        initialQuality: 0.95 // Keep compression quality premium
+        initialQuality: 0.6
       };
       
       if (path.includes('photo_') || path.includes('avatar')) {
-        options.maxSizeMB = 0.15;
+        options.maxSizeMB = 0.1;
         options.maxWidthOrHeight = 400;
-        options.initialQuality = 0.7;
       }
 
       fileToUpload = await imageCompression(file, options);
@@ -300,25 +299,6 @@ export async function uploadFile(path: string, file: File): Promise<string> {
               reject(new Error('Imagem excessivamente grande para o modo de compatibilidade (Vercel/Base64). Tente uma imagem abaixo de 800KB.'));
             } else {
               console.log('Simple Base64 reading fallback successful');
-              resolve(base64);
-            }
-          };
-          reader.onerror = () => reject(new Error('Falha ao processar arquivo para fallback local.'));
-          reader.readAsDataURL(fileToUpload);
-        });
-      }
-    } else {
-      // Robust Base64 Local Fallback for non-image documents (PDFs, Word docs, spreadsheets, etc.)
-      if (fileToUpload.size < 900000) {
-        console.log('Resorting to Base64 FileReader fallback for non-image file:', file.name);
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64 = reader.result as string;
-            if (base64.length > 1048576) {
-              reject(new Error('Documento excessivamente grande para o modo de compatibilidade sem Firebase Storage. Tente um arquivo abaixo de 750KB.'));
-            } else {
-              console.log('Document Base64 reading fallback successful');
               resolve(base64);
             }
           };

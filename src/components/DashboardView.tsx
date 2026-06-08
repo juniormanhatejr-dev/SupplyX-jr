@@ -27,7 +27,7 @@ interface DashboardViewProps {
   onNavigate?: (tab: string, payload?: any) => void;
   isDarkMode?: boolean;
   language?: 'PT' | 'EN';
-  userType?: 'buyer' | 'supplier';
+  userType?: 'buyer' | 'supplier' | 'logistics';
 }
 
 export default function DashboardView({ onActivateIA, onCategoryClick, onNavigate, isDarkMode, language, userType = 'buyer' }: DashboardViewProps) {

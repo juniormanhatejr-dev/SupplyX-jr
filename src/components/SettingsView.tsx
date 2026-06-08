@@ -181,7 +181,7 @@ export default function SettingsView({
         city: profile.city || '',
         photoURL: profile.photoURL || '',
         coverURL: profile.coverURL || '',
-        fleetSize: profile.fleetSize || '',
+        fleetSize: String(profile.fleetSize || ''),
         specialization: profile.specialization || '',
         bankAccounts: profile.bankAccounts || [],
         mobileWallets: profile.mobileWallets || [],

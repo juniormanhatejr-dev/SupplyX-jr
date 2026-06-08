@@ -249,7 +249,23 @@ export default function LogisticsView({
           const item = docSnap.data();
           const reqId = item.id || docSnap.id;
           if (!demoIds.includes(reqId)) {
-            const assignedCarrier = item.assignedCarrier;
+            // Filter out mock carrier names from assignedCarrier
+            let assignedCarrier = item.assignedCarrier;
+            if (assignedCarrier) {
+              const lower = assignedCarrier.toLowerCase();
+              const mockNames = [
+                'moz logistics',
+                'fast cargo',
+                'nampula',
+                'união',
+                'uniao',
+                'manica',
+                'supplyx'
+              ];
+              if (mockNames.some(m => lower.includes(m))) {
+                assignedCarrier = undefined;
+              }
+            }
 
             firestoreList.push({
               id: reqId,

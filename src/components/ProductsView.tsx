@@ -127,7 +127,7 @@ interface ProductsViewProps {
   initialCategory?: string;
   initialSearchQuery?: string;
   onClearSearch?: () => void;
-  userType?: 'buyer' | 'supplier';
+  userType?: 'buyer' | 'supplier' | 'logistics';
   supplierId?: string | null;
   onClearSupplierFilter?: () => void;
 }

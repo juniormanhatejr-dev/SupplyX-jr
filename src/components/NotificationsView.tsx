@@ -20,7 +20,7 @@ interface Notification {
 interface NotificationsViewProps {
   isDarkMode: boolean;
   language: 'PT' | 'EN';
-  userType?: 'buyer' | 'supplier';
+  userType?: 'buyer' | 'supplier' | 'logistics';
 }
 
 export default function NotificationsView({ isDarkMode, language, userType }: NotificationsViewProps) {
@@ -45,7 +45,6 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
       new: 'NOVO',
       justNow: 'Agora',
       ago: 'atrás',
-      viewSubject: 'Ver Detalhes',
       priorities: {
         high: 'ALTA',
         medium: 'MÉDIA',
@@ -64,7 +63,6 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
       new: 'NEW',
       justNow: 'Just now',
       ago: 'ago',
-      viewSubject: 'View Details',
       priorities: {
         high: 'HIGH',
         medium: 'MEDIUM',
@@ -72,47 +70,6 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
       }
     }
   }[language];
-
-  const handleNotificationClick = async (n: any) => {
-    if (!n.read) {
-      await markNotificationAsRead(n.id);
-    }
-
-    let targetTab = '';
-    let payload: any = undefined;
-
-    const id = n.id || '';
-    const type = n.type || '';
-    const title = (n.title || '').toLowerCase();
-
-    if (id.startsWith('notif_msg_') || title.includes('mensagem') || title.includes('message') || title.includes('💬')) {
-      targetTab = 'Mensagens';
-      if (id.startsWith('notif_msg_')) {
-        const parts = id.split('_');
-        if (parts.length > 2) {
-          payload = { chatId: parts[2] };
-        }
-      }
-    } else if (id.startsWith('notif_occurrence_') || title.includes('ocorrência') || title.includes('incident') || title.includes('⚠️')) {
-      targetTab = 'Logística';
-    } else if (id.startsWith('notif_featured_carrier_') || title.includes('transportadora') || title.includes('carrier') || title.includes('🏆')) {
-      targetTab = 'Logística';
-    } else if (id.startsWith('notif_promo_product_') || type === 'promotion') {
-      targetTab = 'Produtos / Materiais';
-    } else if (id.startsWith('notif_new_supplier_') || type === 'supplier') {
-      targetTab = 'Fornecedores';
-    } else if (type === 'quote_request' || title.includes('cotação') || title.includes('quote') || title.includes('pedido') || title.includes('order')) {
-      targetTab = 'Pedidos / Cotações';
-      if (n.metadata?.requestId) {
-        payload = { requestId: n.metadata.requestId };
-      }
-    }
-
-    if (targetTab) {
-      const event = new CustomEvent('navigate-to-tab', { detail: { tab: targetTab, payload } });
-      window.dispatchEvent(event);
-    }
-  };
 
   const formatTime = (createdAt: any) => {
     if (!createdAt) return t.justNow;
@@ -209,11 +166,10 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
             <motion.div 
               layout
               key={n.id}
-              onClick={() => handleNotificationClick(n)}
-              className={`p-10 rounded-[48px] border transition-all relative group overflow-hidden cursor-pointer ${
+              className={`p-10 rounded-[48px] border transition-all relative group overflow-hidden ${
                 isDarkMode 
-                  ? `${n.read ? 'bg-supplyx-dark border-white/5 hover:border-white/10 shadow-3xl' : 'bg-supplyx-dark border-supplyx-blue hover:border-supplyx-blue/80 shadow-2xl shadow-blue-500/10'}` 
-                  : `${n.read ? 'bg-white border-zinc-200 hover:border-zinc-300 shadow-sm' : 'bg-blue-50/40 border-supplyx-blue hover:border-supplyx-blue/80 shadow-xl shadow-zinc-200/20'}`
+                  ? `${n.read ? 'bg-supplyx-dark border-white/5 shadow-3xl' : 'bg-supplyx-dark border-supplyx-blue shadow-2xl shadow-blue-500/10'}` 
+                  : `${n.read ? 'bg-white border-zinc-100' : 'bg-brand/5 border-brand/20 shadow-xl shadow-zinc-200/20'}`
               }`}
             >
               {!n.read && (
@@ -226,7 +182,7 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
 
               <div className="flex flex-col sm:flex-row gap-10">
                 <div className={`w-20 h-20 rounded-[32px] shrink-0 flex items-center justify-center transition-all duration-500 group-hover:scale-110 shadow-2xl ${
-                  isDarkMode ? 'bg-supplyx-deep shadow-black' : 'bg-zinc-100 shadow-md'
+                  isDarkMode ? 'bg-supplyx-deep shadow-black' : 'bg-zinc-50 focus:bg-zinc-100'
                 }`}>
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${getColorClass(n.type)} shadow-inner`}>
                     {getIcon(n.type)}
@@ -235,63 +191,42 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
 
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-4 mb-4">
-                    <h3 className={`text-xl font-black uppercase italic tracking-tight ${isDarkMode ? 'text-zinc-100' : 'text-zinc-950 font-extrabold'}`}>
+                    <h3 className={`text-xl font-black uppercase italic tracking-tight ${isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>
                       {n.title}
                     </h3>
                     <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] border ${
                       n.priority === 'high' ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' :
-                      n.priority === 'medium' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 
-                      isDarkMode ? 'bg-zinc-500/10 text-zinc-400 border-white/5' : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                      n.priority === 'medium' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-zinc-500/10 text-zinc-500 border-white/5'
                     }`}>
                       {t.priority}: {t.priorities[n.priority || 'medium']}
                     </div>
                   </div>
 
-                  <p className={`text-base font-semibold leading-relaxed mb-10 max-w-2xl ${isDarkMode ? 'text-zinc-400' : 'text-zinc-850 font-medium'}`}>
+                  <p className={`text-base font-medium leading-relaxed mb-10 max-w-2xl ${isDarkMode ? 'text-zinc-400' : 'text-zinc-600'}`}>
                     {n.message}
                   </p>
 
                   <div className="flex flex-wrap items-center justify-between gap-6 pointer-events-auto">
-                    <div className={`flex items-center gap-6 text-[10px] font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-zinc-500' : 'text-zinc-650'}`}>
+                    <div className="flex items-center gap-6 text-[10px] font-black uppercase text-zinc-500 tracking-[0.2em]">
                        <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-supplyx-blue" /> {formatTime(n.createdAt)}</span>
                        <span className="flex items-center gap-2"><Calendar className="w-4 h-4" /> {formatDate(n.createdAt)}</span>
                     </div>
 
                     <div className="flex items-center gap-4">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleNotificationClick(n);
-                        }}
-                        className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all hover:scale-105 active:scale-95 ${
-                          isDarkMode 
-                            ? 'bg-white/5 border-white/5 text-zinc-300 hover:bg-white/10' 
-                            : 'bg-zinc-100 border-zinc-350 text-zinc-800 hover:bg-zinc-200 shadow-sm font-bold'
-                        }`}
-                      >
-                        {t.viewSubject}
-                      </button>
-
                       {!n.read && (
                         <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            markNotificationAsRead(n.id);
-                          }}
+                          onClick={() => markNotificationAsRead(n.id)}
                           className="px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-supplyx-blue text-white shadow-xl shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all"
                         >
                           {t.markRead}
                         </button>
                       )}
                       <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteNotification(n.id);
-                        }}
+                        onClick={() => deleteNotification(n.id)}
                         className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all hover:scale-105 active:scale-95 flex items-center gap-2 ${
                           isDarkMode 
                             ? 'bg-rose-500/5 border-rose-500/20 text-rose-400 hover:bg-rose-500/10' 
-                            : 'bg-rose-50 border-rose-100 text-rose-600 hover:bg-rose-100 hover:text-rose-700'
+                            : 'bg-rose-50 border-rose-100 text-rose-600 hover:bg-rose-100'
                         }`}
                         title={t.delete}
                       >

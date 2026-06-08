@@ -72,7 +72,7 @@ const formatLogisticsNameFromUid = (uid: string): string | null => {
 interface ChatViewProps {
   isDarkMode?: boolean;
   language?: 'PT' | 'EN';
-  userType?: 'buyer' | 'supplier';
+  userType?: 'buyer' | 'supplier' | 'logistics';
   onNavigate?: (tab: string) => void;
   onBack?: () => void;
   initialRecipientId?: string | null;
@@ -737,12 +737,11 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                             ) : (
                               <a 
                                 href={msg.fileUrl} 
-                                download={msg.fileName || 'Arquivo'}
                                 target="_blank" 
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-2 underline cursor-pointer hover:brightness-110 transition-all font-bold"
+                                className="flex items-center gap-2 underline"
                               >
-                                <Paperclip className="w-4 h-4 shrink-0" />
+                                <Paperclip className="w-4 h-4" />
                                 {msg.fileName || 'Arquivo'}
                               </a>
                             )}
@@ -787,7 +786,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                   ref={fileInputRef} 
                   className="hidden" 
                   onChange={handleFileUpload}
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.csv"
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
                 />
                 <div className="flex items-center gap-2">
                   <button 

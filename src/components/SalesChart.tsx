@@ -20,7 +20,7 @@ const data = [
 
 interface SalesChartProps {
   isDarkMode?: boolean;
-  userType?: 'buyer' | 'supplier';
+  userType?: 'buyer' | 'supplier' | 'logistics';
   language?: 'PT' | 'EN';
   standalone?: boolean;
 }

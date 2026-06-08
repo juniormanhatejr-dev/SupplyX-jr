@@ -22,6 +22,7 @@ interface Supplier {
   city?: string;
   photoURL?: string;
   catalogItems?: string[]; // Added this to the interface
+  nuit?: string;
 }
 
 interface SuppliersViewProps {
@@ -29,7 +30,7 @@ interface SuppliersViewProps {
   language: 'PT' | 'EN';
   onViewProfile?: (uid: string) => void;
   onNavigate?: (tab: string, payload?: any) => void;
-  userType?: 'buyer' | 'supplier';
+  userType?: 'buyer' | 'supplier' | 'logistics';
 }
 
 export default function SuppliersView({ isDarkMode, language, onViewProfile, onNavigate, userType = 'buyer' }: SuppliersViewProps) {

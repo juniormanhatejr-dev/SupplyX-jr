@@ -515,31 +515,29 @@ async function startServer() {
     }
   });
 
+  // Explicit route for legacy Service Worker cleanup to prevent HTML/SPA fallback from throwing script syntax/redirect errors in the browser
+  app.get(['/service-worker.js', '/sw.js'], (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.send(
+      "self.addEventListener('install', (event) => {\n" +
+      "  self.skipWaiting();\n" +
+      "});\n" +
+      "self.addEventListener('activate', (event) => {\n" +
+      "  event.waitUntil(\n" +
+      "    self.clients.claim()\n" +
+      "      .then(() => self.registration.unregister())\n" +
+      "      .then(() => {\n" +
+      "        console.log('[ServiceWorker] Self-unregistered successfully.');\n" +
+      "      })\n" +
+      "  );\n" +
+      "});"
+    );
+  });
+
   // Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', environment: process.env.NODE_ENV });
-  });
-
-  // Explicitly serve a self-unregistering service-worker to purge any legacy client caches
-  app.get('/service-worker.js', (req, res) => {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.set('Content-Type', 'application/javascript');
-    res.send(`
-      self.addEventListener('install', (event) => {
-        self.skipWaiting();
-      });
-      self.addEventListener('activate', (event) => {
-        self.registration.unregister()
-          .then(() => self.clients.matchAll())
-          .then((clients) => {
-            clients.forEach((client) => {
-              if (client.url && 'navigate' in client) {
-                client.navigate(client.url);
-              }
-            });
-          });
-      });
-    `);
   });
 
   // Vite middleware for development

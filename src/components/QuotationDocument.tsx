@@ -76,6 +76,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
   const discountPercent = data.items[0]?.discount || 0;
 
   const formatCurrency = (value: number) => {
+    if (value === 0) return 'Sob Consulta';
     return value.toLocaleString('pt-MZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' MT';
   };
 
@@ -409,7 +410,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
 
       {/* Summary and Footer Info */}
       <div style={{ position: 'relative', zIndex: 10, pointerEvents: 'auto', display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '30px', alignItems: 'start' }}>
-        <div style={{ spaceY: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Notes Box */}
           <div style={{ 
             padding: '15px', 
@@ -493,7 +494,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
         {/* Totals Summary Column */}
         <div>
           <div style={{ border: `1px solid ${COLORS.borderGray}`, borderRadius: '12px', overflow: 'hidden' }}>
-            <div style={{ padding: '15px', backgroundColor: COLORS.lightGray, spaceY: '10px' }}>
+            <div style={{ padding: '15px', backgroundColor: COLORS.lightGray, display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700, color: COLORS.textMuted }}>
                 <span>Subtotal:</span>
                 <span>{formatCurrency(subtotal)}</span>
@@ -571,7 +572,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
           <span style={{ fontSize: '7px', opacity: 0.6 }}>Este documento é gerado automaticamente pela plataforma SupplyX e possui validade jurídica para efeitos de cotação em território Moçambicano.</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ fontSize: '9px', fontWeight: 900, italic: true }}>Powered by</span>
+          <span style={{ fontSize: '9px', fontWeight: 900, fontStyle: 'italic' }}>Powered by</span>
           <SupplyXLogo size="sm" showText={false} />
         </div>
       </div>

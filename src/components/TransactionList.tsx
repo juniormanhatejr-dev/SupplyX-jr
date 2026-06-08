@@ -3,7 +3,7 @@ import { FileText, MoreHorizontal } from 'lucide-react';
 
 interface TransactionListProps {
   isDarkMode?: boolean;
-  userType?: 'buyer' | 'supplier';
+  userType?: 'buyer' | 'supplier' | 'logistics';
   language?: 'PT' | 'EN';
   onNavigate?: (tab: string) => void;
 }

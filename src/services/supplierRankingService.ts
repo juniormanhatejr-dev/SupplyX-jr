@@ -45,7 +45,7 @@ export function rankSuppliers(
   suppliers: Array<{
     id: string;
     location: Location;
-    catalog: Array<{ name: string; price: number }>;
+    catalog: Array<{ name: string; price: number; onSale?: boolean; salePrice?: number }>;
   }>
 ): SupplierRanking[] {
   // First calculate totals to find min/max for normalization
@@ -59,7 +59,8 @@ export function rankSuppliers(
         req.material.toLowerCase().includes(cat.name.toLowerCase())
       );
       if (match) {
-        priceTotal += match.price * req.quantity;
+        const price = (match.onSale && (match.salePrice !== undefined && match.salePrice !== null)) ? match.salePrice : match.price;
+        priceTotal += price * req.quantity;
         matchedCount++;
       } else {
         // Penalty for missing items - estimate a high price

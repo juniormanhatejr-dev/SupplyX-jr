@@ -1044,7 +1044,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           );
 
           if (match) {
-            const price = match.price || 0;
+            const price = match.onSale ? (match.salePrice || 0) : (match.price || 0);
             const quantity = parseFloat(row.quantity || '0');
             calculatedTotal += price * quantity;
             itemPrices.push({ material: row.material, price });
@@ -1073,7 +1073,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                 (p.name.toLowerCase().includes(r.material.toLowerCase()) || 
                  r.material.toLowerCase().includes(p.name.toLowerCase()))
               );
-              const price = match ? (match.price || 0) : 0;
+              const price = match ? (match.onSale ? (match.salePrice || 0) : (match.price || 0)) : 0;
               const vatRate = match ? (match.vatRate !== undefined ? match.vatRate : 16) : 16;
               const preTaxPrice = price / (1 + vatRate / 100);
               return {

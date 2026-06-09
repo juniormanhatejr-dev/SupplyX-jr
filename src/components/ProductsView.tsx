@@ -676,7 +676,9 @@ export default function ProductsView({
     link.setAttribute("download", `solicitacao_${selectedService.toLowerCase().replace(/\s/g, '_')}.csv`);
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    if (document.body && link && link.parentNode === document.body) {
+      document.body.removeChild(link);
+    }
   };
 
   const [isClassifying, setIsClassifying] = useState(false);
@@ -973,7 +975,13 @@ export default function ProductsView({
       {/* Service Request Modal */}
       <AnimatePresence>
         {isEditorOpen && userType === 'supplier' && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-md">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            key="editor-modal-backdrop"
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-md"
+          >
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1375,11 +1383,17 @@ export default function ProductsView({
                 </button>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
 
         {selectedService && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            key="service-modal-backdrop"
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm"
+          >
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1446,7 +1460,7 @@ export default function ProductsView({
                 </>
               )}
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 

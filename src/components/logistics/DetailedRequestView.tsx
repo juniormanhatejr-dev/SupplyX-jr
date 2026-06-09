@@ -1734,7 +1734,7 @@ export default function DetailedRequestView({
                       {requestProducts.length > 0 ? (
                         requestProducts.map((prod, index) => (
                           <div 
-                            key={index}
+                            key={(prod as any).id || `${prod.name}_${prod.quantity}_${prod.weight || ''}_${prod.volume || ''}_${index}`}
                             className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
                               isDarkMode ? 'bg-zinc-950/40 border-white/5 hover:border-white/10' : 'bg-zinc-50 border-zinc-150'
                             }`}

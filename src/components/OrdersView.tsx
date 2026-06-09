@@ -3153,7 +3153,13 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
         <AnimatePresence>
           {isPreviewOpen && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-zinc-950/80 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              key="orders-preview-backdrop"
+              className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-zinc-950/80 backdrop-blur-sm"
+            >
               <motion.div 
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -3202,7 +3208,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                   </div>
                 </div>
               </motion.div>
-            </div>
+            </motion.div>
           )}
         </AnimatePresence>
       </motion.div>

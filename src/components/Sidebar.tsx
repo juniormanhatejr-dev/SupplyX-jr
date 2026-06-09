@@ -146,7 +146,7 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
           }
           return (
             <button
-              key={index}
+              key={item.originalLabel}
               onClick={() => {
                 onNavItemClick(item.originalLabel);
                 if (window.innerWidth < 1024) onClose();

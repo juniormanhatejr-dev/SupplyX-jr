@@ -1913,7 +1913,13 @@ export default function SettingsView({
       {/* Custom Alert/Success Modal */}
       <AnimatePresence>
         {alertModal.isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            key="settings-alert-backdrop-wrapper"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1979,7 +1985,7 @@ export default function SettingsView({
                 </button>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </motion.div>

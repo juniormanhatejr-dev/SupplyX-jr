@@ -392,7 +392,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
           </thead>
           <tbody>
             {data.items.map((item, index) => (
-              <tr key={index} style={{ 
+              <tr key={`${item.description}_${index}`} style={{ 
                 backgroundColor: index % 2 === 0 ? COLORS.white : COLORS.lightGray,
                 borderBottom: `1px solid ${COLORS.borderGray}`
               }}>

@@ -111,7 +111,12 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
 
       <AnimatePresence>
         {isOpen && (
-          <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            key="notif-container"
+          >
             <div className="fixed inset-0 z-30" onClick={() => setIsOpen(false)} />
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -215,7 +220,7 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                 </button>
               </div>
             </motion.div>
-          </>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

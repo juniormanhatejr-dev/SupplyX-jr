@@ -7,6 +7,21 @@
     <!-- EARLIEST DOCUMENT RUNTIME DIAGNOSTIC LOGGER & ERROR HOOKS -->
     <script>
       (function() {
+        // Immediate clean up of any legacy Service Workers to prevent redirect check errors of cookie-less background fetches in the browser
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            for (var i = 0; i < regs.length; i++) {
+              regs[i].unregister().then(function(ok) {
+                if (ok) console.log('[HTML] Legacy Service Worker unregistered early.');
+              }).catch(function(e) {
+                console.warn('[HTML] Error unregistering service worker:', e);
+              });
+            }
+          }).catch(function(e) {
+            console.warn('[HTML] Error reading service workers:', e);
+          });
+        }
+
         window.__startup_logs = [{ time: new Date().toLocaleTimeString(), msg: '[HTML] Loading index.html resources', type: 'info' }];
         window.__startup_errors = [];
         

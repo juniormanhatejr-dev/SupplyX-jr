@@ -1,12 +1,4 @@
-self.addEventListener('install', (event) => {
-  self.skipWaiting();
-});
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    self.clients.claim()
-      .then(() => self.registration.unregister())
-      .then(() => {
-        console.log('[ServiceWorker] Self-unregistered successfully.');
-      })
-  );
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', e => {
+  e.waitUntil(self.clients.claim());
 });

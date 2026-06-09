@@ -56,11 +56,10 @@
         // Diagnostic visual screen constructor if app completely fails to mount React
         function showCrashScreen(err) {
           setTimeout(function() {
-            // Check if React loaded successfully by inspecting if there are any child elements under #root
             const rootEl = document.getElementById('root');
             if (rootEl && rootEl.children.length > 0) {
               log('[HTML] React is executing/rendering successfully. Suppressing splash fallback.');
-              return; // React or child components successfully loaded, so skip
+              return;
             }
             if (document.getElementById('startup-crash-overlay')) return;
 
@@ -129,4 +128,3 @@
     </script>
   </body>
 </html>
-

@@ -20,6 +20,11 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
 
+  React.useEffect(() => {
+    setIsLoaded(false);
+    setHasError(false);
+  }, [src]);
+
   return (
     <div className={`relative overflow-hidden ${containerClassName}`}>
       <AnimatePresence mode="wait">

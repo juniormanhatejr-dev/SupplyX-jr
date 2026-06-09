@@ -27,7 +27,7 @@ service firebase.storage {
     // Chat Files
     match /chats/{chatId}/{allPaths=**} {
       allow read: if isSignedIn(); 
-      allow write: if isSignedIn() && request.resource.size < 20 * 1024 * 1024;
+      allow write: if isSignedIn() && request.resource.size < 100 * 1024 * 1024;
     }
   }
 }

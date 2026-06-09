@@ -260,11 +260,16 @@ export async function uploadFile(path: string, file: File): Promise<string> {
   try {
     console.log(`Starting direct uploadBytes to: ${path}`);
     
-    // Create a promise that rejects after 20 seconds to force fallback
+    // Calculate a dynamic timeout based on file size: minimum 30 seconds, or 10 seconds per MB
+    const fileMB = fileToUpload.size / (1024 * 1024);
+    const dynamicTimeoutMs = Math.max(30000, Math.ceil(fileMB * 10000)); // 10s per MB, min 30s
+    console.log(`Setting dynamic direct upload timeout: ${dynamicTimeoutMs / 1000}s for file size: ${fileMB.toFixed(2)} MB`);
+    
+    // Create a promise that rejects after the dynamic timeout to force fallback
     const uploadWithTimeout = Promise.race([
       uploadBytes(fileRef, fileToUpload),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Upload timeout (20s) - switching to local storage fallback')), 20000)
+        setTimeout(() => reject(new Error(`Upload timeout (${Math.round(dynamicTimeoutMs / 1000)}s) - switching to local storage fallback`)), dynamicTimeoutMs)
       )
     ]) as Promise<any>;
 

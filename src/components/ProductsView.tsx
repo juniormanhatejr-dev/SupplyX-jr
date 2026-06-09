@@ -295,6 +295,7 @@ export default function ProductsView({
 
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
@@ -1151,16 +1152,34 @@ export default function ProductsView({
                       <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.imageUrl}</label>
                       <button
                         type="button"
-                        disabled={!editingProduct?.name || editingProduct.name.trim().length <= 2}
+                        disabled={isGeneratingImage || !editingProduct?.name || editingProduct.name.trim().length <= 2}
                         onClick={() => {
                           if (!editingProduct?.name) return;
+                          setIsGeneratingImage(true);
                           const promptParam = encodeURIComponent(`photorealistic studio high-quality shot of product: ${editingProduct.name.trim()} hardware material, beautiful 3D display, clean industrial lighting, solid studio background`);
                           const generatedUrl = `https://image.pollinations.ai/prompt/${promptParam}?width=600&height=600&nologo=true&seed=${Math.floor(Math.random()*100000)}`;
-                          setEditingProduct(prev => ({ ...prev, image: generatedUrl }));
+                          
+                          const img = new Image();
+                          img.src = generatedUrl;
+                          img.onload = () => {
+                            setEditingProduct(prev => prev ? { ...prev, image: generatedUrl } : null);
+                            setIsGeneratingImage(false);
+                          };
+                          img.onerror = () => {
+                            setEditingProduct(prev => prev ? { ...prev, image: generatedUrl } : null);
+                            setIsGeneratingImage(false);
+                          };
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-teal-500/10 text-teal-400 text-[8.5px] font-black uppercase tracking-widest hover:bg-teal-500/25 transition-all disabled:opacity-40"
+                        className="px-2.5 py-1 rounded-lg bg-teal-500/10 text-teal-400 text-[8.5px] font-black uppercase tracking-widest hover:bg-teal-500/25 transition-all disabled:opacity-40 flex items-center gap-1.5"
                       >
-                        {language === 'PT' ? '✨ Gerar Foto por IA' : '✨ Generate Photo via AI'}
+                        {isGeneratingImage ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin text-teal-400" />
+                            {language === 'PT' ? '⏳ Gerando...' : '⏳ Generating...'}
+                          </>
+                        ) : (
+                          language === 'PT' ? '✨ Gerar Foto por IA' : '✨ Generate Photo via AI'
+                        )}
                       </button>
                     </div>
                     <div className="flex gap-4">

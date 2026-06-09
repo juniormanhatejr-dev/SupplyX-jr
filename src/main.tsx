@@ -19,22 +19,18 @@ const log = (msg: string, type: 'info' | 'error' = 'info') => {
 
 log('Initializing main.tsx bundle execution');
 
-// Forcefully unregister any legacy Service Workers and clear modern browser cache storage to prevent caching loops and redirect errors in the browser
+// Register the Service Worker and clear old cache if needed for complete PWA compliance
 if (typeof window !== 'undefined') {
   log(`Reading environment variables... PROD: ${(import.meta as any).env.PROD}`);
   
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then((registrations) => {
-      for (const registration of registrations) {
-        registration.unregister().then((success) => {
-          if (success) {
-            log('Unregistered legacy service worker successfully.');
-          }
-        });
-      }
-    }).catch((err) => {
-      console.warn('[ServiceWorker] Failed to query registrations:', err);
-    });
+    navigator.serviceWorker.register('/sw.js')
+      .then((reg) => {
+        log('Service Worker registered successfully with scope: ' + reg.scope);
+      })
+      .catch((err) => {
+        console.warn('[ServiceWorker] Main bundle registration failed:', err);
+      });
   }
 
   if ('caches' in window) {

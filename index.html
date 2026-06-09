@@ -3,22 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <title>SupplyX - On-Chain Industrial Procurement</title>
+    <link rel="manifest" href="/manifest.json" />
     <!-- EARLIEST DOCUMENT RUNTIME DIAGNOSTIC LOGGER & ERROR HOOKS -->
     <script>
       (function() {
-        // Immediate clean up of any legacy Service Workers to prevent redirect check errors of cookie-less background fetches in the browser
+        // Register the Service Worker early for complete PWA compliance
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(function(regs) {
-            for (var i = 0; i < regs.length; i++) {
-              regs[i].unregister().then(function(ok) {
-                if (ok) console.log('[HTML] Legacy Service Worker unregistered early.');
-              }).catch(function(e) {
-                console.warn('[HTML] Error unregistering service worker:', e);
-              });
-            }
+          navigator.serviceWorker.register('/sw.js').then(function(reg) {
+            console.log('[HTML] Service Worker registered early with scope:', reg.scope);
           }).catch(function(e) {
-            console.warn('[HTML] Error reading service workers:', e);
+            console.warn('[HTML] Early Service Worker registration failed:', e);
           });
         }
 

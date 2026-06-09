@@ -516,24 +516,17 @@ async function startServer() {
     }
   });
 
-  // Explicit route for legacy Service Worker cleanup to prevent HTML/SPA fallback from throwing script syntax/redirect errors in the browser
-  app.get(['/service-worker.js', '/sw.js'], (req, res) => {
+  // Route for custom web App Manifest
+  app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/manifest+json');
+    res.sendFile(path.join(process.cwd(), 'public', 'manifest.json'));
+  });
+
+  // Explicit route for active Service Worker in compliance with PWABuilder checks
+  app.get(['/sw.js', '/service-worker.js'], (req, res) => {
     res.setHeader('Content-Type', 'application/javascript');
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.send(
-      "self.addEventListener('install', (event) => {\n" +
-      "  self.skipWaiting();\n" +
-      "});\n" +
-      "self.addEventListener('activate', (event) => {\n" +
-      "  event.waitUntil(\n" +
-      "    self.clients.claim()\n" +
-      "      .then(() => self.registration.unregister())\n" +
-      "      .then(() => {\n" +
-      "        console.log('[ServiceWorker] Self-unregistered successfully.');\n" +
-      "      })\n" +
-      "  );\n" +
-      "});"
-    );
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(`self.addEventListener('install', () => self.skipWaiting());`);
   });
 
   // Health check

@@ -52,6 +52,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
         onError={() => setHasError(true)}
         loading={isPriority ? "eager" : "lazy"}
         fetchPriority={isPriority ? "high" : "low"}
+        referrerPolicy="no-referrer"
         {...props}
       />
     </div>

@@ -1013,8 +1013,17 @@ export default function ProductsView({
                     value={editingProduct?.name || ''}
                     onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
                     onBlur={() => {
-                      if (editingProduct?.name && editingProduct.name.trim().length > 2 && editingProduct.name !== lastClassifiedName) {
-                        handleAIClassification(editingProduct.name);
+                      if (editingProduct?.name && editingProduct.name.trim().length > 2) {
+                        if (editingProduct.name !== lastClassifiedName) {
+                          handleAIClassification(editingProduct.name);
+                        }
+                        // Automatic dynamic generation of material product images via dynamic URL
+                        const fallbackUrl = 'https://images.unsplash.com/photo-1581094288338-2314dddb7ec3?w=600&q=80';
+                        if (!editingProduct.image || editingProduct.image === fallbackUrl) {
+                          const promptParam = encodeURIComponent(`photorealistic studio high-quality shot of product material: ${editingProduct.name.trim()}, realistic texture, professional lighting, clean white backdrop, isolated`);
+                          const generatedUrl = `https://image.pollinations.ai/prompt/${promptParam}?width=600&height=600&nologo=true`;
+                          setEditingProduct(prev => ({ ...prev, image: generatedUrl }));
+                        }
                       }
                     }}
                     className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
@@ -1138,7 +1147,22 @@ export default function ProductsView({
                   </div>
                 </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.imageUrl}</label>
+                    <div className="flex justify-between items-center px-1">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.imageUrl}</label>
+                      <button
+                        type="button"
+                        disabled={!editingProduct?.name || editingProduct.name.trim().length <= 2}
+                        onClick={() => {
+                          if (!editingProduct?.name) return;
+                          const promptParam = encodeURIComponent(`photorealistic studio high-quality shot of product: ${editingProduct.name.trim()} hardware material, beautiful 3D display, clean industrial lighting, solid studio background`);
+                          const generatedUrl = `https://image.pollinations.ai/prompt/${promptParam}?width=600&height=600&nologo=true&seed=${Math.floor(Math.random()*100000)}`;
+                          setEditingProduct(prev => ({ ...prev, image: generatedUrl }));
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-teal-500/10 text-teal-400 text-[8.5px] font-black uppercase tracking-widest hover:bg-teal-500/25 transition-all disabled:opacity-40"
+                      >
+                        {language === 'PT' ? '✨ Gerar Foto por IA' : '✨ Generate Photo via AI'}
+                      </button>
+                    </div>
                     <div className="flex gap-4">
                       <div className="flex-1 space-y-2">
                         <input 
@@ -1148,7 +1172,7 @@ export default function ProductsView({
                           className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
                           placeholder="https://..."
                         />
-                        <p className="text-[9px] font-bold text-zinc-400 uppercase ml-1 italic">{language === 'PT' ? '* Carregamento automático ao selecionar arquivo' : '* Auto-uploads on file selection'}</p>
+                        <p className="text-[9px] font-bold text-zinc-400 uppercase ml-1 italic">{language === 'PT' ? '* Carregamento automático ao selecionar arquivo, ou use a IA acima' : '* Auto-uploads on file selection, or use AI generation above'}</p>
                       </div>
                       <label className={`shrink-0 flex flex-col items-center justify-center w-24 h-24 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:bg-brand/5 hover:border-brand/50 relative group ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-500' : 'bg-zinc-50 border-zinc-100 text-zinc-400'}`}>
                         <input 

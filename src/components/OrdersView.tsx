@@ -29,7 +29,7 @@ import {
   User,
   Truck,
 } from 'lucide-react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, getDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, setDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import ProfileModal from './ProfileModal';
 import QuotationDocument from './QuotationDocument';
@@ -236,6 +236,55 @@ const OrderRow = memo(({ row, index, isDarkMode, language, t, allProducts, onUpd
 });
 
 OrderRow.displayName = 'OrderRow';
+
+const calculateMozambiqueDistance = (origin: string, destination: string): number => {
+  if (!origin || !destination) return 0;
+  const o = origin.toLowerCase();
+  const d = destination.toLowerCase();
+  
+  const getCity = (val: string) => {
+    if (val.includes('maputo') || val.includes('matola')) return 'maputo';
+    if (val.includes('beira') || val.includes('sofala')) return 'beira';
+    if (val.includes('nampula')) return 'nampula';
+    if (val.includes('nacala')) return 'nacala';
+    if (val.includes('tete')) return 'tete';
+    if (val.includes('quelimane') || val.includes('zambezia')) return 'quelimane';
+    if (val.includes('pemba') || val.includes('cabo')) return 'pemba';
+    if (val.includes('lichinga') || val.includes('niassa')) return 'lichinga';
+    if (val.includes('chimoio') || val.includes('manica')) return 'chimoio';
+    if (val.includes('xai') || val.includes('gaza')) return 'xai-xai';
+    if (val.includes('inhambane')) return 'inhambane';
+    return '';
+  };
+
+  const oCity = getCity(o);
+  const dCity = getCity(d);
+
+  if (!oCity || !dCity) {
+    let hash = 0;
+    for (let i = 0; i < o.length; i++) hash += o.charCodeAt(i);
+    for (let i = 0; i < d.length; i++) hash += d.charCodeAt(i);
+    return (hash % 850) + 40;
+  }
+
+  if (oCity === dCity) return 15;
+
+  const distances: Record<string, Record<string, number>> = {
+    'maputo': { 'beira': 1020, 'nampula': 1940, 'nacala': 2130, 'tete': 1520, 'quelimane': 1350, 'pemba': 2340, 'lichinga': 2280, 'chimoio': 940, 'xai-xai': 210, 'inhambane': 470 },
+    'beira': { 'maputo': 1020, 'nampula': 950, 'nacala': 1140, 'tete': 580, 'quelimane': 420, 'pemba': 1420, 'lichinga': 1360, 'chimoio': 200, 'xai-xai': 815, 'inhambane': 672 },
+    'nampula': { 'maputo': 1940, 'beira': 950, 'nacala': 190, 'tete': 880, 'quelimane': 540, 'pemba': 400, 'lichinga': 680, 'chimoio': 1144, 'xai-xai': 1730, 'inhambane': 1540 },
+    'nacala': { 'maputo': 2130, 'beira': 1140, 'nampula': 190, 'tete': 1070, 'quelimane': 730, 'pemba': 450, 'lichinga': 870, 'chimoio': 1334, 'xai-xai': 1920, 'inhambane': 1730 },
+    'tete': { 'maputo': 1520, 'beira': 580, 'nampula': 880, 'nacala': 1070, 'quelimane': 640, 'pemba': 1280, 'lichinga': 820, 'chimoio': 390, 'xai-xai': 1310, 'inhambane': 1120 },
+    'quelimane': { 'maputo': 1350, 'beira': 420, 'nampula': 540, 'nacala': 730, 'tete': 640, 'pemba': 940, 'lichinga': 1220, 'chimoio': 610, 'xai-xai': 1140, 'inhambane': 950 },
+    'pemba': { 'maputo': 2340, 'beira': 1420, 'nampula': 400, 'nacala': 450, 'tete': 1280, 'quelimane': 940, 'lichinga': 1080, 'chimoio': 1614, 'xai-xai': 2130, 'inhambane': 1940 },
+    'lichinga': { 'maputo': 2280, 'beira': 1360, 'nampula': 680, 'nacala': 870, 'tete': 820, 'quelimane': 1220, 'pemba': 1080, 'chimoio': 1550, 'xai-xai': 2070, 'inhambane': 1880 },
+    'chimoio': { 'maputo': 940, 'beira': 200, 'nampula': 1144, 'nacala': 1334, 'tete': 390, 'quelimane': 610, 'pemba': 1614, 'lichinga': 1550, 'xai-xai': 735, 'inhambane': 590 },
+    'xai-xai': { 'maputo': 210, 'beira': 815, 'nampula': 1730, 'nacala': 1920, 'tete': 1310, 'quelimane': 1140, 'pemba': 2130, 'lichinga': 2070, 'chimoio': 735, 'inhambane': 260 },
+    'inhambane': { 'maputo': 470, 'beira': 672, 'nampula': 1540, 'nacala': 1730, 'tete': 1120, 'quelimane': 950, 'pemba': 1940, 'lichinga': 1880, 'chimoio': 590, 'xai-xai': 260 }
+  };
+
+  return distances[oCity]?.[dCity] || distances[dCity]?.[oCity] || 320;
+};
 
 export default function OrdersView({ startWithForm = false, onFormClose, onNavigate, isDarkMode, language, userType = 'buyer' }: OrdersViewProps) {
   const [showForm, setShowForm] = useState(userType === 'supplier' ? false : startWithForm);
@@ -499,6 +548,34 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const [spreadsheetRows, setSpreadsheetRows] = useState([
     { id: '1', name: '', quantity: '1', weight: '' }
   ]);
+  const [logisticsItemsTable, setLogisticsItemsTable] = useState<any[]>([
+    { id: '1', name: '', quantity: '1', weight: '0.1' }
+  ]);
+
+  const handleInitializeLogisticsItems = () => {
+    const targetResponse = aiResponses[selectedResponseIndex] || respondingTo;
+    let initial: any[] = [];
+    if (targetResponse?.items?.length > 0) {
+      initial = targetResponse.items.map((it: any, idx: number) => ({
+        id: String(idx + 1),
+        name: it.material || it.description || 'Produto',
+        quantity: String(it.quantity || '1'),
+        weight: String(it.weight || '0.1')
+      }));
+    } else if (rows.filter(r => r.material).length > 0) {
+      initial = rows.filter(r => r.material).map((it: any, idx: number) => ({
+        id: String(idx + 1),
+        name: it.material,
+        quantity: String(it.quantity || '1'),
+        weight: String(it.weight || '0.1')
+      }));
+    } else {
+      initial = [
+        { id: '1', name: 'Materiais de Construção B2B', quantity: '1', weight: '0.5' }
+      ];
+    }
+    setLogisticsItemsTable(initial);
+  };
 
   const [isEstimatingWeight, setIsEstimatingWeight] = useState(false);
   const [aiWeightResult, setAiWeightResult] = useState<any>(null);
@@ -640,13 +717,14 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       supplierId: targetResponse?.supplierId || 'supplier_default',
       pickupAddress: spreadsheetOrigem,
       deliveryAddress: spreadsheetDestino,
+      distance: `${calculateMozambiqueDistance(spreadsheetOrigem, spreadsheetDestino)} KM`,
       createdAt: new Date().toISOString()
     };
 
     existing = [newLogisticsOrder, ...existing];
     localStorage.setItem('supplyx_freight_requests', JSON.stringify(existing));
 
-    addDoc(collection(db, 'freight_orders'), newLogisticsOrder).catch(err => {
+    setDoc(doc(db, 'freight_orders', logisticsId), newLogisticsOrder).catch(err => {
       console.warn('Firestore write warning:', err);
     });
 
@@ -698,18 +776,23 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         console.error(err);
       }
 
-      const totalQty = rows.reduce((acc, r) => acc + (parseFloat(r.quantity) || 0), 0) || 5;
-      const targetWeight = `${logisticsFormFields.peso} Toneladas`;
+      const validTableItems = logisticsItemsTable.filter(item => item.name && item.name.trim() !== '');
+      const compiledItemsList = validTableItems.map(it => `${it.name} (${it.quantity}x${it.weight ? `, ${it.weight}T` : ''})`).join(', ') || materialsList;
+      const totalQty = validTableItems.reduce((acc, r) => acc + (parseFloat(r.quantity) || 1), 0);
+      const computedWeight = validTableItems.reduce((acc, r) => acc + (parseFloat(r.weight) || 0), 0) || parseFloat(logisticsFormFields.peso) || 1;
+
+      const targetWeight = `${computedWeight} Toneladas`;
       const targetVolume = `${logisticsFormFields.volume} m³`;
 
       const newLogisticsOrder = {
         id: logisticsId,
-        tipoCarga: logisticsFormFields.tipoCarga || materialsList,
+        tipoCarga: compiledItemsList,
         quantidade: `${totalQty} Lotes`,
         peso: targetWeight,
         volume: targetVolume,
         origem: logisticsFormFields.origem,
         destino: logisticsFormFields.destino,
+        distance: `${calculateMozambiqueDistance(logisticsFormFields.origem, logisticsFormFields.destino)} KM`,
         status: 'Em concurso',
         requester: 'Client',
         freightResponsibility: 'Client',
@@ -732,14 +815,19 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         supplierId: targetResponse?.supplierId || 'supplier_default',
         pickupAddress: logisticsFormFields.origem,
         deliveryAddress: logisticsFormFields.destino,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        items: validTableItems.map(it => ({
+          name: it.name,
+          quantity: it.quantity,
+          weight: it.weight
+        }))
       };
 
       existing = [newLogisticsOrder, ...existing];
       localStorage.setItem('supplyx_freight_requests', JSON.stringify(existing));
 
-      // Push to Firestore freight_orders collection
-      addDoc(collection(db, 'freight_orders'), newLogisticsOrder).catch(err => {
+      // Push to Firestore freight_orders collection using doc reference
+      setDoc(doc(db, 'freight_orders', logisticsId), newLogisticsOrder).catch(err => {
         console.warn('Firestore write warning:', err);
       });
 
@@ -2522,12 +2610,13 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                               </div>
 
                               <div className="space-y-4 text-left">
-                                {/* Row 1: Origem / Destino */}
+                                {/* Row 1: Local de Partida / Local de Chegada */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
-                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1">Origem da Carga B2B</label>
+                                    <label className="text-[8px] font-black uppercase text-[#0052CC] tracking-wider block mb-1">Local de Partida (Origem)</label>
                                     <input 
                                       type="text" 
+                                      placeholder="Ex. Maputo"
                                       value={logisticsFormFields.origem}
                                       onChange={e => setLogisticsFormFields({...logisticsFormFields, origem: e.target.value})}
                                       className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
@@ -2536,9 +2625,10 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                     />
                                   </div>
                                   <div>
-                                    <label className="text-[8px] font-black uppercase text-zinc-500 tracking-wider block mb-1 font-sans">Destino do Frete</label>
+                                    <label className="text-[8px] font-black uppercase text-[#0052CC] tracking-wider block mb-1 font-sans">Local de Chegada (Destino)</label>
                                     <input 
                                       type="text" 
+                                      placeholder="Ex. Beira"
                                       value={logisticsFormFields.destino}
                                       onChange={e => setLogisticsFormFields({...logisticsFormFields, destino: e.target.value})}
                                       className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
@@ -2548,25 +2638,117 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                   </div>
                                 </div>
 
-                                {/* Relação de Itens e Quantidades */}
-                                <div className="p-4 rounded-xl bg-zinc-950/40 border border-white/5 space-y-2">
-                                  <label className="text-[8px] font-black uppercase text-zinc-400 tracking-wider block">Itens da Carga e Quantidades</label>
-                                  <div className="flex flex-wrap gap-2">
-                                    {(aiResponses[selectedResponseIndex] || respondingTo)?.items?.length > 0 ? (
-                                      (aiResponses[selectedResponseIndex] || respondingTo).items.map((it: any, idx: number) => (
-                                        <span key={idx} className="bg-[#0052CC]/10 text-[#0052CC] text-[10px] font-black px-2.5 py-1.5 rounded-lg border border-[#0052CC]/15">
-                                          📦 {it.material || it.description || 'Produto'} ({it.quantity || '1'} {it.unit || 'Unid.'})
-                                        </span>
-                                      ))
-                                    ) : rows.filter(r => r.material).length > 0 ? (
-                                      rows.filter(r => r.material).map((it: any, idx: number) => (
-                                        <span key={idx} className="bg-[#0052CC]/10 text-[#0052CC] text-[10px] font-black px-2.5 py-1.5 rounded-lg border border-[#0052CC]/15">
-                                          📦 {it.material} ({it.quantity || '1'} {it.unit || 'Unid.'})
-                                        </span>
-                                      ))
-                                    ) : (
-                                      <span className="text-[10px] text-zinc-500 font-bold uppercase">Nenhum item detectado</span>
-                                    )}
+                                {/* Quilometragem Calculada HUD */}
+                                {logisticsFormFields.origem && logisticsFormFields.destino && (
+                                  <div className="p-3 rounded-2xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-between text-teal-400">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm">🛣️</span>
+                                      <div className="text-left">
+                                        <span className="text-[8px] font-black uppercase tracking-wider block text-teal-300 leading-none mb-0.5">Cálculo de Roteamento Inteligente</span>
+                                        <span className="text-[10px] font-bold">Origem: {logisticsFormFields.origem} ➔ Destino: {logisticsFormFields.destino}</span>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <span className="text-[8px] font-black uppercase tracking-wider block text-teal-300 leading-none mb-0.5">Distância Roteada</span>
+                                      <span className="text-xs font-black tracking-tight">{calculateMozambiqueDistance(logisticsFormFields.origem, logisticsFormFields.destino)} KM</span>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Tabela de Alistamento de Mercadorias e Quantidades */}
+                                <div className="p-4 rounded-2xl bg-zinc-950/40 border border-white/5 space-y-3 text-left">
+                                  <div className="flex justify-between items-center">
+                                    <div>
+                                      <label className="text-[8px] font-black uppercase text-zinc-400 tracking-wider block">Tabela de Mercadorias e Quantidades</label>
+                                      <p className="text-[7.5px] font-bold text-zinc-500 uppercase mt-0.5 leading-none">Aliste os materiais e suas respectivas quantidades para o despacho</p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLogisticsItemsTable([...logisticsItemsTable, { id: String(Date.now()), name: '', quantity: '1', weight: '0.1' }]);
+                                      }}
+                                      className="px-2.5 py-1 bg-[#0052CC]/10 border border-[#0052CC]/25 text-[#0052CC] hover:bg-[#0052CC]/20 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all"
+                                    >
+                                      + Adicionar Item
+                                    </button>
+                                  </div>
+                                  
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs">
+                                      <thead>
+                                        <tr className="border-b border-white/5 text-[8px] font-black text-zinc-500 uppercase tracking-widest">
+                                          <th className="pb-1.5">Material / Mercadoria</th>
+                                          <th className="pb-1.5 w-24">Quantidade</th>
+                                          <th className="pb-1.5 w-24">Peso (T)</th>
+                                          <th className="pb-1.5 w-12 text-center">Remover</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-white/5">
+                                        {logisticsItemsTable.map((item, index) => (
+                                          <tr key={item.id} className="group/item">
+                                            <td className="py-2 pr-2">
+                                              <input
+                                                type="text"
+                                                placeholder="Ex. Cimento CP-II 50kg"
+                                                value={item.name}
+                                                onChange={(e) => {
+                                                  const updated = [...logisticsItemsTable];
+                                                  updated[index].name = e.target.value;
+                                                  setLogisticsItemsTable(updated);
+                                                }}
+                                                className={`w-full p-1.5 rounded-lg text-[10px] font-bold ${
+                                                  isDarkMode ? 'bg-zinc-900 border-white/5 text-white' : 'bg-white border-zinc-200 text-zinc-900'
+                                                } border`}
+                                              />
+                                            </td>
+                                            <td className="py-2 pr-2">
+                                              <input
+                                                type="number"
+                                                min="1"
+                                                placeholder="1"
+                                                value={item.quantity}
+                                                onChange={(e) => {
+                                                  const updated = [...logisticsItemsTable];
+                                                  updated[index].quantity = e.target.value;
+                                                  setLogisticsItemsTable(updated);
+                                                }}
+                                                className={`w-full p-1.5 rounded-lg text-[10px] font-bold ${
+                                                  isDarkMode ? 'bg-zinc-900 border-white/5 text-white' : 'bg-white border-zinc-200 text-zinc-900'
+                                                } border`}
+                                              />
+                                            </td>
+                                            <td className="py-2 pr-2">
+                                              <input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="0.1"
+                                                value={item.weight}
+                                                onChange={(e) => {
+                                                  const updated = [...logisticsItemsTable];
+                                                  updated[index].weight = e.target.value;
+                                                  setLogisticsItemsTable(updated);
+                                                }}
+                                                className={`w-full p-1.5 rounded-lg text-[10px] font-bold ${
+                                                  isDarkMode ? 'bg-zinc-900 border-white/5 text-white' : 'bg-white border-zinc-200 text-zinc-900'
+                                                } border`}
+                                              />
+                                            </td>
+                                            <td className="py-2 text-center">
+                                              <button
+                                                type="button"
+                                                disabled={logisticsItemsTable.length <= 1}
+                                                onClick={() => {
+                                                  setLogisticsItemsTable(logisticsItemsTable.filter((_, idx) => idx !== index));
+                                                }}
+                                                className="text-zinc-500 hover:text-red-500 disabled:opacity-30 p-1"
+                                              >
+                                                <X className="w-3.5 h-3.5" />
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
                                   </div>
                                 </div>
 

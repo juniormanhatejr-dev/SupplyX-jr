@@ -57,17 +57,18 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Support JSON request bodies
-  app.use(express.json());
+  // Support JSON request bodies with 100MB limit for base64 fallback uploads
+  app.use(express.json({ limit: '100mb' }));
+  app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
   // Performance improvements
   app.use(compression());
 
-  // Use multer for memory storage
+  // Use multer for memory storage with 100MB file limit
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB limit
+      fileSize: 100 * 1024 * 1024, // 100MB limit
     },
   });
 

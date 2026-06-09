@@ -450,6 +450,18 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     const file = e.target.files?.[0];
     if (!file || !activeRoom || !auth.currentUser) return;
 
+    // 100MB is 100 * 1024 * 1024 bytes
+    const maxSizeBytes = 100 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      const errorMsg = language === 'PT' 
+        ? `Erro: O arquivo é muito grande (${fileSizeMB} MB). O limite máximo de upload é de 100 MB.` 
+        : `Error: File is too large (${fileSizeMB} MB). The maximum upload limit is 100 MB.`;
+      alert(errorMsg);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     setIsUploading(true);
     try {
       const { uploadFile } = await import('../lib/firebase');
@@ -793,6 +805,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                     type="button" 
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
+                    title={language === 'PT' ? 'Anexar arquivo (máx 100MB)' : 'Attach file (max 100MB)'}
                     className="p-2.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors disabled:opacity-50"
                   >
                     {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}

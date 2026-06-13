@@ -16,6 +16,7 @@ import {
 import { motion } from 'motion/react';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
+import { OptimizedImage } from './ui/OptimizedImage';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard' },
@@ -156,14 +157,21 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
                   ? 'bg-supplyx-blue text-white shadow-2xl shadow-blue-500/20' 
                   : isDarkMode ? 'text-zinc-500 hover:bg-white/5 hover:text-white' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}`}
             >
-              {item.originalLabel === 'Meu Perfil' && profile?.photoURL ? (
+              {item.originalLabel === 'Meu Perfil' ? (
                 <div className={`w-5 h-5 rounded-lg overflow-hidden border transition-transform group-hover:scale-110 ${isActive ? 'border-white/50' : 'border-supplyx-blue/30'}`}>
-                  <img 
-                    src={profile.photoURL} 
-                    alt="Profile" 
-                    className="w-full h-full object-cover" 
-                    referrerPolicy="no-referrer"
-                  />
+                  {profile?.photoURL ? (
+                    <OptimizedImage 
+                      src={profile.photoURL} 
+                      alt="Profile" 
+                      className="w-full h-full object-cover" 
+                      containerClassName="w-full h-full"
+                      isPriority={true}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-supplyx-blue/10 text-supplyx-blue text-[9px] font-black italic">
+                      {profile?.name?.charAt(0) || '?'}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <item.icon className={`w-5 h-5 transition-transform group-hover:scale-110 ${isActive ? 'text-white' : 'text-supplyx-blue'}`} />

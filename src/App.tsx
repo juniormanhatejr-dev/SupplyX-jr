@@ -453,6 +453,8 @@ export default function App() {
                         alt={profile.name} 
                         className="w-full h-full object-cover transition-transform group-hover:scale-110"
                         referrerPolicy="no-referrer"
+                        containerClassName="w-full h-full"
+                        isPriority={true}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-supplyx-blue/10 text-supplyx-blue font-black italic text-base">

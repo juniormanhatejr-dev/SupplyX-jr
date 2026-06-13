@@ -80,34 +80,88 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
     return value.toLocaleString('pt-MZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' MT';
   };
 
-  // Pagination Logic specifically tuned to prevent overflows
+  // Dynamic Pagination Logic based on real height estimations (in mm)
   const items = data.items || [];
   
   const paginateItems = (itemsList: QuotationItem[]) => {
-    // If all items fit on a single page with the totals/signatures block, keep it on 1 page
-    if (itemsList.length <= 6) {
+    // Height estimation helper in millimeters
+    const getItemHeight = (item: QuotationItem) => {
+      const descLines = Math.ceil((item.description || '').length / 45) || 1;
+      // 8mm padding/borders + 4.5mm per text line
+      return 8 + (descLines * 4.5);
+    };
+
+    // Constants in millimeters
+    const PAGE_HEIGHT = 297;
+    const TOP_PADDING = 20;
+    const BOTTOM_PADDING = 20;
+    const FOOTER_RESERVA = 30; // Buffer zone for corporate absolute footer to prevent overlapping
+    const MAX_CONTENT_HEIGHT = PAGE_HEIGHT - TOP_PADDING - BOTTOM_PADDING - FOOTER_RESERVA; // 227mm
+
+    const firstPageHeaderHeight = 105; 
+    const miniHeaderHeight = 20;
+    const tableHeaderHeight = 8;
+    const totalsBlockHeight = 80;
+
+    // 1. If everything fits nicely on a single page, keep it all on Page 1
+    let totalItemsHeight = 0;
+    for (const item of itemsList) {
+      totalItemsHeight += getItemHeight(item);
+    }
+    const singlePageNeededHeight = firstPageHeaderHeight + tableHeaderHeight + totalItemsHeight + totalsBlockHeight;
+    if (singlePageNeededHeight <= MAX_CONTENT_HEIGHT + 10) { // Allow minor flexibility (up to 237mm)
       return [itemsList];
     }
-    
-    const pagesList: QuotationItem[][] = [];
-    
-    // Page 1 can fit up to 10 items when Totals are pushed to subsequent pages.
-    const page1Limit = 10;
-    pagesList.push(itemsList.slice(0, page1Limit));
-    
-    let remaining = itemsList.slice(page1Limit);
-    while (remaining.length > 0) {
-      // Last page carries the Totals/signatures block. It can fit up to 9 items.
-      if (remaining.length <= 9) {
-        pagesList.push(remaining);
-        remaining = [];
-      } else {
-        // Middle pages have NO Totals block. They can fit up to 16 items!
-        pagesList.push(remaining.slice(0, 16));
-        remaining = remaining.slice(16);
+
+    // 2. Multi-page packing
+    const pages: QuotationItem[][] = [];
+    let currentPageItems: QuotationItem[] = [];
+    let currentY = firstPageHeaderHeight + tableHeaderHeight;
+
+    for (let i = 0; i < itemsList.length; i++) {
+      const item = itemsList[i];
+      const rowH = getItemHeight(item);
+
+      // If adding this item exceeds the page limit, push existing items and start a new page
+      if (currentY + rowH > MAX_CONTENT_HEIGHT) {
+        pages.push(currentPageItems);
+        currentPageItems = [];
+        currentY = miniHeaderHeight + tableHeaderHeight;
       }
+
+      currentPageItems.push(item);
+      currentY += rowH;
     }
-    return pagesList;
+
+    if (currentPageItems.length > 0) {
+      pages.push(currentPageItems);
+    }
+
+    // 3. Look-ahead to make sure the totals/signatures block fits on the last page.
+    // If not, transfer items from the last page to a new page until there is enough space.
+    let lastPageIndex = pages.length - 1;
+    let lastPageItems = pages[lastPageIndex];
+    let lastPageY = (pages.length === 1 ? firstPageHeaderHeight : miniHeaderHeight) + tableHeaderHeight;
+    for (const item of lastPageItems) {
+      lastPageY += getItemHeight(item);
+    }
+
+    if (lastPageY + totalsBlockHeight > MAX_CONTENT_HEIGHT) {
+      // Pop items to the next page to make space for the Totals/Signatures block
+      // ensuring at least 1 item stays on the last page.
+      const nextPageItems: QuotationItem[] = [];
+      while (lastPageItems.length > 1 && lastPageY + totalsBlockHeight > MAX_CONTENT_HEIGHT) {
+        const popped = lastPageItems.pop();
+        if (popped) {
+          nextPageItems.unshift(popped);
+          lastPageY -= getItemHeight(popped);
+        }
+      }
+      pages[lastPageIndex] = lastPageItems;
+      pages.push(nextPageItems);
+    }
+
+    return pages;
   };
 
   const pagesList = paginateItems(items);

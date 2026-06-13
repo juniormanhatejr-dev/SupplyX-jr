@@ -28,6 +28,8 @@ import {
   X,
   User,
   Truck,
+  Folder,
+  FolderOpen
 } from 'lucide-react';
 import { collection, query, where, onSnapshot, addDoc, setDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -309,6 +311,35 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     const saved = localStorage.getItem('supplyx_viewed_mock_orders');
     return saved ? JSON.parse(saved) : [];
   });
+  const [deletedMockIds, setDeletedMockIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('supplyx_deleted_mock_orders');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [recentFolderOpen, setRecentFolderOpen] = useState(true);
+  const [oldFolderOpen, setOldFolderOpen] = useState(false);
+
+  const deleteQuotation = async (quoteId: string, isMock: boolean, event?: React.MouseEvent) => {
+    if (event) event.stopPropagation();
+    
+    const confirmMessage = language === 'PT' 
+      ? 'Tem a certeza de que deseja eliminar esta cotação? Esta ação não pode ser desfeita.' 
+      : 'Are you sure you want to delete this quotation? This action cannot be undone.';
+      
+    if (!window.confirm(confirmMessage)) return;
+
+    if (isMock) {
+      const newDeletedList = [...deletedMockIds, quoteId];
+      setDeletedMockIds(newDeletedList);
+      localStorage.setItem('supplyx_deleted_mock_orders', JSON.stringify(newDeletedList));
+    } else {
+      try {
+        await deleteDoc(doc(db, 'quotations', quoteId));
+      } catch (err) {
+        console.error('Error deleting quotation:', err);
+        handleFirestoreError(err, OperationType.DELETE, `quotations/${quoteId}`);
+      }
+    }
+  };
 
   const markQuotationAsViewed = async (quoteId: string, currentViewedBy: any = []) => {
     const matchedUserId = auth.currentUser?.uid;
@@ -1941,7 +1972,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       return matchedUserId ? viewedList.includes(matchedUserId) : false;
     });
 
-    const mockList = getOrders(t);
+    const mockList = getOrders(t).filter((order) => !deletedMockIds.includes(order.id));
     const mockRecent = mockList.filter((order) => !viewedMockIds.includes(order.id));
     const mockOld = mockList.filter((order) => viewedMockIds.includes(order.id));
 
@@ -1953,7 +1984,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       hasRecent: activeRecent.length > 0 || mockRecent.length > 0,
       hasOld: activeOld.length > 0 || mockOld.length > 0
     };
-  }, [displayedQuotations, viewedMockIds, user?.uid, t]);
+  }, [displayedQuotations, viewedMockIds, deletedMockIds, user?.uid, t]);
 
   const renderQuotationCard = (order: any, isMock: boolean) => {
     const quoteTitle = isMock ? order.id : (order.requestId || order.id);
@@ -2107,6 +2138,20 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                 className={`p-2 sm:p-2.5 rounded-xl transition-all active:scale-95 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-supplyx-blue' : 'bg-zinc-50 text-zinc-500 hover:text-supplyx-blue'}`}
               >
                 <MessageSquare className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteQuotation(order.id, isMock, e);
+                }}
+                className={`p-2 sm:p-2.5 rounded-xl transition-all active:scale-95 ${
+                  isDarkMode 
+                    ? 'bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white' 
+                    : 'bg-red-50 text-red-500 hover:bg-red-500 hover:text-white'
+                }`}
+                title={language === 'PT' ? 'Eliminar Cotação' : 'Delete Quotation'}
+              >
+                <Trash2 className="w-4 h-4" />
               </button>
               {!isMock && (
                 <button
@@ -3782,37 +3827,148 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-8">
-          {/* Recent/New Section */}
-          {partitionedQuotations.hasRecent && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 border-b border-zinc-200 dark:border-white/5 pb-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-supplyx-blue shrink-0 animate-pulse" />
-                <h3 className={`text-xs font-black uppercase tracking-[0.2em] italic ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-700'}`}>
-                  {language === 'PT' ? 'Pedidos Recentes' : 'Recent Requests'} ({partitionedQuotations.recentReal.length + partitionedQuotations.recentMock.length})
-                </h3>
+          {/* Folders Layout for Quotation Requests */}
+          <div className="space-y-6">
+            {/* Recent/New Folder */}
+            <div className={`overflow-hidden rounded-[32px] border transition-all duration-300 ${
+              isDarkMode ? 'border-white/5 bg-zinc-950/20' : 'border-zinc-150 bg-white/60 shadow-sm'
+            }`}>
+              <div 
+                onClick={() => setRecentFolderOpen(!recentFolderOpen)}
+                className={`cursor-pointer transition-all duration-300 p-5 sm:p-6 flex items-center justify-between gap-4 border-b ${
+                  recentFolderOpen 
+                    ? (isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-zinc-50 border-zinc-100')
+                    : 'border-transparent hover:bg-zinc-500/5'
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-2xl transition-all duration-300 ${
+                    recentFolderOpen
+                      ? (isDarkMode ? 'bg-brand/20 text-brand' : 'bg-brand/10 text-brand-dark')
+                      : (isDarkMode ? 'bg-zinc-900 text-zinc-505' : 'bg-zinc-100 text-zinc-400')
+                  }`}>
+                    {recentFolderOpen ? <FolderOpen className="w-6 h-6" /> : <Folder className="w-6 h-6" />}
+                  </div>
+                  <div>
+                    <h3 className={`text-sm sm:text-base font-black uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                      {language === 'PT' ? 'Pasta: Pedidos Recentes' : 'Folder: Recent Requests'}
+                    </h3>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest flex items-center gap-1.5 mt-0.5">
+                      <span className="w-2 h-2 rounded-full bg-brand animate-pulse shrink-0" />
+                      {partitionedQuotations.recentReal.length + partitionedQuotations.recentMock.length} {language === 'PT' ? 'itens ativos' : 'active items'}
+                    </p>
+                  </div>
+                </div>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all duration-300 ${
+                  isDarkMode ? 'border-white/5 bg-zinc-900' : 'border-zinc-200 bg-zinc-50'
+                }`}>
+                  <svg 
+                    className={`w-3.5 h-3.5 transition-transform duration-300 ${recentFolderOpen ? 'transform rotate-180' : ''}`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               </div>
-              <div className="space-y-4">
-                {partitionedQuotations.recentReal.map((order) => renderQuotationCard(order, false))}
-                {partitionedQuotations.recentMock.map((order) => renderQuotationCard(order, true))}
-              </div>
+              
+              <AnimatePresence initial={false}>
+                {recentFolderOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-5 sm:p-6 space-y-4">
+                      {partitionedQuotations.recentReal.length + partitionedQuotations.recentMock.length === 0 ? (
+                        <div className="py-8 text-center text-zinc-400 text-xs font-black uppercase tracking-widest">
+                          {language === 'PT' ? 'Esta pasta está vazia' : 'This folder is empty'}
+                        </div>
+                      ) : (
+                        <>
+                          {partitionedQuotations.recentReal.map((order) => renderQuotationCard(order, false))}
+                          {partitionedQuotations.recentMock.map((order) => renderQuotationCard(order, true))}
+                        </>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          )}
 
-          {/* Old/Past Section */}
-          {partitionedQuotations.hasOld && (
-            <div className="space-y-8 pt-4">
-              <div className="flex items-center gap-3 border-b border-zinc-200 dark:border-white/5 pb-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-zinc-400 dark:bg-zinc-600 shrink-0" />
-                <h3 className={`text-xs font-black uppercase tracking-[0.2em] italic ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                  {language === 'PT' ? 'Pedidos Antigos' : 'Old Requests'} ({partitionedQuotations.oldReal.length + partitionedQuotations.oldMock.length})
-                </h3>
+            {/* Old/Past Folder */}
+            <div className={`overflow-hidden rounded-[32px] border transition-all duration-300 ${
+              isDarkMode ? 'border-white/5 bg-zinc-950/20' : 'border-zinc-150 bg-white/60 shadow-sm'
+            }`}>
+              <div 
+                onClick={() => setOldFolderOpen(!oldFolderOpen)}
+                className={`cursor-pointer transition-all duration-300 p-5 sm:p-6 flex items-center justify-between gap-4 border-b ${
+                  oldFolderOpen 
+                    ? (isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-zinc-50 border-zinc-100')
+                    : 'border-transparent hover:bg-zinc-500/5'
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-2xl transition-all duration-300 ${
+                    oldFolderOpen
+                      ? (isDarkMode ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-200 text-zinc-600')
+                      : (isDarkMode ? 'bg-zinc-900 text-zinc-505' : 'bg-zinc-100 text-zinc-400')
+                  }`}>
+                    {oldFolderOpen ? <FolderOpen className="w-6 h-6" /> : <Folder className="w-6 h-6" />}
+                  </div>
+                  <div>
+                    <h3 className={`text-sm sm:text-base font-black uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                      {language === 'PT' ? 'Pasta: Pedidos Antigos' : 'Folder: Old Requests'}
+                    </h3>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest flex items-center gap-1.5 mt-0.5">
+                      <span className="w-2 h-2 rounded-full bg-zinc-400 shrink-0" />
+                      {partitionedQuotations.oldReal.length + partitionedQuotations.oldMock.length} {language === 'PT' ? 'itens históricos' : 'historical items'}
+                    </p>
+                  </div>
+                </div>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all duration-300 ${
+                  isDarkMode ? 'border-white/5 bg-zinc-900' : 'border-zinc-200 bg-zinc-50'
+                }`}>
+                  <svg 
+                    className={`w-3.5 h-3.5 transition-transform duration-300 ${oldFolderOpen ? 'transform rotate-180' : ''}`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               </div>
-              <div className="space-y-4">
-                {partitionedQuotations.oldReal.map((order) => renderQuotationCard(order, false))}
-                {partitionedQuotations.oldMock.map((order) => renderQuotationCard(order, true))}
-              </div>
+              
+              <AnimatePresence initial={false}>
+                {oldFolderOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-5 sm:p-6 space-y-4">
+                      {partitionedQuotations.oldReal.length + partitionedQuotations.oldMock.length === 0 ? (
+                        <div className="py-8 text-center text-zinc-400 text-xs font-black uppercase tracking-widest">
+                          {language === 'PT' ? 'Esta pasta está vazia' : 'This folder is empty'}
+                        </div>
+                      ) : (
+                        <>
+                          {partitionedQuotations.oldReal.map((order) => renderQuotationCard(order, false))}
+                          {partitionedQuotations.oldMock.map((order) => renderQuotationCard(order, true))}
+                        </>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          )}
+          </div>
 
           {/* Empty state if any */}
           {!partitionedQuotations.hasRecent && !partitionedQuotations.hasOld && (

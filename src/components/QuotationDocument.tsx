@@ -84,24 +84,27 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
   const items = data.items || [];
   
   const paginateItems = (itemsList: QuotationItem[]) => {
-    if (itemsList.length <= 4) {
+    // If all items fit on a single page with the totals/signatures block, keep it on 1 page
+    if (itemsList.length <= 6) {
       return [itemsList];
     }
     
     const pagesList: QuotationItem[][] = [];
-    // Page 1 gets max 4 items (takes up ~40% space with head/metadata block)
-    pagesList.push(itemsList.slice(0, 4));
     
-    let remaining = itemsList.slice(4);
+    // Page 1 can fit up to 10 items when Totals are pushed to subsequent pages.
+    const page1Limit = 10;
+    pagesList.push(itemsList.slice(0, page1Limit));
+    
+    let remaining = itemsList.slice(page1Limit);
     while (remaining.length > 0) {
-      // If remaining fits perfectly with totals & payment block (max 4 items) on the last page
-      if (remaining.length <= 4) {
+      // Last page carries the Totals/signatures block. It can fit up to 9 items.
+      if (remaining.length <= 9) {
         pagesList.push(remaining);
         remaining = [];
       } else {
-        // Otherwise grab 6 items for this page and keep going
-        pagesList.push(remaining.slice(0, 6));
-        remaining = remaining.slice(6);
+        // Middle pages have NO Totals block. They can fit up to 16 items!
+        pagesList.push(remaining.slice(0, 16));
+        remaining = remaining.slice(16);
       }
     }
     return pagesList;

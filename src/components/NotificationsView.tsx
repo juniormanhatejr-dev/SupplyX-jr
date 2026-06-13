@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
 import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Calendar, Gift, Info, FileText, AlertCircle, Trash2, CheckCheck } from 'lucide-react';
 import { useState } from 'react';
-import { useNotifications } from '../contexts/NotificationContext';
+import { useNotifications, getNotificationRoute } from '../contexts/NotificationContext';
 
 interface Notification {
   id: string;
@@ -166,7 +166,14 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
             <motion.div 
               layout
               key={n.id}
-              className={`p-10 rounded-[48px] border transition-all relative group overflow-hidden ${
+              onClick={() => {
+                if (!n.read) markNotificationAsRead(n.id);
+                const route = getNotificationRoute(n);
+                window.dispatchEvent(new CustomEvent('navigate-app', { 
+                  detail: { tab: route.tab, payload: route.payload } 
+                }));
+              }}
+              className={`p-10 rounded-[48px] border transition-all relative group overflow-hidden cursor-pointer ${
                 isDarkMode 
                   ? `${n.read ? 'bg-supplyx-dark border-white/5 shadow-3xl' : 'bg-supplyx-dark border-supplyx-blue shadow-2xl shadow-blue-500/10'}` 
                   : `${n.read ? 'bg-white border-zinc-100' : 'bg-brand/5 border-brand/20 shadow-xl shadow-zinc-200/20'}`
@@ -215,14 +222,20 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
                     <div className="flex items-center gap-4">
                       {!n.read && (
                         <button 
-                          onClick={() => markNotificationAsRead(n.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            markNotificationAsRead(n.id);
+                          }}
                           className="px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-supplyx-blue text-white shadow-xl shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all"
                         >
                           {t.markRead}
                         </button>
                       )}
                       <button 
-                        onClick={() => deleteNotification(n.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteNotification(n.id);
+                        }}
                         className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all hover:scale-105 active:scale-95 flex items-center gap-2 ${
                           isDarkMode 
                             ? 'bg-rose-500/5 border-rose-500/20 text-rose-400 hover:bg-rose-500/10' 

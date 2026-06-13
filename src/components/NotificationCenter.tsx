@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Info, FileText, AlertCircle, Trash2, CheckCheck } from 'lucide-react';
 import { useState } from 'react';
-import { useNotifications } from '../contexts/NotificationContext';
+import { useNotifications, getNotificationRoute } from '../contexts/NotificationContext';
 
 interface Notification {
   id: string;
@@ -169,7 +169,14 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                     {notifications.map((n) => (
                       <div 
                         key={n.id} 
-                        onClick={() => !n.read && markNotificationAsRead(n.id)}
+                        onClick={() => {
+                          if (!n.read) markNotificationAsRead(n.id);
+                          const route = getNotificationRoute(n);
+                          window.dispatchEvent(new CustomEvent('navigate-app', { 
+                            detail: { tab: route.tab, payload: route.payload } 
+                          }));
+                          setIsOpen(false);
+                        }}
                         className={`p-6 flex gap-6 transition-all relative group cursor-pointer ${
                           !n.read ? (isDarkMode ? 'bg-supplyx-blue/5' : 'bg-supplyx-blue/5') : ''
                         } ${isDarkMode ? 'hover:bg-white/[0.02]' : 'hover:bg-zinc-50'}`}

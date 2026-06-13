@@ -87,8 +87,20 @@ export default function App() {
       }
       setActiveTab('Mensagens');
     };
+    
+    const handleNavigateApp = (e: any) => {
+      const { tab, payload } = e.detail || {};
+      if (tab) {
+        handleNavigateWithPayload(tab, payload);
+      }
+    };
+
     window.addEventListener('navigate-to-messages', handleNavigate);
-    return () => window.removeEventListener('navigate-to-messages', handleNavigate);
+    window.addEventListener('navigate-app', handleNavigateApp);
+    return () => {
+      window.removeEventListener('navigate-to-messages', handleNavigate);
+      window.removeEventListener('navigate-app', handleNavigateApp);
+    };
   }, []);
 
   // If supplier or logistics, default to their specific dashboards

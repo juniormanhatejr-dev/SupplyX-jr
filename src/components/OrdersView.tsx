@@ -304,6 +304,320 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   const [rawAllProducts, setAllProducts] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
   const [realQuotations, setRealQuotations] = useState<any[]>([]);
+  const [selectedRealQuoteForPreview, setSelectedRealQuoteForPreview] = useState<any>(null);
+  const [viewedMockIds, setViewedMockIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('supplyx_viewed_mock_orders');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const markQuotationAsViewed = async (quoteId: string, currentViewedBy: any = []) => {
+    const matchedUserId = auth.currentUser?.uid;
+    if (!matchedUserId) return;
+    const viewedList = Array.isArray(currentViewedBy) ? currentViewedBy : [];
+    if (viewedList.includes(matchedUserId)) return;
+    try {
+      const quoteRef = doc(db, 'quotations', quoteId);
+      await updateDoc(quoteRef, {
+        viewedBy: [...viewedList, matchedUserId]
+      });
+      console.log(`Quotation ${quoteId} marked as viewed by user ${matchedUserId}`);
+    } catch (err) {
+      console.error('Error marking quotation as viewed:', err);
+    }
+  };
+
+  const markMockOrderAsViewed = (orderId: string) => {
+    if (viewedMockIds.includes(orderId)) return;
+    const newList = [...viewedMockIds, orderId];
+    setViewedMockIds(newList);
+    localStorage.setItem('supplyx_viewed_mock_orders', JSON.stringify(newList));
+  };
+
+  const getPreviewData = (targetQuote: any) => {
+    const isSupplierUser = userType === 'supplier';
+    const quoteSupplierId = targetQuote.supplierId;
+    const dbSupplier = mergedSuppliers.find(s => s.id === quoteSupplierId);
+
+    const sInfo = isSupplierUser ? {
+      name: profile?.name || targetQuote.supplierName || 'FORNECEDOR',
+      isVerified: true,
+      address: profile?.address || 'Maputo, Moçambique',
+      email: profile?.email || user?.email || '',
+      phone: profile?.phone || '',
+      nuit: profile?.nuit || '400' + Math.floor(Math.random() * 1000000),
+      logoURL: profile?.photoURL || '',
+      bankAccounts: profile?.bankAccounts || [],
+      mobileWallets: profile?.mobileWallets || [],
+      signatureURL: profile?.signatureURL,
+      stampURL: profile?.stampURL
+    } : {
+      name: dbSupplier?.name || targetQuote.supplierName || 'FORNECEDOR',
+      isVerified: true,
+      address: dbSupplier?.address || 'Maputo, Moçambique',
+      email: dbSupplier?.email || 'sales@supplier.com',
+      phone: dbSupplier?.phone || '',
+      nuit: dbSupplier?.nuit || '400' + Math.floor(Math.random() * 1000000),
+      logoURL: dbSupplier?.photoURL || '',
+      bankAccounts: dbSupplier?.bankAccounts || [],
+      mobileWallets: dbSupplier?.mobileWallets || [],
+      signatureURL: dbSupplier?.signatureURL,
+      stampURL: dbSupplier?.stampURL
+    };
+
+    const cInfo = isSupplierUser ? {
+      name: targetQuote.buyerName || 'Cliente SupplyX',
+      nuit: '400377081',
+      address: 'NACALA - PORTO',
+      email: targetQuote.buyerEmail || 'cliente@supplyx.com',
+      phone: '+258 84 ...'
+    } : {
+      name: profile?.name || targetQuote.buyerName || 'Cliente SupplyX',
+      nuit: profile?.nuit || '400377081',
+      address: profile?.address || 'NACALA - PORTO',
+      email: profile?.email || user?.email || 'cliente@supplyx.com',
+      phone: profile?.phone || '+258 84 ...'
+    };
+
+    return {
+      quoteNumber: targetQuote.requestId || targetQuote.id || 'PR-QT-2035/2026',
+      date: targetQuote.createdAt?.toDate ? targetQuote.createdAt.toDate().toLocaleDateString('pt-PT') : new Date().toLocaleDateString('pt-PT'),
+      validityDays: 15,
+      supplier: sInfo,
+      client: cInfo,
+      items: (targetQuote.items || []).map((row: any) => ({
+        material: row.material || row.description || '',
+        quantity: row.quantity || '1',
+        unit: row.unit || '',
+        needDate: row.needDate || '',
+        unitPrice: row.unitPrice || 0,
+        vatUnitRate: row.vatUnitRate !== undefined ? row.vatUnitRate : 16
+      }))
+    };
+  };
+
+  const renderQuotationCardStale = (order: any, isMock: boolean) => {
+    const t: any = translations.PT;
+    const user: any = { uid: 'stale' };
+    const quoteTitle = isMock ? order.id : (order.requestId || order.id);
+    const quoteAmount = isMock ? order.total : `MT ${(order.totalAmount || 0).toLocaleString('pt-BR')}`;
+    const quoteDate = isMock ? order.date : (order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString() : new Date().toLocaleDateString());
+    const displayStatus = isMock 
+      ? order.status 
+      : (order.status === 'pending' ? t.status.quote : (order.status === 'responded' ? t.status.waiting : order.status));
+      
+    const statusColorClass = isMock 
+      ? (order.status === t.status.delivered ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+         order.status === t.status.transit ? 'bg-supplyx-blue/10 text-supplyx-blue border-supplyx-blue/20' :
+         order.status === t.status.waiting ? 'bg-amber-500/10 text-amber-500 border-amber-500/10' :
+         'bg-indigo-500/10 text-indigo-500 border-indigo-500/10')
+      : (order.status === t.status.delivered ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+         order.status === t.status.transit ? 'bg-supplyx-blue/10 text-supplyx-blue border-supplyx-blue/20' :
+         (order.status === t.status.waiting || order.status === 'responded') ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+         'bg-indigo-500/10 text-indigo-500 border-indigo-500/10');
+
+    const handleProfileClick = (e: any) => {
+      e.stopPropagation();
+      const profileId = isMock 
+        ? (userType === 'supplier' ? 'buyer_demo_uid' : order.supplierId)
+        : (userType === 'supplier' ? order.buyerId : order.supplierId);
+      if (profileId) {
+        setViewingProfileId(profileId);
+        setIsProfileModalOpen(true);
+      }
+    };
+
+    const displayPartner = isMock
+      ? (userType === 'supplier' ? `${t.client}: Manhate Jr` : `${t.supplier}: ${order.supplier}`)
+      : (userType === 'supplier' ? `${t.client}: ${order.buyerName || 'Client'}` : `${t.supplier}: ${order.supplierName}`);
+
+    const handleCardClick = () => {
+      if (isMock) {
+        markMockOrderAsViewed(order.id);
+        const mockRealObj = {
+          id: order.id,
+          requestId: order.id,
+          supplierId: order.supplierId || 'S1',
+          supplierName: order.supplier,
+          buyerName: 'Manhate Jr',
+          buyerEmail: 'manhate@supplyx.co.mz',
+          totalAmount: parseFloat(order.total.replace('MT ', '').replace('.', '').replace(',', '.')) || 12450,
+          createdAt: { toDate: () => new Date() },
+          items: order.items || [
+            { description: 'Materiais de Construção', quantity: '1', unitPrice: 12450 }
+          ]
+        };
+        setSelectedRealQuoteForPreview(mockRealObj);
+      } else {
+        markQuotationAsViewed(order.id, order.viewedBy);
+        setSelectedRealQuoteForPreview(order);
+      }
+    };
+
+    return (
+      <motion.div 
+        key={order.id} 
+        whileHover={{ y: -4 }}
+        onClick={handleCardClick}
+        className={`p-5 sm:p-6 rounded-[28px] sm:rounded-[32px] border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 transition-all cursor-pointer group relative overflow-hidden ${
+          isDarkMode 
+            ? 'bg-supplyx-dark border-white/5 hover:border-supplyx-blue/50 shadow-2xl shadow-black/20' 
+            : 'bg-white border-zinc-100 hover:border-supplyx-blue/30 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
+        }`}
+      >
+        <div className="flex items-center gap-4 sm:gap-5 w-full sm:w-auto relative z-10">
+          <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[18px] sm:rounded-[20px] flex items-center justify-center border transition-all shrink-0 ${
+            isDarkMode 
+              ? 'bg-zinc-800/50 border-white/5 group-hover:bg-supplyx-blue/10 group-hover:border-supplyx-blue/20' 
+              : 'bg-zinc-50 border-zinc-100 group-hover:bg-supplyx-blue/5 group-hover:border-supplyx-blue/10'
+          }`}>
+            <FileText className={`w-5 h-5 sm:w-6 sm:h-6 transition-colors ${isDarkMode ? 'text-zinc-500 group-hover:text-supplyx-blue' : 'text-zinc-400 group-hover:text-supplyx-blue'}`} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-0.5">
+              <h4 className={`text-base sm:text-lg font-black italic tracking-tight transition-colors truncate ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{quoteTitle}</h4>
+              {((!isMock && (order.status === t.status.quote || order.status === 'pending')) || (isMock && order.status === t.status.quote)) && (
+                 <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue animate-pulse" />
+              )}
+            </div>
+            <p 
+              className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-[#0f9fa8] cursor-pointer hover:text-supplyx-blue transition-colors flex items-center gap-2 truncate"
+              onClick={handleProfileClick}
+            >
+              <User className="w-3 h-3" />
+              {displayPartner}
+            </p>
+          </div>
+          
+          {/* Mobile Status Badge */}
+          <div className="sm:hidden shrink-0">
+            <div className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${statusColorClass}`}>
+              {displayStatus}
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-10 w-full sm:w-auto p-4 sm:p-0 rounded-2xl bg-zinc-900/5 sm:bg-transparent relative z-10">
+          <div className="text-left sm:text-right">
+            <p className={`text-lg sm:text-xl font-black italic tracking-tighter leading-none mb-1 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+              {quoteAmount}
+            </p>
+            <p className="text-[8px] sm:text-[9px] text-zinc-500 font-bold uppercase tracking-[0.2em]">
+              {quoteDate}
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-2 sm:gap-4">
+            {/* Desktop Only Status */}
+            <div className={`hidden sm:block px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border ${statusColorClass}`}>
+              {displayStatus}
+            </div>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {(!isMock || (isMock && order.status === t.status.quote)) && (
+                <button 
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setDownloadingOrderId(order.id);
+                    try {
+                      if (isMock) {
+                        const mockRes: SupplierResponse = {
+                          supplierId: order.supplierId || 'S1',
+                          name: order.supplier,
+                          price: parseFloat(order.total.replace('MT ', '').replace('.', '').replace(',', '.')) || 12450,
+                          timeToDeliver: '2 dias',
+                          confidence: 95,
+                          itemPrices: (order.items || []).map((it: any) => ({ material: it.description, price: it.unitPrice || 0 }))
+                        };
+                        setSelectedResponseIndex(0);
+                        await downloadPDF(mockRes);
+                      } else {
+                        setActivePdfQuote(order);
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        const mockRes: SupplierResponse = {
+                           supplierId: order.supplierId,
+                           name: order.supplierName,
+                           price: order.totalAmount || 0,
+                           timeToDeliver: '2 dias',
+                           confidence: order.confidence || 0,
+                           itemPrices: []
+                        };
+                        await downloadPDF(mockRes);
+                        setActivePdfQuote(null);
+                      }
+                    } finally {
+                      setDownloadingOrderId(null);
+                    }
+                  }}
+                  disabled={downloadingOrderId === order.id}
+                  className={`p-2 sm:p-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-50 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-white' : 'bg-zinc-50 text-zinc-500 hover:text-zinc-900'}`}
+                >
+                  {downloadingOrderId === order.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                </button>
+              )}
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startChat(order);
+                }}
+                className={`p-2 sm:p-2.5 rounded-xl transition-all active:scale-95 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-supplyx-blue' : 'bg-zinc-50 text-zinc-500 hover:text-supplyx-blue'}`}
+              >
+                <MessageSquare className="w-4 h-4" />
+              </button>
+              
+              {!isMock && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const currentSupplierName = order.supplierName || 'Fornecedor Parceiro';
+                    let materialsList = order.materials?.map((m: any) => typeof m === 'object' ? m.name : m).filter(Boolean).join(', ');
+                    if (!materialsList && order.items) {
+                      materialsList = order.items.map((it: any) => it.material || it.description).filter(Boolean).join(', ');
+                    }
+                    if (!materialsList) materialsList = 'Materiais de Construção B2B';
+
+                    const calculatedOrigem = order.supplierAddress || currentSupplierName + ', Moçambique';
+                    const calculatedDestino = profile?.address || order.buyerName || 'Província de Nampula, Moçambique';
+
+                    setLogisticsFormFields({
+                      origem: calculatedOrigem,
+                      destino: calculatedDestino,
+                      tipoCarga: materialsList,
+                      peso: '12',
+
+                      volume: '24',
+                      prioridade: 'normal',
+                      dataDesejada: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                      tipoVeiculo: 'caminhão pesado',
+                      observacoes: `Ordem Logística vinculada à Cotação #${order.id || 'QT-01'}. Faturamento sob custódia SupplyX. Urgência: ALTA`,
+                      seguroCarga: 'Incluso (Fidelidade)',
+                      cargaFragil: false,
+                      temperaturaControlada: false
+                    });
+
+                    setSpreadsheetOrigem(calculatedOrigem);
+                    setSpreadsheetDestino(calculatedDestino);
+                    setSpreadsheetRows([
+                      { id: '1', name: '', quantity: '1', weight: '' }
+                    ]);
+
+                    setRespondingTo(order);
+                    setIsDirectLogisticsRequest(true);
+                    setShowForm(true);
+                    setStep(4);
+                    setPaymentSuccess(true);
+                    setSelectedScenario(3);
+                    setShowLogisticsQuestion(true);
+                  }}
+                  className="px-4 py-2.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  {language === 'PT' ? 'Solicitar Logística' : 'Request Logistics'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
   
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   
@@ -1343,83 +1657,56 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     try {
       const element = invoiceRef.current;
       
-      const canvas = await html2canvas(element, {
-        scale: 2, // High resolution yet optimal performance
-        useCORS: true,
-        allowTaint: false, // Disabling taint prevents DOMException on toDataURL
-        backgroundColor: '#ffffff',
-        logging: false,
-        imageTimeout: 30000,
-        onclone: (clonedDoc) => {
-          // Reset the absolute offscreen positions so html2canvas renders perfectly in layout bounds
-          const container = clonedDoc.getElementById('pdf-template-container');
-          if (container) {
-            container.style.position = 'relative';
-            container.style.left = '0';
-            container.style.top = '0';
-            container.style.width = '210mm';
-            container.style.height = 'auto';
-            container.style.zIndex = '9999';
-            container.style.pointerEvents = 'auto';
-          }
-          const clonedElement = clonedDoc.getElementById('quotation-document');
-          if (clonedElement) {
-            clonedElement.style.position = 'relative';
-            clonedElement.style.left = '0';
-            clonedElement.style.top = '0';
-            clonedElement.style.margin = '0';
-            clonedElement.style.display = 'block';
-            clonedElement.style.visibility = 'visible';
-          }
-          const htmlFooter = clonedDoc.getElementById('quotation-corporate-footer');
-          if (htmlFooter) {
-            htmlFooter.style.display = 'none';
-          }
-          sanitizeDocumentColors(clonedDoc, false);
-        }
-      });
+      // Query all page elements
+      const pageElements = Array.from(element.querySelectorAll('.quotation-page'));
       
-      const imgData = canvas.toDataURL('image/jpeg', 0.95); // JPEG prevents browser lockups from massive payloads
+      // If none found for some reason, fallback to rendering the whole parent
+      const targets = pageElements.length > 0 ? pageElements : [element];
+      
       const pdf = new jsPDF('p', 'mm', 'a4', true);
       
-      const imgWidth = 210; 
-      const pageHeight = 297;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      const addFooter = (doc: any, pageNum: number) => {
-        const footerY = 282;
-        doc.setDrawColor(217, 225, 229); // COLORS.borderGray
-        doc.line(20, footerY - 5, 190, footerY - 5);
+      for (let i = 0; i < targets.length; i++) {
+        const targetEl = targets[i] as HTMLElement;
         
-        doc.setFontSize(7);
-        doc.setTextColor(113, 128, 150); // COLORS.textMuted
-        doc.setFont('helvetica', 'normal');
+        const canvas = await html2canvas(targetEl, {
+          scale: 2, // High resolution yet optimal performance
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: '#ffffff',
+          logging: false,
+          imageTimeout: 30000,
+          onclone: (clonedDoc) => {
+            const container = clonedDoc.getElementById('pdf-template-container');
+            if (container) {
+              container.style.position = 'relative';
+              container.style.left = '0';
+              container.style.top = '0';
+              container.style.width = '210mm';
+              container.style.height = 'auto';
+              container.style.zIndex = '9999';
+              container.style.pointerEvents = 'auto';
+            }
+            const clonedElement = clonedDoc.getElementById('quotation-document');
+            if (clonedElement) {
+              clonedElement.style.position = 'relative';
+              clonedElement.style.left = '0';
+              clonedElement.style.top = '0';
+              clonedElement.style.margin = '0';
+              clonedElement.style.display = 'block';
+              clonedElement.style.visibility = 'visible';
+            }
+            sanitizeDocumentColors(clonedDoc, false);
+          }
+        });
         
-        const supplierInfo = `${response.name} | Tel: ${response.phone || '---'} | Email: ${response.email || '---'}`;
-        doc.text(supplierInfo, 20, footerY);
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
         
-        doc.setFontSize(6);
-        doc.text('Gestão Documental & Intermediação: Manhate Link África, Lda - Registada em Moçambique sob Nuit 400123456', 20, footerY + 3.5);
-        doc.text('Este documento possui validade jurídica para efeitos de cotação oficial no Ecossistema SupplyX.', 20, footerY + 6.5);
+        if (i > 0) {
+          pdf.addPage();
+        }
         
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Powered by Manhate Link África | Página ${pageNum}`, 190, footerY + 6.5, { align: 'right' });
-      };
-
-      let pageCount = 1;
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-      addFooter(pdf, pageCount);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pageCount++;
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-        addFooter(pdf, pageCount);
-        heightLeft -= pageHeight;
+        // Fit perfectly on standard A4 dimensions (210mm x 297mm)
+        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
       }
       
       const timestamp = new Date().getTime();
@@ -1640,6 +1927,241 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   };
 
   const t = language === 'PT' ? translations.PT : translations.EN;
+
+  const partitionedQuotations = useMemo(() => {
+    const matchedUserId = user?.uid;
+    
+    const activeRecent = displayedQuotations.filter((order) => {
+      const viewedList = Array.isArray(order.viewedBy) ? order.viewedBy : [];
+      return matchedUserId ? !viewedList.includes(matchedUserId) : true;
+    });
+    
+    const activeOld = displayedQuotations.filter((order) => {
+      const viewedList = Array.isArray(order.viewedBy) ? order.viewedBy : [];
+      return matchedUserId ? viewedList.includes(matchedUserId) : false;
+    });
+
+    const mockList = getOrders(t);
+    const mockRecent = mockList.filter((order) => !viewedMockIds.includes(order.id));
+    const mockOld = mockList.filter((order) => viewedMockIds.includes(order.id));
+
+    return {
+      recentReal: activeRecent,
+      oldReal: activeOld,
+      recentMock: mockRecent,
+      oldMock: mockOld,
+      hasRecent: activeRecent.length > 0 || mockRecent.length > 0,
+      hasOld: activeOld.length > 0 || mockOld.length > 0
+    };
+  }, [displayedQuotations, viewedMockIds, user?.uid, t]);
+
+  const renderQuotationCard = (order: any, isMock: boolean) => {
+    const quoteTitle = isMock ? order.id : (order.requestId || order.id);
+    const quoteAmount = isMock ? order.total : `MT ${(order.totalAmount || 0).toLocaleString('pt-BR')}`;
+    const quoteDate = isMock ? order.date : (order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString() : new Date().toLocaleDateString());
+    const displayStatus = isMock 
+      ? order.status 
+      : (((order.status === 'pending' || !order.status) ? t.status.quote : (order.status === 'responded' ? t.status.waiting : order.status)));
+
+    const isRecent = isMock 
+      ? !viewedMockIds.includes(order.id) 
+      : (!order.viewedBy || (user?.uid && !order.viewedBy.includes(user.uid)));
+
+    const currentSupplierName = isMock ? order.supplier : (order.supplierName || 'Fornecedor Parceiro');
+
+    return (
+      <motion.div 
+        key={order.id} 
+        whileHover={{ y: -4 }}
+        onClick={() => {
+          if (isMock) {
+            markMockOrderAsViewed(order.id);
+            startChat(order);
+          } else {
+            markQuotationAsViewed(order.id);
+            setSelectedRealQuoteForPreview(order);
+          }
+        }}
+        className={`p-5 sm:p-6 rounded-[28px] sm:rounded-[32px] border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 transition-all cursor-pointer group relative overflow-hidden ${
+          isDarkMode 
+            ? 'bg-supplyx-dark border-white/5 hover:border-supplyx-blue/50 shadow-2xl shadow-black/20' 
+            : 'bg-white border-zinc-100 hover:border-supplyx-blue/30 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
+        }`}
+      >
+        <div className="flex items-center gap-4 sm:gap-5 w-full sm:w-auto relative z-10 font-sans">
+          <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[18px] sm:rounded-[20px] flex items-center justify-center border transition-all shrink-0 ${
+            isDarkMode 
+              ? 'bg-zinc-850 border-white/5 group-hover:bg-supplyx-blue/10 group-hover:border-supplyx-blue/20' 
+              : 'bg-zinc-50 border-zinc-100 group-hover:bg-supplyx-blue/5 group-hover:bg-supplyx-blue/10'
+          }`}>
+            <FileText className={`w-5 h-5 sm:w-6 sm:h-6 transition-colors ${isDarkMode ? 'text-zinc-500 group-hover:text-supplyx-blue' : 'text-zinc-400 group-hover:text-supplyx-blue'}`} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-0.5">
+              <h4 className={`text-base sm:text-lg font-black italic tracking-tight transition-colors truncate ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{quoteTitle}</h4>
+              {isRecent && (
+                 <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue animate-pulse shrink-0" />
+              )}
+              {isRecent && (
+                <span className="px-1.5 py-0.5 rounded bg-supplyx-blue/10 text-supplyx-blue text-[8px] font-black uppercase tracking-widest shrink-0 animate-pulse">
+                  {language === 'PT' ? 'Novo' : 'New'}
+                </span>
+              )}
+            </div>
+            <p 
+              className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-supplyx-blue transition-colors flex items-center gap-2 truncate"
+              onClick={(e) => {
+                e.stopPropagation();
+                const profileId = isMock 
+                  ? (userType === 'supplier' ? 'buyer_demo_uid' : order.supplierId)
+                  : (userType === 'supplier' ? order.buyerId : order.supplierId);
+                if (profileId) {
+                  setViewingProfileId(profileId);
+                  setIsProfileModalOpen(true);
+                }
+              }}
+            >
+              <User className="w-3 h-3 text-supplyx-blue" />
+              {userType === 'supplier' 
+                ? `${t.client}: ${isMock ? 'Manhate Jr' : (order.buyerName || 'Client')}` 
+                : `${t.supplier}: ${currentSupplierName}`}
+            </p>
+          </div>
+          
+          {/* Mobile Status Badge */}
+          <div className="sm:hidden shrink-0">
+            <div className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border
+              ${displayStatus === t.status.delivered ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+                displayStatus === t.status.transit ? 'bg-supplyx-blue/10 text-supplyx-blue border-supplyx-blue/20' :
+                (displayStatus === t.status.waiting || displayStatus === 'responded') ? 'bg-amber-500/10 text-amber-500 border-amber-550/10' :
+                'bg-indigo-500/10 text-indigo-500 border-indigo-554/10'}`}>
+              {displayStatus}
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-10 w-full sm:w-auto p-4 sm:p-0 rounded-2xl bg-zinc-900/5 sm:bg-transparent relative z-10 font-sans">
+          <div className="text-left sm:text-right">
+            <p className={`text-lg sm:text-xl font-black italic tracking-tighter leading-none mb-1 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+              {quoteAmount}
+            </p>
+            <p className="text-[8px] sm:text-[9px] text-zinc-500 font-bold uppercase tracking-[0.2em]">
+              {quoteDate}
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-2 sm:gap-4">
+            {/* Desktop Only Status */}
+            <div className={`hidden sm:block px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border
+              ${displayStatus === t.status.delivered ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+                displayStatus === t.status.transit ? 'bg-supplyx-blue/10 text-supplyx-blue border-supplyx-blue/20' :
+                (displayStatus === t.status.waiting || displayStatus === 'responded') ? 'bg-amber-500/10 text-amber-500 border-amber-550/20 font-black' :
+                'bg-indigo-500/10 text-indigo-500 border-indigo-554/10 font-black'}`}>
+              {displayStatus}
+            </div>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <button 
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  setDownloadingOrderId(order.id);
+                  try {
+                    if (isMock) {
+                      const mockRes: SupplierResponse = {
+                        supplierId: order.supplierId || 'S1',
+                        name: order.supplier,
+                        price: parseFloat(order.total.replace('MT ', '').replace('.', '').replace(',', '.')) || 12450,
+                        timeToDeliver: '2 dias',
+                        confidence: 95,
+                        itemPrices: (order.items || []).map((it: any) => ({ material: it.description, price: it.unitPrice || 0 }))
+                      };
+                      setSelectedResponseIndex(0);
+                      await downloadPDF(mockRes);
+                    } else {
+                      setActivePdfQuote(order);
+                      await new Promise(resolve => setTimeout(resolve, 500));
+                      const mockRes: SupplierResponse = {
+                        supplierId: order.supplierId,
+                        name: order.supplierName,
+                        price: order.totalAmount || 0,
+                        timeToDeliver: '2 dias',
+                        confidence: order.confidence || 0,
+                        itemPrices: []
+                      };
+                      await downloadPDF(mockRes);
+                      setActivePdfQuote(null);
+                    }
+                  } finally {
+                    setDownloadingOrderId(null);
+                  }
+                }}
+                disabled={downloadingOrderId === order.id}
+                className={`p-2 sm:p-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-50 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-white' : 'bg-zinc-50 text-zinc-500 hover:text-zinc-900'}`}
+              >
+                {downloadingOrderId === order.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              </button>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startChat(order);
+                }}
+                className={`p-2 sm:p-2.5 rounded-xl transition-all active:scale-95 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-supplyx-blue' : 'bg-zinc-50 text-zinc-500 hover:text-supplyx-blue'}`}
+              >
+                <MessageSquare className="w-4 h-4" />
+              </button>
+              {!isMock && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Populate logistics form parameters for this specific quote/order
+                    let materialsList = order.materials?.map((m: any) => typeof m === 'object' ? m.name : m).filter(Boolean).join(', ');
+                    if (!materialsList && order.items) {
+                      materialsList = order.items.map((it: any) => it.material || it.description).filter(Boolean).join(', ');
+                    }
+                    if (!materialsList) materialsList = 'Materiais de Construção B2B';
+
+                    const calculatedOrigem = order.supplierAddress || currentSupplierName + ', Moçambique';
+                    const calculatedDestino = profile?.address || order.buyerName || 'Província de Nampula, Moçambique';
+
+                    setLogisticsFormFields({
+                      origem: calculatedOrigem,
+                      destino: calculatedDestino,
+                      tipoCarga: materialsList,
+                      peso: '12',
+                      volume: '24',
+                      prioridade: 'normal',
+                      dataDesejada: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                      tipoVeiculo: 'caminhão pesado',
+                      observacoes: `Ordem Logística vinculada à Cotação #${order.id || 'QT-01'}. Faturamento sob custódia SupplyX. Urgência: ALTA`,
+                      seguroCarga: 'Incluso (Fidelidade)',
+                      cargaFragil: false,
+                      temperaturaControlada: false
+                    });
+
+                    setSpreadsheetOrigem(calculatedOrigem);
+                    setSpreadsheetDestino(calculatedDestino);
+                    setSpreadsheetRows([
+                      { id: '1', name: '', quantity: '1', weight: '' }
+                    ]);
+
+                    setRespondingTo(order);
+                    setIsDirectLogisticsRequest(true);
+                    setShowForm(true);
+                    setStep(4);
+                    setPaymentSuccess(true);
+                    setSelectedScenario(3);
+                    setShowLogisticsQuestion(true);
+                  }}
+                  className="px-4 py-2.5 bg-emerald-500/10 text-emerald-554 hover:bg-emerald-500 hover:text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  {language === 'PT' ? 'Solicitar Logística' : 'Request Logistics'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
 
   const quotationData = useMemo(() => {
     // If responding to or viewing a specific real quotation
@@ -3202,8 +3724,8 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                     </button>
                   </div>
                 </div>
-                <div className="flex-grow overflow-auto p-4 sm:p-8 bg-zinc-200">
-                  <div className="w-[210mm] min-h-[297mm] mx-auto bg-white shadow-2xl overflow-hidden">
+                <div className="flex-grow overflow-auto p-4 sm:p-8 bg-zinc-100 shadow-inner flex flex-col items-center">
+                  <div className="max-w-[210mm] w-full">
                     <QuotationDocument data={quotationData} />
                   </div>
                 </div>
@@ -3259,7 +3781,51 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-8">
+          {/* Recent/New Section */}
+          {partitionedQuotations.hasRecent && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 border-b border-zinc-200 dark:border-white/5 pb-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-supplyx-blue shrink-0 animate-pulse" />
+                <h3 className={`text-xs font-black uppercase tracking-[0.2em] italic ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-700'}`}>
+                  {language === 'PT' ? 'Pedidos Recentes' : 'Recent Requests'} ({partitionedQuotations.recentReal.length + partitionedQuotations.recentMock.length})
+                </h3>
+              </div>
+              <div className="space-y-4">
+                {partitionedQuotations.recentReal.map((order) => renderQuotationCard(order, false))}
+                {partitionedQuotations.recentMock.map((order) => renderQuotationCard(order, true))}
+              </div>
+            </div>
+          )}
+
+          {/* Old/Past Section */}
+          {partitionedQuotations.hasOld && (
+            <div className="space-y-8 pt-4">
+              <div className="flex items-center gap-3 border-b border-zinc-200 dark:border-white/5 pb-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-zinc-400 dark:bg-zinc-600 shrink-0" />
+                <h3 className={`text-xs font-black uppercase tracking-[0.2em] italic ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                  {language === 'PT' ? 'Pedidos Antigos' : 'Old Requests'} ({partitionedQuotations.oldReal.length + partitionedQuotations.oldMock.length})
+                </h3>
+              </div>
+              <div className="space-y-4">
+                {partitionedQuotations.oldReal.map((order) => renderQuotationCard(order, false))}
+                {partitionedQuotations.oldMock.map((order) => renderQuotationCard(order, true))}
+              </div>
+            </div>
+          )}
+
+          {/* Empty state if any */}
+          {!partitionedQuotations.hasRecent && !partitionedQuotations.hasOld && (
+            <div className={`p-12 text-center rounded-[32px] border ${isDarkMode ? 'bg-supplyx-dark border-white/5' : 'bg-white border-zinc-100 shadow-sm'}`}>
+              <FileText className="w-12 h-12 text-zinc-400 mx-auto mb-4" />
+              <p className={`text-sm font-black uppercase tracking-widest ${isDarkMode ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                {language === 'PT' ? 'Nenhum pedido de cotação encontrado' : 'No quotation requests found'}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="hidden">
           {displayedQuotations.map((order) => (
             <motion.div 
               key={order.id} 
@@ -3551,6 +4117,40 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           <Zap className="absolute right-0 bottom-0 opacity-5 w-32 h-32 -mb-8 -mr-8 group-hover:scale-110 transition-transform" />
         </div>
       </div>
+
+      {selectedRealQuoteForPreview && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-zinc-950/85 backdrop-blur-sm">
+          <div 
+            className={`w-full max-w-[950px] max-h-[92vh] rounded-[32px] shadow-2xl overflow-hidden flex flex-col ${
+              isDarkMode ? 'bg-zinc-900 border border-white/5 text-white' : 'bg-white text-zinc-950'
+            }`}
+          >
+            {/* Header */}
+            <div className="p-6 border-b border-zinc-200 dark:border-white/5 flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50">
+              <div className="flex items-center gap-3">
+                <FileText className="w-6 h-6 text-supplyx-blue" />
+                <h3 className={`font-black uppercase tracking-tight italic ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                  {language === 'PT' ? 'Visualizar Cotação/Pedido' : 'View Quotation/Order'}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setSelectedRealQuoteForPreview(null)}
+                className={`p-2 rounded-xl transition-all active:scale-95 ${
+                  isDarkMode ? 'hover:bg-white/5 text-zinc-400 hover:text-white' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-900'
+                }`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {/* Document Content */}
+            <div className="flex-grow overflow-auto p-4 sm:p-8 bg-zinc-100 dark:bg-zinc-950 flex flex-col items-center">
+              <div className="max-w-[210mm] w-full bg-white rounded-2xl shadow-xl p-4 sm:p-8 text-zinc-900">
+                <QuotationDocument data={getPreviewData(selectedRealQuoteForPreview)} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ProfileModal 
         userId={viewingProfileId || ''}

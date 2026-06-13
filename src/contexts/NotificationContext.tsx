@@ -20,6 +20,81 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
+export const getNotificationRoute = (n: any) => {
+  const type = (n.type || '').toLowerCase();
+  const title = (n.title || '').toLowerCase();
+  const message = (n.message || '').toLowerCase();
+  
+  // 1. If it's a message or chat notification
+  if (n.chatId || title.includes('mensagem') || title.includes('message') || type === 'msg' || title.includes('💬')) {
+    return {
+      tab: 'Mensagens',
+      payload: n.chatId ? { chatId: n.chatId } : undefined
+    };
+  }
+
+  // 2. If it is high efficiency carrier / logistics / occurrences / incidents
+  if (
+    type === 'logistics' || 
+    title.includes('ocorrência') || 
+    title.includes('incident') || 
+    title.includes('transportadora') || 
+    title.includes('carrier') || 
+    message.includes('cargo') || 
+    message.includes('delivery') || 
+    message.includes('entrega') || 
+    message.includes('logística') || 
+    title.includes('⚠️') || 
+    title.includes('🏆')
+  ) {
+    return {
+      tab: 'Logística',
+      payload: { subTab: 'requests_list' }
+    };
+  }
+
+  // 3. If it's quote / quote_request / rfq / orders
+  if (
+    type === 'rfq' || 
+    type === 'quote_request' || 
+    type === 'order' || 
+    type === 'quote' || 
+    title.includes('cotação') || 
+    title.includes('pedido') || 
+    title.includes('quote') || 
+    title.includes('rfq') || 
+    message.includes('cotação') || 
+    message.includes('pedido')
+  ) {
+    return {
+      tab: 'Pedidos / Cotações',
+      payload: undefined
+    };
+  }
+
+  // 4. If supplier
+  if (type === 'supplier' || title.includes('fornecedor') || title.includes('supplier')) {
+    return {
+      tab: 'Fornecedores',
+      payload: undefined
+    };
+  }
+
+  // 5. If sale / promotion / product
+  if (type === 'promotion' || title.includes('promoção') || title.includes('promo') || title.includes('sale') || title.includes('⚡')) {
+    return {
+      tab: 'Produtos / Materiais',
+      payload: undefined
+    };
+  }
+
+  // Default to Dashboard
+  return {
+    tab: 'Dashboard',
+    payload: undefined
+  };
+};
+
 export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkMode?: boolean; language?: 'PT' | 'EN' }> = ({ children, isDarkMode = true, language = 'PT' }) => {
   const { user } = useAuth();
   const [permission, setPermission] = useState<NotificationPermission>(
@@ -383,7 +458,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
               isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100'
             }`}
             onClick={() => {
-              window.dispatchEvent(new CustomEvent('navigate-to-messages', { detail: { chatId: activeNotification.chatId } }));
+              const route = getNotificationRoute(activeNotification);
+              window.dispatchEvent(new CustomEvent('navigate-app', { 
+                detail: { tab: route.tab, payload: route.payload } 
+              }));
               setActiveNotification(null);
             }}
           >

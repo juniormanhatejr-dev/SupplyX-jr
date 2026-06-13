@@ -241,51 +241,76 @@ OrderRow.displayName = 'OrderRow';
 
 const calculateMozambiqueDistance = (origin: string, destination: string): number => {
   if (!origin || !destination) return 0;
-  const o = origin.toLowerCase();
-  const d = destination.toLowerCase();
+  const o = origin.toLowerCase().trim();
+  const d = destination.toLowerCase().trim();
   
-  const getCity = (val: string) => {
-    if (val.includes('maputo') || val.includes('matola')) return 'maputo';
-    if (val.includes('beira') || val.includes('sofala')) return 'beira';
-    if (val.includes('nampula')) return 'nampula';
-    if (val.includes('nacala')) return 'nacala';
-    if (val.includes('tete')) return 'tete';
-    if (val.includes('quelimane') || val.includes('zambezia')) return 'quelimane';
-    if (val.includes('pemba') || val.includes('cabo')) return 'pemba';
-    if (val.includes('lichinga') || val.includes('niassa')) return 'lichinga';
-    if (val.includes('chimoio') || val.includes('manica')) return 'chimoio';
-    if (val.includes('xai') || val.includes('gaza')) return 'xai-xai';
-    if (val.includes('inhambane')) return 'inhambane';
-    return '';
+  const MOZ_CITIES: Record<string, { lat: number; lng: number }> = {
+    'maputo': { lat: -25.9692, lng: 32.5732 },
+    'matola': { lat: -25.9622, lng: 32.4589 },
+    'xai-xai': { lat: -25.0454, lng: 33.6442 },
+    'gaza': { lat: -25.0454, lng: 33.6442 },
+    'inhambane': { lat: -23.8650, lng: 35.3833 },
+    'maxixe': { lat: -23.8597, lng: 35.3472 },
+    'beira': { lat: -19.8436, lng: 34.8794 },
+    'sofala': { lat: -19.8436, lng: 34.8794 },
+    'chimoio': { lat: -19.1164, lng: 33.4833 },
+    'manica': { lat: -19.1164, lng: 33.4833 },
+    'tete': { lat: -16.1564, lng: 33.5867 },
+    'quelimane': { lat: -17.8786, lng: 36.8883 },
+    'zambezia': { lat: -17.8786, lng: 36.8883 },
+    'nampula': { lat: -15.1167, lng: 39.2667 },
+    'nacala': { lat: -14.5428, lng: 40.6853 },
+    'pemba': { lat: -12.9775, lng: 40.5178 },
+    'cabo delgado': { lat: -12.9775, lng: 40.5178 },
+    'lichinga': { lat: -13.3128, lng: 35.2406 },
+    'niassa': { lat: -13.3128, lng: 35.2406 },
+    'angoche': { lat: -16.2306, lng: 39.9072 },
+    'mocuba': { lat: -16.8375, lng: 36.9856 },
+    'gurue': { lat: -15.4674, lng: 36.9791 },
+    'cuamba': { lat: -14.8031, lng: 36.5372 },
+    'montepuez': { lat: -13.1256, lng: 38.9997 }
   };
 
-  const oCity = getCity(o);
-  const dCity = getCity(d);
+  const getCoordinates = (val: string) => {
+    for (const city of Object.keys(MOZ_CITIES)) {
+      if (val.includes(city)) {
+        return MOZ_CITIES[city];
+      }
+    }
+    return null;
+  };
 
-  if (!oCity || !dCity) {
+  const coord1 = getCoordinates(o);
+  const coord2 = getCoordinates(d);
+
+  if (!coord1 || !coord2) {
+    // Elegant fallback pseudo-distance calculation based on string hashing if city coordinates are unknown
     let hash = 0;
     for (let i = 0; i < o.length; i++) hash += o.charCodeAt(i);
     for (let i = 0; i < d.length; i++) hash += d.charCodeAt(i);
     return (hash % 850) + 40;
   }
 
-  if (oCity === dCity) return 15;
+  // Haversine formula calculation:
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = ((coord2.lat - coord1.lat) * Math.PI) / 180;
+  const dLng = ((coord2.lng - coord1.lng) * Math.PI) / 180;
+  
+  const lat1Rad = (coord1.lat * Math.PI) / 180;
+  const lat2Rad = (coord2.lat * Math.PI) / 180;
 
-  const distances: Record<string, Record<string, number>> = {
-    'maputo': { 'beira': 1020, 'nampula': 1940, 'nacala': 2130, 'tete': 1520, 'quelimane': 1350, 'pemba': 2340, 'lichinga': 2280, 'chimoio': 940, 'xai-xai': 210, 'inhambane': 470 },
-    'beira': { 'maputo': 1020, 'nampula': 950, 'nacala': 1140, 'tete': 580, 'quelimane': 420, 'pemba': 1420, 'lichinga': 1360, 'chimoio': 200, 'xai-xai': 815, 'inhambane': 672 },
-    'nampula': { 'maputo': 1940, 'beira': 950, 'nacala': 190, 'tete': 880, 'quelimane': 540, 'pemba': 400, 'lichinga': 680, 'chimoio': 1144, 'xai-xai': 1730, 'inhambane': 1540 },
-    'nacala': { 'maputo': 2130, 'beira': 1140, 'nampula': 190, 'tete': 1070, 'quelimane': 730, 'pemba': 450, 'lichinga': 870, 'chimoio': 1334, 'xai-xai': 1920, 'inhambane': 1730 },
-    'tete': { 'maputo': 1520, 'beira': 580, 'nampula': 880, 'nacala': 1070, 'quelimane': 640, 'pemba': 1280, 'lichinga': 820, 'chimoio': 390, 'xai-xai': 1310, 'inhambane': 1120 },
-    'quelimane': { 'maputo': 1350, 'beira': 420, 'nampula': 540, 'nacala': 730, 'tete': 640, 'pemba': 940, 'lichinga': 1220, 'chimoio': 610, 'xai-xai': 1140, 'inhambane': 950 },
-    'pemba': { 'maputo': 2340, 'beira': 1420, 'nampula': 400, 'nacala': 450, 'tete': 1280, 'quelimane': 940, 'lichinga': 1080, 'chimoio': 1614, 'xai-xai': 2130, 'inhambane': 1940 },
-    'lichinga': { 'maputo': 2280, 'beira': 1360, 'nampula': 680, 'nacala': 870, 'tete': 820, 'quelimane': 1220, 'pemba': 1080, 'chimoio': 1550, 'xai-xai': 2070, 'inhambane': 1880 },
-    'chimoio': { 'maputo': 940, 'beira': 200, 'nampula': 1144, 'nacala': 1334, 'tete': 390, 'quelimane': 610, 'pemba': 1614, 'lichinga': 1550, 'xai-xai': 735, 'inhambane': 590 },
-    'xai-xai': { 'maputo': 210, 'beira': 815, 'nampula': 1730, 'nacala': 1920, 'tete': 1310, 'quelimane': 1140, 'pemba': 2130, 'lichinga': 2070, 'chimoio': 735, 'inhambane': 260 },
-    'inhambane': { 'maputo': 470, 'beira': 672, 'nampula': 1540, 'nacala': 1730, 'tete': 1120, 'quelimane': 950, 'pemba': 1940, 'lichinga': 1880, 'chimoio': 590, 'xai-xai': 260 }
-  };
+  const aFactor = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1Rad) * Math.cos(lat2Rad) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  
+  const cFactor = 2 * Math.atan2(Math.sqrt(aFactor), Math.sqrt(1 - aFactor));
+  const straightLineDistance = R * cFactor;
 
-  return distances[oCity]?.[dCity] || distances[dCity]?.[oCity] || 320;
+  // Curving/Winding factor coefficient of 1.30 used representatively for land freight route tracking (e.g. N1 roads)
+  const estimatedRoadDistance = straightLineDistance * 1.30;
+  
+  return Math.round(estimatedRoadDistance);
 };
 
 export default function OrdersView({ startWithForm = false, onFormClose, onNavigate, isDarkMode, language, userType = 'buyer' }: OrdersViewProps) {

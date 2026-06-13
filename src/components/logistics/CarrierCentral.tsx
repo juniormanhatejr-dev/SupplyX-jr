@@ -42,7 +42,7 @@ export default function CarrierCentral({
   profileName
 }: CarrierCentralProps) {
   const { user, profile } = useAuth();
-  const carrierName = profile?.companyName || profileName || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Minha Transportadora');
+  const carrierName = profile?.companyName || profile?.name || profileName || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Minha Transportadora');
 
   // Setup tabs inside Carrier Central: 'available' | 'active' | 'tracking' | 'chat'
   const [carrierTab, setCarrierTab] = useState<'available' | 'active' | 'tracking' | 'chat'>('active');
@@ -182,12 +182,23 @@ export default function CarrierCentral({
   // Filters computed based on carrier assignment
   const availableLoads = requests.filter(r => r.status === 'Em concurso');
   
-  const activeDeliveries = requests.filter(r => 
-    r.status !== 'Em concurso' && 
-    r.status !== 'Pago' && 
-    r.status !== 'Pendente' &&
-    (r.assignedCarrier === carrierName || r.assignedCarrier === profileName || !r.assignedCarrier)
-  );
+  const activeDeliveries = requests.filter(r => {
+    if (r.status === 'Em concurso' || r.status === 'Pago' || r.status === 'Pendente') return false;
+    if (!r.assignedCarrier) return true;
+    
+    const reqCarrier = r.assignedCarrier.trim().toLowerCase();
+    const myName = carrierName.trim().toLowerCase();
+    const myProfileName = (profileName || '').trim().toLowerCase();
+    const myDisplayName = (user?.displayName || '').trim().toLowerCase();
+    const myCompName = (profile?.companyName || '').trim().toLowerCase();
+    const myProfName = (profile?.name || '').trim().toLowerCase();
+
+    return reqCarrier === myName || 
+           reqCarrier === myProfileName || 
+           reqCarrier === myDisplayName || 
+           reqCarrier === myCompName || 
+           reqCarrier === myProfName;
+  });
 
   // Set first load as default selection if none
   useEffect(() => {
@@ -223,7 +234,8 @@ export default function CarrierCentral({
   // Move status forward
   const handleAdvanceStatus = (loadId: string, currentStatus: string) => {
     let nextStatus = 'Em recolha';
-    if (currentStatus === 'Em recolha') nextStatus = 'Em trânsito';
+    if (currentStatus === 'Atribuído') nextStatus = 'Em recolha';
+    else if (currentStatus === 'Em recolha') nextStatus = 'Em trânsito';
     else if (currentStatus === 'Em trânsito') nextStatus = 'Entregue';
     else if (currentStatus === 'Entregue') return; // terminal
 
@@ -331,7 +343,16 @@ export default function CarrierCentral({
   };
 
   // Active chat listing selection
-  const chatRooms = requests.filter(r => r.status !== 'Em concurso' && r.status !== 'Pendente');
+  const chatRooms = requests.filter(r => {
+    if (r.status === 'Em concurso' || r.status === 'Pendente') return false;
+    if (!r.assignedCarrier) return true;
+    
+    const reqCarrier = r.assignedCarrier.trim().toLowerCase();
+    const myName = carrierName.trim().toLowerCase();
+    const myCompName = (profile?.companyName || '').trim().toLowerCase();
+    const myProfName = (profile?.name || '').trim().toLowerCase();
+    return reqCarrier === myName || reqCarrier === myCompName || reqCarrier === myProfName;
+  });
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-4 gap-8 text-left animate-in fade-in duration-300">
@@ -672,12 +693,14 @@ export default function CarrierCentral({
                               ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' 
                               : load.status === 'Em recolha' 
                                 ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' 
-                                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : load.status === 'Atribuído'
+                                  ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20 animate-pulse'
+                                  : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                           }`}>
                             {load.status}
                           </span>
                         </div>
-                        <h4 className={`text-md font-black italic uppercase text-white leading-tight`}>{load.tipoCarga}</h4>
+                        <h4 className={`text-md font-black italic uppercase ${isDarkMode ? 'text-white' : 'text-zinc-900'} leading-tight`}>{load.tipoCarga}</h4>
                         <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">
                           🏁 {load.origem.split(',')[0]} ➔ {load.destino.split(',')[0]}
                         </p>
@@ -694,6 +717,19 @@ export default function CarrierCentral({
                         </div>
 
                         <div className="flex gap-2">
+                          {load.status === 'Atribuído' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAdvanceStatus(load.id, 'Atribuído');
+                              }}
+                              className="px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider shadow-lg transition-all active:scale-95 flex items-center gap-1"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              {language === 'PT' ? 'Aceitar e Recolher' : 'Accept & Pickup'}
+                            </button>
+                          )}
+
                           {load.status === 'Em recolha' && (
                             <button
                               onClick={(e) => {

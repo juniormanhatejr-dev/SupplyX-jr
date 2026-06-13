@@ -32,6 +32,9 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
     deleteAllNotifications
   } = useNotifications();
 
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [selectedNotifIds, setSelectedNotifIds] = useState<string[]>([]);
+
   const t = {
     PT: {
       title: 'Centro de Notificações',
@@ -45,6 +48,12 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
       new: 'NOVO',
       justNow: 'Agora',
       ago: 'atrás',
+      bulkActions: 'Ações em Massa',
+      cancelSelection: 'Cancelar Seleção',
+      selectAll: 'Selecionar Todas',
+      deselectAll: 'Desmarcar Todas',
+      deleteBtnSelected: 'Eliminar Selecionados',
+      markAsReadSelected: 'Marcar Selecionados Lidas',
       priorities: {
         high: 'ALTA',
         medium: 'MÉDIA',
@@ -63,6 +72,12 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
       new: 'NEW',
       justNow: 'Just now',
       ago: 'ago',
+      bulkActions: 'Bulk Actions',
+      cancelSelection: 'Cancel Selection',
+      selectAll: 'Select All',
+      deselectAll: 'Deselect All',
+      deleteBtnSelected: 'Delete Selected',
+      markAsReadSelected: 'Mark Selected Read',
       priorities: {
         high: 'HIGH',
         medium: 'MEDIUM',
@@ -70,6 +85,30 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
       }
     }
   }[language];
+
+  const handleBulkDeleteSelected = async () => {
+    if (selectedNotifIds.length === 0) return;
+    try {
+      const promises = selectedNotifIds.map(id => deleteNotification(id));
+      await Promise.all(promises);
+      setSelectedNotifIds([]);
+      setIsMultiSelectMode(false);
+    } catch (err) {
+      console.error('[NotificationsView] Error bulk deleting selected:', err);
+    }
+  };
+
+  const handleBulkMarkReadSelected = async () => {
+    if (selectedNotifIds.length === 0) return;
+    try {
+      const promises = selectedNotifIds.map(id => markNotificationAsRead(id));
+      await Promise.all(promises);
+      setSelectedNotifIds([]);
+      setIsMultiSelectMode(false);
+    } catch (err) {
+      console.error('[NotificationsView] Error bulk marking read selected:', err);
+    }
+  };
 
   const formatTime = (createdAt: any) => {
     if (!createdAt) return t.justNow;
@@ -124,31 +163,92 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
           <p className="text-zinc-500 text-[11px] font-black uppercase tracking-[0.2em] mt-2">{t.subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
-          {notifications.some(n => !n.read) && (
-            <button 
-              onClick={() => markAllNotificationsAsRead()}
+          {/* Multi-Select Toggle Button */}
+          {notifications.length > 0 && (
+            <button
+              onClick={() => {
+                setIsMultiSelectMode(!isMultiSelectMode);
+                setSelectedNotifIds([]);
+              }}
               className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg border ${
-                isDarkMode 
-                  ? 'bg-white/5 hover:bg-white/10 text-zinc-300 border-white/5' 
-                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-zinc-200'
+                isMultiSelectMode
+                  ? 'bg-supplyx-blue text-white border-supplyx-blue'
+                  : isDarkMode
+                    ? 'bg-white/5 hover:bg-white/10 text-zinc-300 border-white/5'
+                    : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-zinc-200'
               }`}
             >
-              <CheckCheck className="w-4 h-4 text-supplyx-blue" />
-              {t.markAllRead}
+              {isMultiSelectMode ? t.cancelSelection : t.bulkActions}
             </button>
           )}
-          {notifications.length > 0 && (
-            <button 
-              onClick={() => deleteAllNotifications()}
-              className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg border ${
-                isDarkMode 
-                  ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/10' 
-                  : 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-100'
-              }`}
-            >
-              <Trash2 className="w-4 h-4" />
-              {t.deleteAll}
-            </button>
+
+          {isMultiSelectMode ? (
+            <>
+              <button
+                onClick={() => setSelectedNotifIds(notifications.map(n => n.id))}
+                className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all border ${
+                  isDarkMode ? 'bg-zinc-900 text-zinc-300 border-white/5' : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                }`}
+              >
+                {t.selectAll}
+              </button>
+              <button
+                onClick={() => setSelectedNotifIds([])}
+                className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all border ${
+                  isDarkMode ? 'bg-zinc-900 text-zinc-300 border-white/5' : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                }`}
+              >
+                {t.deselectAll}
+              </button>
+
+              {selectedNotifIds.length > 0 && (
+                <>
+                  <button
+                    onClick={handleBulkMarkReadSelected}
+                    className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/10"
+                  >
+                    <CheckCheck className="w-4 h-4 text-emerald-400" />
+                    {t.markAsReadSelected} ({selectedNotifIds.length})
+                  </button>
+                  <button
+                    onClick={handleBulkDeleteSelected}
+                    className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/10"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {t.deleteBtnSelected} ({selectedNotifIds.length})
+                  </button>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {notifications.some(n => !n.read) && (
+                <button 
+                  onClick={() => markAllNotificationsAsRead()}
+                  className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg border ${
+                    isDarkMode 
+                      ? 'bg-white/5 hover:bg-white/10 text-zinc-300 border-white/5' 
+                      : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-zinc-200'
+                  }`}
+                >
+                  <CheckCheck className="w-4 h-4 text-supplyx-blue" />
+                  {t.markAllRead}
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button 
+                  onClick={() => deleteAllNotifications()}
+                  className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg border ${
+                    isDarkMode 
+                      ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/10' 
+                      : 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-100'
+                  }`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {t.deleteAll}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -162,96 +262,125 @@ export default function NotificationsView({ isDarkMode, language, userType }: No
             <p className="text-[11px] font-black text-zinc-500 uppercase tracking-[0.3em]">{t.empty}</p>
           </div>
         ) : (
-          notifications.map((n) => (
-            <motion.div 
-              layout
-              key={n.id}
-              onClick={() => {
-                if (!n.read) markNotificationAsRead(n.id);
-                const route = getNotificationRoute(n);
-                window.dispatchEvent(new CustomEvent('navigate-app', { 
-                  detail: { tab: route.tab, payload: route.payload } 
-                }));
-              }}
-              className={`p-10 rounded-[48px] border transition-all relative group overflow-hidden cursor-pointer ${
-                isDarkMode 
-                  ? `${n.read ? 'bg-supplyx-dark border-white/5 shadow-3xl' : 'bg-supplyx-dark border-supplyx-blue shadow-2xl shadow-blue-500/10'}` 
-                  : `${n.read ? 'bg-white border-zinc-100' : 'bg-brand/5 border-brand/20 shadow-xl shadow-zinc-200/20'}`
-              }`}
-            >
-              {!n.read && (
-                <div className="absolute top-0 right-0 w-32 h-32 overflow-hidden pointer-events-none">
-                  <div className="absolute top-6 right-[-40px] w-48 py-2 bg-supplyx-blue text-white text-[9px] font-black uppercase tracking-[0.3em] transform rotate-45 flex items-center justify-center shadow-2xl">
-                    {t.new}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex flex-col sm:flex-row gap-10">
-                <div className={`w-20 h-20 rounded-[32px] shrink-0 flex items-center justify-center transition-all duration-500 group-hover:scale-110 shadow-2xl ${
-                  isDarkMode ? 'bg-supplyx-deep shadow-black' : 'bg-zinc-50 focus:bg-zinc-100'
-                }`}>
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${getColorClass(n.type)} shadow-inner`}>
-                    {getIcon(n.type)}
-                  </div>
-                </div>
-
-                <div className="flex-1">
-                  <div className="flex flex-wrap items-center gap-4 mb-4">
-                    <h3 className={`text-xl font-black uppercase italic tracking-tight ${isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>
-                      {n.title}
-                    </h3>
-                    <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] border ${
-                      n.priority === 'high' ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' :
-                      n.priority === 'medium' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-zinc-500/10 text-zinc-500 border-white/5'
+          notifications.map((n) => {
+            const isSelected = selectedNotifIds.includes(n.id);
+            return (
+              <motion.div 
+                layout
+                key={n.id}
+                onClick={() => {
+                  if (isMultiSelectMode) {
+                    if (isSelected) {
+                      setSelectedNotifIds(selectedNotifIds.filter(id => id !== n.id));
+                    } else {
+                      setSelectedNotifIds([...selectedNotifIds, n.id]);
+                    }
+                    return;
+                  }
+                  if (!n.read) markNotificationAsRead(n.id);
+                  const route = getNotificationRoute(n);
+                  window.dispatchEvent(new CustomEvent('navigate-app', { 
+                    detail: { tab: route.tab, payload: route.payload } 
+                  }));
+                }}
+                className={`p-10 rounded-[48px] border transition-all relative group overflow-hidden cursor-pointer flex gap-6 items-center ${
+                  isDarkMode 
+                    ? `${isSelected ? 'bg-supplyx-blue/10 border-supplyx-blue shadow-2xl' : n.read ? 'bg-supplyx-dark border-white/5 shadow-3xl' : 'bg-supplyx-dark border-supplyx-blue shadow-2xl shadow-blue-500/10'}` 
+                    : `${isSelected ? 'bg-brand/10 border-brand/50 shadow-xl' : n.read ? 'bg-white border-zinc-100' : 'bg-brand/5 border-brand/20 shadow-xl shadow-zinc-200/20'}`
+                }`}
+              >
+                {isMultiSelectMode && (
+                  <div className="flex items-center justify-center pr-2 shrink-0 pointer-events-none">
+                    <div className={`w-8 h-8 rounded-2xl border-2 flex items-center justify-center transition-all ${
+                      isSelected
+                        ? 'bg-supplyx-blue border-supplyx-blue text-white'
+                        : isDarkMode ? 'border-white/10 bg-black/20' : 'border-zinc-300 bg-white'
                     }`}>
-                      {t.priority}: {t.priorities[n.priority || 'medium']}
+                      {isSelected && (
+                        <CheckCircle2 className="w-5 h-5 text-white" />
+                      )}
                     </div>
                   </div>
+                )}
 
-                  <p className={`text-base font-medium leading-relaxed mb-10 max-w-2xl ${isDarkMode ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                    {n.message}
-                  </p>
+                <div className="flex-1 min-w-0">
+                  {!n.read && !isMultiSelectMode && (
+                    <div className="absolute top-0 right-0 w-32 h-32 overflow-hidden pointer-events-none">
+                      <div className="absolute top-6 right-[-40px] w-48 py-2 bg-supplyx-blue text-white text-[9px] font-black uppercase tracking-[0.3em] transform rotate-45 flex items-center justify-center shadow-2xl">
+                        {t.new}
+                      </div>
+                    </div>
+                  )}
 
-                  <div className="flex flex-wrap items-center justify-between gap-6 pointer-events-auto">
-                    <div className="flex items-center gap-6 text-[10px] font-black uppercase text-zinc-500 tracking-[0.2em]">
-                       <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-supplyx-blue" /> {formatTime(n.createdAt)}</span>
-                       <span className="flex items-center gap-2"><Calendar className="w-4 h-4" /> {formatDate(n.createdAt)}</span>
+                  <div className="flex flex-col sm:flex-row gap-10">
+                    <div className={`w-20 h-20 rounded-[32px] shrink-0 flex items-center justify-center transition-all duration-500 group-hover:scale-110 shadow-2xl ${
+                      isDarkMode ? 'bg-supplyx-deep shadow-black' : 'bg-zinc-50 focus:bg-zinc-100'
+                    }`}>
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${getColorClass(n.type)} shadow-inner`}>
+                        {getIcon(n.type)}
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      {!n.read && (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            markNotificationAsRead(n.id);
-                          }}
-                          className="px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-supplyx-blue text-white shadow-xl shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all"
-                        >
-                          {t.markRead}
-                        </button>
-                      )}
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteNotification(n.id);
-                        }}
-                        className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all hover:scale-105 active:scale-95 flex items-center gap-2 ${
-                          isDarkMode 
-                            ? 'bg-rose-500/5 border-rose-500/20 text-rose-400 hover:bg-rose-500/10' 
-                            : 'bg-rose-50 border-rose-100 text-rose-600 hover:bg-rose-100'
-                        }`}
-                        title={t.delete}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        {t.delete}
-                      </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-4 mb-4">
+                        <h3 className={`text-xl font-black uppercase italic tracking-tight truncate ${isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                          {n.title}
+                        </h3>
+                        <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] border ${
+                          n.priority === 'high' ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' :
+                          n.priority === 'medium' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-zinc-500/10 text-zinc-500 border-white/5'
+                        }`}>
+                          {t.priority}: {t.priorities[n.priority || 'medium']}
+                        </div>
+                      </div>
+
+                      <p className={`text-base font-medium leading-relaxed mb-10 max-w-2xl ${isDarkMode ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                        {n.message}
+                      </p>
+
+                      <div className="flex flex-wrap items-center justify-between gap-6 pointer-events-auto">
+                        <div className="flex items-center gap-6 text-[10px] font-black uppercase text-zinc-500 tracking-[0.2em]">
+                          <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-supplyx-blue" /> {formatTime(n.createdAt)}</span>
+                          <span className="flex items-center gap-2"><Calendar className="w-4 h-4" /> {formatDate(n.createdAt)}</span>
+                        </div>
+
+                        {!isMultiSelectMode && (
+                          <div className="flex items-center gap-4">
+                            {!n.read && (
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  markNotificationAsRead(n.id);
+                                }}
+                                className="px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-supplyx-blue text-white shadow-xl shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all"
+                              >
+                                {t.markRead}
+                              </button>
+                            )}
+                            <button 
+                              onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteNotification(n.id);
+                              }}
+                              className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all hover:scale-105 active:scale-95 flex items-center gap-2 ${
+                                isDarkMode 
+                                  ? 'bg-rose-500/5 border-rose-500/20 text-rose-400 hover:bg-rose-500/10' 
+                                  : 'bg-rose-50 border-rose-100 text-rose-600 hover:bg-rose-100'
+                              }`}
+                              title={t.delete}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              {t.delete}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          ))
+              </motion.div>
+            );
+          })
         )}
       </div>
     </motion.div>

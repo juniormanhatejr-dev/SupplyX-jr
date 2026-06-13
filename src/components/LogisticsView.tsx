@@ -200,8 +200,25 @@ export default function LogisticsView({
 
   // Synchronize triggers to local storage and Firestore
   const syncRequestsToLocalStorage = (list: CargoRequest[]) => {
-    localStorage.setItem('supplyx_freight_requests', JSON.stringify(list));
-    setCustomRequests(list);
+    // Merge the changes in the incoming 'list' into the existing 'customRequests'
+    setCustomRequests((prevRequests) => {
+      const merged = prevRequests.map(item => {
+        const updatedItem = list.find(l => l.id === item.id);
+        return updatedItem ? updatedItem : item;
+      });
+
+      // Include any brand new items in 'list' that are not in prevRequests
+      list.forEach(req => {
+        if (!merged.some(m => m.id === req.id)) {
+          merged.unshift(req);
+        }
+      });
+
+      localStorage.setItem('supplyx_freight_requests', JSON.stringify(merged));
+      return merged;
+    });
+
+    // Sync each of the modified/passed items to Firestore
     list.forEach((req) => {
       syncRequestToFirestore(req);
     });

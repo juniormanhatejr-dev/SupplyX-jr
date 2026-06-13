@@ -297,6 +297,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
     const unsubscribeNotifs = onSnapshot(qNotifs, (snapshot) => {
       let fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
       
+      // Filter out deleted notifications (which we mark with deleted: true to prevent automatic re-creation by syncRealtimeAlerts)
+      fetched = fetched.filter((n: any) => !n.deleted);
+      
       // Sort in memory by createdAt descending to avoid index errors
       fetched.sort((a, b) => {
         const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
@@ -321,6 +324,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
         snapshot.docChanges().forEach((change) => {
           if (change.type === 'added') {
             const notif = change.doc.data();
+            if (notif.deleted) return;
             console.log(`[NotificationContext] Dynamic new system/alert notification received: "${notif.title}"`);
             triggerNotification(notif.title, notif.message);
           }
@@ -406,11 +410,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
   };
 
   const deleteNotification = async (notificationId: string) => {
-    console.log(`[NotificationContext] Deleting notification ${notificationId}...`);
+    console.log(`[NotificationContext] Marking notification ${notificationId} as deleted...`);
     try {
       const ref = doc(db, 'notifications', notificationId);
-      await deleteDoc(ref);
-      console.log(`[NotificationContext] Notification ${notificationId} deleted successfully.`);
+      // We set deleted: true dynamically on the document so it is excluded from view but prevents automatic recreation
+      await setDoc(ref, { deleted: true }, { merge: true });
+      console.log(`[NotificationContext] Notification ${notificationId} marked as deleted: true successfully.`);
     } catch (error) {
       console.error('[NotificationContext] Error deleting notification:', error);
     }
@@ -418,16 +423,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
 
   const deleteAllNotifications = async () => {
     if (!user) return;
-    console.log('[NotificationContext] Deleting all notifications...');
+    console.log('[NotificationContext] Marking all active notifications as deleted...');
     try {
       if (notifications.length === 0) return;
       const batch = writeBatch(db);
       notifications.forEach((n) => {
         const ref = doc(db, 'notifications', n.id);
-        batch.delete(ref);
+        batch.set(ref, { deleted: true }, { merge: true });
       });
       await batch.commit();
-      console.log(`[NotificationContext] All ${notifications.length} notifications deleted successfully.`);
+      console.log(`[NotificationContext] All ${notifications.length} notifications marked as deleted successfully.`);
     } catch (error) {
       console.error('[NotificationContext] Error deleting all notifications:', error);
     }

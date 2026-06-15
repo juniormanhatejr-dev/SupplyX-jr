@@ -147,9 +147,7 @@ export default function CreateRequestPage({
 
   // Excel-like spreadsheet state of products and quantities (Satisfies user Excel requirement #1)
   const [spreadsheetItems, setSpreadsheetItems] = useState<SpreadsheetItem[]>([
-    { id: '1', name: 'Varões de Aço Corrugado de 12mm', quantity: '150 varas' },
-    { id: '2', name: 'Sacos de Cimento CP-IV 50kg', quantity: '200 sacos' },
-    { id: '3', name: 'Argamassa Forte para Acabamento', quantity: '50 sacos' }
+    { id: '1', name: '', quantity: '' }
   ]);
   const [isEstimatingWithAI, setIsEstimatingWithAI] = useState(false);
   const [aiEstimationError, setAiEstimationError] = useState<string | null>(null);
@@ -230,11 +228,11 @@ export default function CreateRequestPage({
 
   // States
   const [formData, setFormData] = useState({
-    tipoCarga: 'Cimento CP-IV',
-    quantidade: '1 Lote',
-    peso: '18 Toneladas',
-    volume: '30 m³',
-    dimensions: '12m x 2.4m x 2.2m',
+    tipoCarga: '',
+    quantidade: '',
+    peso: '',
+    volume: '',
+    dimensions: '',
     fragile: false,
     origem: 'Porto de Maputo, Moçambique',
     destino: 'Nampula, Moçambique',

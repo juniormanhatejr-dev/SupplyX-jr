@@ -26,6 +26,7 @@ import {
 import { CargoRequest, CommercialDriver, CarrierProposal, Occurrence } from './types';
 import { db, auth } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import { calculateVehicleRecommendation } from './vehicleRecommendation';
 import { collection, query, where, getDocs, getDoc, addDoc, updateDoc, doc, serverTimestamp, onSnapshot, setDoc } from 'firebase/firestore';
 
 interface DetailedRequestViewProps {
@@ -112,7 +113,7 @@ export default function DetailedRequestView({
   const [savedSignature, setSavedSignature] = useState<string>('');
 
   // Products and quantities sheet states for cubing card
-  const [cubingCardTab, setCubingCardTab] = useState<'spec' | 'products'>('spec');
+  const [cubingCardTab, setCubingCardTab] = useState<'spec' | 'products' | 'vehicle'>('spec');
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProductIndex, setEditingProductIndex] = useState<number | null>(null);
   const [productForm, setProductForm] = useState({
@@ -147,6 +148,15 @@ export default function DetailedRequestView({
       targetPrice: 'A definir por lance logístico'
     } as CargoRequest;
   }, [selectedRequestId, requests]);
+
+  // Vehicle recommendation fallback computation (Satisfies Backward Compatibility rule)
+  const vehicleRec = useMemo(() => {
+    const rawWeight = requestObj.peso || '1000 kg';
+    const rawVolume = requestObj.volume || '10 m³';
+    const rawDims = requestObj.dimensions || '5m x 2.2m x 2m';
+    
+    return calculateVehicleRecommendation(rawWeight, rawVolume, rawDims);
+  }, [requestObj]);
 
   // Parse products from custom field or dynamic tipoCarga
   const requestProducts = useMemo(() => {
@@ -1686,6 +1696,17 @@ export default function DetailedRequestView({
                       {language === 'PT' ? 'Produtos' : 'Products'}
                       <span className="bg-white/10 text-[8px] font-mono px-1 rounded-full">{requestProducts.length}</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setCubingCardTab('vehicle')}
+                      className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-md transition-all flex items-center gap-1.5 ${
+                        cubingCardTab === 'vehicle' 
+                          ? 'bg-supplyx-blue text-white' 
+                          : 'text-zinc-500 hover:text-zinc-400'
+                      }`}
+                    >
+                      {language === 'PT' ? 'Compatibilidade' : 'Compatibility'}
+                    </button>
                   </div>
                 </div>
 
@@ -1936,6 +1957,109 @@ export default function DetailedRequestView({
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {cubingCardTab === 'vehicle' && (
+                  <div className="space-y-4 text-left">
+                    <div className="p-4 rounded-2xl bg-zinc-950/40 border border-white/5 space-y-4">
+                      
+                      {/* Name of selection */}
+                      <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                        <div>
+                          <p className="text-[7.5px] font-black text-zinc-500 uppercase tracking-widest block">
+                            {language === 'PT' ? 'Veículo Recomendado' : 'Optimal Capacity Match'}
+                          </p>
+                          <h4 className="text-sm font-black text-white uppercase tracking-tight mt-1 truncate">
+                            {vehicleRec.recommendedVehicle}
+                          </h4>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[7px] text-zinc-500 font-bold uppercase">{language === 'PT' ? 'Pontuação' : 'Score'}</p>
+                          <p className="text-sm font-black text-supplyx-blue font-mono">{vehicleRec.vehicleCompatibilityScore}%</p>
+                        </div>
+                      </div>
+
+                      {/* Warnings if any */}
+                      {vehicleRec.warnings.length > 0 && (
+                        <div className="space-y-1.5 pt-1">
+                          {vehicleRec.warnings.map((warn, i) => {
+                            const isCrit = warn.includes('Overweight') || warn.includes('Oversized') || warn.includes('Incompatible');
+                            return (
+                              <div key={i} className={`p-2.5 rounded-lg text-[8px] font-bold uppercase tracking-wider border flex items-center gap-1.5 ${
+                                isCrit ? "bg-rose-500/10 text-rose-450 border-rose-500/15" : "bg-amber-500/10 text-amber-400 border-amber-500/15"
+                              }`}>
+                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                <span>{warn}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Weight Progress Bar */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[7px] font-black uppercase">
+                          <span className="text-zinc-500">{language === 'PT' ? 'Ocupação de Peso' : 'Weight Capacity Utilization'}</span>
+                          <span className={vehicleRec.utilizationWeightPercent > 90 ? 'text-rose-400' : 'text-supplyx-blue'}>
+                            {vehicleRec.utilizationWeightPercent}%
+                          </span>
+                        </div>
+                        <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              vehicleRec.utilizationWeightPercent > 90 ? 'bg-rose-500' : 'bg-supplyx-blue'
+                            }`}
+                            style={{ width: `${Math.min(100, vehicleRec.utilizationWeightPercent)}%` }}
+                          />
+                        </div>
+                        <p className="text-[7px] text-zinc-500 uppercase font-semibold">
+                          {language === 'PT' ? 'Capacidade Livre:' : 'Remaining Payload:'} {vehicleRec.remainingPayloadKg.toLocaleString('pt-BR')} kg
+                        </p>
+                      </div>
+
+                      {/* Volume Progress Bar */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[7px] font-black uppercase">
+                          <span className="text-zinc-500">{language === 'PT' ? 'Ocupação de Volume (m³)' : 'Volume Capacity Utilization'}</span>
+                          <span className={vehicleRec.utilizationVolumePercent > 90 ? 'text-rose-450 text-rose-450' : 'text-emerald-400'}>
+                            {vehicleRec.utilizationVolumePercent}%
+                          </span>
+                        </div>
+                        <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              vehicleRec.utilizationVolumePercent > 90 ? 'bg-rose-500' : 'bg-emerald-400'
+                            }`}
+                            style={{ width: `${Math.min(100, vehicleRec.utilizationVolumePercent)}%` }}
+                          />
+                        </div>
+                        <p className="text-[7px] text-zinc-500 uppercase font-semibold">
+                          {language === 'PT' ? 'Volume Livre:' : 'Remaining Volume:'} {vehicleRec.remainingVolumeM3} m³
+                        </p>
+                      </div>
+
+                      {/* Fleet alternatives list */}
+                      <div>
+                        <span className="text-[7px] font-black text-zinc-500 uppercase tracking-widest block mb-1">
+                          {language === 'PT' ? 'Outras Opções Compatíveis:' : 'Other Commercially Eligible Classes:'}
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {vehicleRec.alternativeVehicles.length > 0 ? (
+                            vehicleRec.alternativeVehicles.map(alt => (
+                              <span key={alt} className="px-1.5 py-0.5 rounded text-[7px] font-black bg-zinc-900 text-zinc-400 border border-white/5 uppercase">
+                                {alt}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-[7px] font-bold text-zinc-600 uppercase">
+                              {language === 'PT' ? 'Nenhuma alternativa viável' : 'Single suitable class only'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                    </div>
                   </div>
                 )}
               </div>

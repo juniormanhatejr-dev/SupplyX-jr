@@ -480,6 +480,80 @@ async function startServer() {
     destinationLng?: number;
   }>();
 
+  // AI Cargo Cubage & Weight Estimator endpoint (Satisfies Excel-like spreadsheet IA demands)
+  app.post('/api/logistics/estimate-cargo-weight', async (req, res) => {
+    const { products } = req.body;
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ error: 'Nenhum produto foi fornecido para a estimativa de cubagem.' });
+    }
+
+    try {
+      console.log(`[SERVER] Estimating cargo cubage and weight with Gemini... Products count: ${products.length}`);
+      const client = getGeminiClient();
+
+      const productDescriptions = products
+        .map((p, index) => `${index + 1}. Produto/Material: "${p.name || 'Material Misto'}", Quantidade: "${p.quantity || 'A definir'}"`)
+        .join('\n');
+
+      const systemInstruction = `
+        Você é um engenheiro de logística física de Moçambique especialista em cálculo de cubagem, volumes de embalagem e peso de mercadorias B2B.
+        Analise a lista de produtos dadas pelo usuário e suas quantidades. 
+        Com base no conhecimento técnico padrão de peso de materiais de construção, mercadorias e cargas industriais comuns, estime:
+        1. O peso total em toneladas (Toneladas) ou quilogramas (kg) se for leve. Por exemplo: "18 Toneladas" ou "1.5 Toneladas" ou "520 kg".
+        2. O volume cúbico estimado total em metros cúbicos (m³). Por exemplo: "32 m³".
+        3. As dimensões sugeridas para transporte (Comprimento x Largura x Altura em metros). Por exemplo: "6.0m x 2.4m x 1.8m" ou "12m x 2.4m x 2.2m".
+        4. Um tipo consolidado de carga/categoria (uma frase curta de até 4-5 palavras). Por exemplo: "Cimento CP-IV" ou "Betão e Argamassa" ou "Ferragens e Perfis C".
+        
+        Sua resposta DEVE ser um objeto JSON válido, contendo as chaves exatas: "peso", "volume", "dimensions", "tipoCarga", "quantidadeSumario".
+        Exemplo do formato JSON esperado:
+        {
+          "peso": "12 Toneladas",
+          "volume": "24 m³",
+          "dimensions": "6m x 2.4m x 2.0m",
+          "tipoCarga": "Cimento CP-IV e Argamassa",
+          "quantidadeSumario": "240 sacos compactados"
+        }
+      `;
+
+      const response = await client.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: `Lista de Produtos:\n${productDescriptions}`,
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              peso: { type: Type.STRING, description: 'Peso total estimado em toneladas ou kg, ex: "18 Toneladas"' },
+              volume: { type: Type.STRING, description: 'Volume cúbico estimado total em m³, ex: "30 m³"' },
+              dimensions: { type: Type.STRING, description: 'Dimensões sugeridas C x L x A em metros, ex: "12m x 2.4m x 2.2m"' },
+              tipoCarga: { type: Type.STRING, description: 'Nome consolidado ou categoria técnica curta do lote, ex: "Varões de Aço Corrugado"' },
+              quantidadeSumario: { type: Type.STRING, description: 'Sumário ou quantidade consolidada da carga inteira' }
+            },
+            required: ['peso', 'volume', 'dimensions', 'tipoCarga', 'quantidadeSumario']
+          }
+        }
+      });
+
+      if (!response.text) {
+        throw new Error('Retorno vazio do modelo Gemini.');
+      }
+
+      console.log('[SERVER] RAW Gemini text:', response.text);
+      const estimativa = JSON.parse(response.text.trim());
+      console.log('[SERVER] Cargo estimation successfully calculated:', estimativa);
+      return res.json(estimativa);
+
+    } catch (error: any) {
+      console.error('[SERVER] Failed to estimate cargo variables:', error);
+      return res.status(502).json({
+        error: 'GEN_AI_ERROR',
+        message: 'Falha ao processar estimativa via IA do Google Gemini. Tente novamente.',
+        details: error.message || String(error)
+      });
+    }
+  });
+
   // Safe Server-Side Google Maps Routing API (No Key Exposure)
   app.post('/api/logistics/route', async (req, res) => {
     const { origin, destination } = req.body;

@@ -47,6 +47,12 @@ export interface CargoRequest {
   cacheVersion?: number;
   estimatedFreight?: number;
   routeStatus?: 'verified_google' | 'estimated_offline' | 'pending_verification' | 'invalid_route' | string;
+  recommendedVehicle?: string;
+  alternativeVehicles?: string[];
+  utilizationWeightPercent?: number;
+  utilizationVolumePercent?: number;
+  vehicleCompatibilityScore?: number;
+  vehicleWarningMsg?: string;
 }
 
 export interface CarrierProposal {

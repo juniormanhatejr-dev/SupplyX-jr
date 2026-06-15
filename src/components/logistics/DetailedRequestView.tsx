@@ -1697,16 +1697,68 @@ export default function DetailedRequestView({
                       { label: 'Cubagem Estimada', val: requestObj.volume || '35 m³' },
                       { label: 'Peso bruto real', val: requestObj.peso },
                       { label: 'Endereço Recolha', val: requestObj.origem },
+                      ...(requestObj.originAddress && requestObj.originAddress !== requestObj.origem ? [
+                        { label: 'Origem Geocodificada', val: requestObj.originAddress }
+                      ] : []),
+                      ...(requestObj.originLat !== undefined ? [
+                        { label: 'Coordenadas Origem', val: `${requestObj.originLat.toFixed(5)}, ${requestObj.originLng?.toFixed(5)}` }
+                      ] : []),
                       { label: 'Endereço Destino', val: requestObj.destino },
+                      ...(requestObj.destinationAddress && requestObj.destinationAddress !== requestObj.destino ? [
+                        { label: 'Destino Geocodificado', val: requestObj.destinationAddress }
+                      ] : []),
+                      ...(requestObj.destinationLat !== undefined ? [
+                        { label: 'Coordenadas Destino', val: `${requestObj.destinationLat.toFixed(5)}, ${requestObj.destinationLng?.toFixed(5)}` }
+                      ] : []),
+                      ...(requestObj.distanceKm !== undefined ? [
+                        { label: 'Distância Rota (Google)', val: `${requestObj.distanceKm} km` }
+                      ] : []),
+                      ...(requestObj.durationMinutes !== undefined ? [
+                        { label: 'Tempo Trânsito (Google)', val: requestObj.durationMinutes < 60 
+                            ? `${requestObj.durationMinutes} Minutos` 
+                            : `${Math.round(requestObj.durationMinutes / 60)} Horas` }
+                      ] : []),
+                      ...(requestObj.routeStatus ? [
+                        { 
+                          label: 'Verificação Contratual', 
+                          val: requestObj.routeStatus,
+                          customElement: (
+                            <span className={`px-2 py-0.5 rounded-[6px] text-[8px] font-black uppercase tracking-wider border ${
+                              requestObj.routeStatus === 'verified_google' 
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25' 
+                                : requestObj.routeStatus === 'estimated_offline' 
+                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/25' 
+                                : requestObj.routeStatus === 'pending_verification' 
+                                ? 'bg-sky-500/10 text-sky-400 border-sky-500/25' 
+                                : 'bg-rose-500/10 text-rose-450 border-rose-500/25'
+                            }`}>
+                              {requestObj.routeStatus === 'verified_google' && 'Verified Google'}
+                              {requestObj.routeStatus === 'estimated_offline' && 'Estimated Offline'}
+                              {requestObj.routeStatus === 'pending_verification' && 'Pending Sync'}
+                              {requestObj.routeStatus === 'invalid_route' && 'Invalid Route'}
+                            </span>
+                          )
+                        }
+                      ] : []),
+                      ...(requestObj.routeCalculatedAt ? [
+                        { label: 'Instante de Auditoria', val: new Date(requestObj.routeCalculatedAt).toLocaleString('pt-BR', {hour: '2-digit', minute: '2-digit', second: '2-digit'}) }
+                      ] : []),
+                      ...(requestObj.estimatedFreight !== undefined ? [
+                        { label: 'Frete Calculado', val: `MT ${requestObj.estimatedFreight.toLocaleString('pt-BR')}` }
+                      ] : []),
                       { label: 'Data de Coleta', val: requestObj.dataColeta || 'A Combinar' },
                       { label: 'Responsável Custo', val: requestObj.freightResponsibility || 'Client' },
                       { label: 'Modo Trânsito', val: requestObj.deliveryMode || 'Fretado Livre' },
                       { label: 'Transportadora Atribuída', val: requestObj.assignedCarrier || (language === 'PT' ? 'Aguardando seleção de lances' : 'Unassigned (Bidding open)') },
                       { label: 'Observações Fiel', val: requestObj.observacoes || 'Sem notas extras' }
                     ].map((item, i) => (
-                      <div key={i} className="flex justify-between items-center text-xs pb-1 border-b border-white/[0.02]">
-                        <span className="font-bold text-zinc-500 uppercase tracking-widest text-[8.5px]">{item.label}</span>
-                        <span className="font-black text-white text-right leading-relaxed max-w-[180px] truncate">{item.val}</span>
+                      <div key={i} className="flex justify-between items-center text-xs pb-1.5 border-b border-white/[0.02]">
+                        <span className="font-bold text-zinc-500 uppercase tracking-widest text-[8px]">{item.label}</span>
+                        {item.customElement ? (
+                          item.customElement
+                        ) : (
+                          <span className="font-black text-white text-right leading-relaxed max-w-[180px] truncate" title={String(item.val)}>{item.val}</span>
+                        )}
                       </div>
                     ))}
                   </div>

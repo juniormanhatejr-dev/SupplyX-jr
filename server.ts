@@ -468,6 +468,169 @@ async function startServer() {
     }
   });
 
+  // Server-Side Google Maps Routing Cache
+  const serverRouteCache = new Map<string, {
+    originAddress: string;
+    destinationAddress: string;
+    distanceKm: number;
+    durationMinutes: number;
+    originLat?: number;
+    originLng?: number;
+    destinationLat?: number;
+    destinationLng?: number;
+  }>();
+
+  // Safe Server-Side Google Maps Routing API (No Key Exposure)
+  app.post('/api/logistics/route', async (req, res) => {
+    const { origin, destination } = req.body;
+    if (!origin || !destination) {
+      return res.status(400).json({ error: 'Os endereços de origem e destino são obrigatórios e não podem estar em branco.' });
+    }
+
+    const cacheKey = `${origin.toLowerCase().trim()}||${destination.toLowerCase().trim()}`;
+    if (serverRouteCache.has(cacheKey)) {
+      console.log(`[SERVER] Route Cache HIT for: ${cacheKey}`);
+      return res.json({ ...serverRouteCache.get(cacheKey), cached: true });
+    }
+
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY;
+    if (!apiKey) {
+      console.error('[SERVER] GOOGLE_MAPS_API_KEY is not defined.');
+      return res.status(500).json({ 
+        error: 'CONFIG_ERROR', 
+        message: 'A chave da API do Google Maps (GOOGLE_MAPS_API_KEY) não está configurada no servidor.' 
+      });
+    }
+
+    try {
+      console.log(`[SERVER] Requesting Route via Geocoding with API Key...`);
+
+      // 1. Geocode Origin Address
+      const originConf = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(origin)}&key=${apiKey}`;
+      const originRes = await fetch(originConf);
+      if (!originRes.ok) {
+        throw new Error(`Erro na conexão com Geocoding (origem): ${originRes.statusText}`);
+      }
+      const originData = (await originRes.json()) as any;
+      if (!originData.results || originData.results.length === 0) {
+        return res.status(400).json({
+          error: 'INVALID_ORIGIN',
+          message: `Endereço de partida ("${origin}") não foi encontrado pela API do Google.`
+        });
+      }
+      const originLoc = originData.results[0].geometry.location;
+      const originFormatted = originData.results[0].formatted_address;
+
+      // 2. Geocode Destination Address
+      const destConf = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(destination)}&key=${apiKey}`;
+      const destRes = await fetch(destConf);
+      if (!destRes.ok) {
+        throw new Error(`Erro na conexão com Geocoding (destino): ${destRes.statusText}`);
+      }
+      const destData = (await destRes.json()) as any;
+      if (!destData.results || destData.results.length === 0) {
+        return res.status(400).json({
+          error: 'INVALID_DESTINATION',
+          message: `Endereço de destino ("${destination}") não foi encontrado pela API do Google.`
+        });
+      }
+      const destLoc = destData.results[0].geometry.location;
+      const destFormatted = destData.results[0].formatted_address;
+
+      // Check if coordinates resolve to exactly the same location (Distance Validation: SAME LOCATION)
+      const latDiff = Math.abs(originLoc.lat - destLoc.lat);
+      const lngDiff = Math.abs(originLoc.lng - destLoc.lng);
+      if (latDiff < 0.0001 && lngDiff < 0.0001) {
+        return res.status(422).json({
+          error: 'SAME_LOCATION',
+          message: 'A origem e o destino resolvem para o mesmo local geográfico.',
+          originAddress: originFormatted,
+          destinationAddress: destFormatted,
+          originLat: originLoc.lat,
+          originLng: originLoc.lng,
+          destinationLat: destLoc.lat,
+          destinationLng: destLoc.lng,
+          distanceKm: 0,
+          durationMinutes: 0
+        });
+      }
+
+      // 3. Compute Route with Google Routes API
+      const routesApiUrl = 'https://routes.googleapis.com/v1/routes:computeRoutes';
+      const response = await fetch(routesApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters',
+        },
+        body: JSON.stringify({
+          origin: {
+            location: {
+              latLng: {
+                latitude: originLoc.lat,
+                longitude: originLoc.lng
+              }
+            }
+          },
+          destination: {
+            location: {
+              latLng: {
+                latitude: destLoc.lat,
+                longitude: destLoc.lng
+              }
+            }
+          },
+          travelMode: 'DRIVING'
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Google Routes API retornou erro: ${response.status} - ${errText}`);
+      }
+
+      const routeData = (await response.json()) as any;
+      if (!routeData.routes || routeData.routes.length === 0) {
+        return res.status(422).json({
+          error: 'ROUTE_NOT_FOUND',
+          message: 'Não foi possível encontrar uma rota de condução terrestre viável entre esses dois pontos.'
+        });
+      }
+
+      const route = routeData.routes[0];
+      const distanceMeters = route.distanceMeters || 0;
+      const distanceKm = parseFloat((distanceMeters / 1000).toFixed(1));
+
+      const durationStr = route.duration || '0s';
+      const seconds = parseInt(durationStr.replace('s', ''), 10) || 0;
+      const durationMinutes = Math.max(1, Math.round(seconds / 60));
+
+      const finalResult = {
+        originAddress: originFormatted,
+        destinationAddress: destFormatted,
+        distanceKm,
+        durationMinutes,
+        originLat: originLoc.lat,
+        originLng: originLoc.lng,
+        destinationLat: destLoc.lat,
+        destinationLng: destLoc.lng
+      };
+
+      serverRouteCache.set(cacheKey, finalResult);
+      console.log(`[SERVER] Route computed successfully & cached: ${distanceKm} KM, ${durationMinutes} minutes`);
+      return res.json({ ...finalResult, cached: false });
+
+    } catch (e: any) {
+      console.error('[SERVER] Route computation failed:', e);
+      return res.status(502).json({
+        error: 'EXTERNAL_SERVICE_ERROR',
+        message: 'A ligação externa à API do Google Maps falhou ou está indisponível neste momento.',
+        details: e.message || String(e)
+      });
+    }
+  });
+
   // API Proxy for Uploads (Bypass CORS)
   app.post('/api/upload', upload.single('file'), async (req: any, res) => {
     try {

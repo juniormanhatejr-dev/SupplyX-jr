@@ -35,6 +35,18 @@ export interface CargoRequest {
   trackStatusText?: string;
   driverName?: string;
   items?: { name: string; quantity: string; weight?: string; volume?: string; }[];
+  originAddress?: string;
+  destinationAddress?: string;
+  distanceKm?: number;
+  durationMinutes?: number;
+  originLat?: number;
+  originLng?: number;
+  destinationLat?: number;
+  destinationLng?: number;
+  routeCalculatedAt?: string;
+  cacheVersion?: number;
+  estimatedFreight?: number;
+  routeStatus?: 'verified_google' | 'estimated_offline' | 'pending_verification' | 'invalid_route' | string;
 }
 
 export interface CarrierProposal {

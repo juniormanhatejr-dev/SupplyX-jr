@@ -1056,15 +1056,7 @@ export default function CreateRequestPage({
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-white/[0.04] space-y-1">
-                <span className="text-[7px] font-black text-zinc-500 uppercase tracking-wider block">{language === 'PT' ? 'Verificação de Dimensões Máximas' : 'Limiting Vehicle Box Space'}</span>
-                <p className="text-[9px] font-mono text-zinc-300 font-bold">
-                  {vehicleRec.selectedVehicleProfile ? `${vehicleRec.selectedVehicleProfile.maxLengthM}m x ${vehicleRec.selectedVehicleProfile.maxWidthM}m x ${vehicleRec.selectedVehicleProfile.maxHeightM}m` : '--'}
-                </p>
-                <p className="text-[7px] text-zinc-500 uppercase font-black">
-                  {language === 'PT' ? 'Orientação espacial otimizada' : 'Maximum dimensional bounds checked'}
-                </p>
-              </div>
+
 
             </div>
 

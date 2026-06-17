@@ -567,12 +567,81 @@ async function startServer() {
       return res.json({ ...serverRouteCache.get(cacheKey), cached: true });
     }
 
+    // Helper function for intelligent Moçambique route estimation via Gemini AI
+    const runGeminiRouteFallback = async (origStr: string, destStr: string, errorContext?: string) => {
+      console.log(`[SERVER] Initiating high-accuracy Gemini route fallback estimator for Mozambique: "${origStr}" -> "${destStr}"...`);
+      try {
+        const ai = getGeminiClient();
+        const systemPrompt = `Você é um motorista experiente de caminhão B2B e especialista de logística terrestre de Moçambique.
+Você calcula distâncias rodoviárias de condução terrestre reais e tempos estimados de trânsito em minutos usando as principais estradas de Moçambique (tais como EN1, EN6, EN7, etc.).
+Seja extremamente realista e preciso conforme as condições reais das estradas moçambicanas. Por exemplo:
+- Maputo até Beira: ~1200 km (cerca de 1020 minutos de trânsito comercial pesado)
+- Maputo até Nampula: ~2150 km (cerca de 1800 minutos)
+- Maputo até Xai-Xai: ~210 km (cerca de 180 minutos)
+- Nampula até Nacala: ~190 km (cerca de 150 minutos)
+- Beira até Chimoio: ~135 km (cerca de 110 minutos)
+- Beira até Tete: ~590 km (cerca de 500 minutos)
+- Maputo até Quelimane: ~1600 km (cerca de 1350 minutos)
+- Tete até Chimoio: ~390 km (cerca de 330 minutos)
+- Pemba até Nampula: ~400 km (cerca de 360 minutos)
+- Quelimane até Nampula: ~540 km (cerca de 480 minutos)
+- Nacala até Pemba: ~470 km (cerca de 420 minutos)
+
+Estime de forma proporcional as distâncias para quaisquer vilas, portos, distritos ou cidades informadas dentro de Moçambique.
+Se a rota for impossível por terra ou os endereços não forem moçambicanos válidos, defina distanceKm: 0 e durationMinutes: 0. Retorne as coordenadas geográficas GPS reais para esses locais no território de Moçambique.`;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: `Estime detalhadamente a rota de condução rodoviária e coordenadas geográficas no território de Moçambique de "${origStr}" para "${destStr}".`,
+          config: {
+            systemInstruction: systemPrompt,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                distanceKm: { type: Type.NUMBER, description: 'Distância rodoviária real aproximada em Km' },
+                durationMinutes: { type: Type.INTEGER, description: 'Tempo total estimado de condução real em minutos' },
+                originAddress: { type: Type.STRING, description: 'Nome formatado completo da origem em Moçambique' },
+                destinationAddress: { type: Type.STRING, description: 'Nome formatado completo do destino em Moçambique' },
+                originLat: { type: Type.NUMBER, description: 'Latitude de GPS aproximada' },
+                originLng: { type: Type.NUMBER, description: 'Longitude de GPS aproximada' },
+                destinationLat: { type: Type.NUMBER, description: 'Latitude de GPS aproximada' },
+                destinationLng: { type: Type.NUMBER, description: 'Longitude de GPS aproximada' },
+              },
+              required: ['distanceKm', 'durationMinutes', 'originAddress', 'destinationAddress', 'originLat', 'originLng', 'destinationLat', 'destinationLng']
+            }
+          }
+        });
+
+        if (response.text) {
+          const result = JSON.parse(response.text.trim());
+          console.log('[SERVER] Mozambique route estimated via Gemini AI successfully:', result);
+          const finalPayload = { 
+            ...result, 
+            routeStatus: 'estimated_offline', 
+            cached: false, 
+            aiFallback: true,
+            warning: errorContext ? `Google Maps API unavailable: ${errorContext}` : undefined
+          };
+          serverRouteCache.set(cacheKey, finalPayload);
+          return finalPayload;
+        }
+      } catch (gemErr: any) {
+        console.error('[SERVER] Gemini Route Estimator Fallback failed completely:', gemErr);
+      }
+      return null;
+    };
+
     const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY;
     if (!apiKey) {
-      console.error('[SERVER] GOOGLE_MAPS_API_KEY is not defined.');
+      console.warn('[SERVER] GOOGLE_MAPS_API_KEY is not defined. Gracefully switching to smart Gemini route estimator...');
+      const geminiResult = await runGeminiRouteFallback(origin, destination, 'No API Key configured on server.');
+      if (geminiResult) {
+        return res.json(geminiResult);
+      }
       return res.status(500).json({ 
         error: 'CONFIG_ERROR', 
-        message: 'A chave da API do Google Maps (GOOGLE_MAPS_API_KEY) não está configurada no servidor.' 
+        message: 'A chave da API do Google Maps não está configurada e o serviço auxiliar de IA falhou. Por favor, verifique as credenciais.' 
       });
     }
 
@@ -587,6 +656,10 @@ async function startServer() {
       }
       const originData = (await originRes.json()) as any;
       if (!originData.results || originData.results.length === 0) {
+        // Fallback to Gemini if geocoding fails on invalid strings before erroring
+        const gemFallbackResult = await runGeminiRouteFallback(origin, destination, `Geocoding failed for origin "${origin}"`);
+        if (gemFallbackResult) return res.json(gemFallbackResult);
+
         return res.status(400).json({
           error: 'INVALID_ORIGIN',
           message: `Endereço de partida ("${origin}") não foi encontrado pela API do Google.`
@@ -603,6 +676,10 @@ async function startServer() {
       }
       const destData = (await destRes.json()) as any;
       if (!destData.results || destData.results.length === 0) {
+        // Fallback to Gemini if geocoding fails on invalid destination
+        const gemFallbackResult = await runGeminiRouteFallback(origin, destination, `Geocoding failed for destination "${destination}"`);
+        if (gemFallbackResult) return res.json(gemFallbackResult);
+
         return res.status(400).json({
           error: 'INVALID_DESTINATION',
           message: `Endereço de destino ("${destination}") não foi encontrado pela API do Google.`
@@ -644,7 +721,7 @@ async function startServer() {
               latLng: {
                 latitude: originLoc.lat,
                 longitude: originLoc.lng
-              }
+               }
             }
           },
           destination: {
@@ -666,6 +743,10 @@ async function startServer() {
 
       const routeData = (await response.json()) as any;
       if (!routeData.routes || routeData.routes.length === 0) {
+        // Fallback to Gemini if Google routing fails to find road route
+        const gemFallbackResult = await runGeminiRouteFallback(origin, destination, 'No direct land route found by Google Routes API');
+        if (gemFallbackResult) return res.json(gemFallbackResult);
+
         return res.status(422).json({
           error: 'ROUTE_NOT_FOUND',
           message: 'Não foi possível encontrar uma rota de condução terrestre viável entre esses dois pontos.'
@@ -696,10 +777,15 @@ async function startServer() {
       return res.json({ ...finalResult, cached: false });
 
     } catch (e: any) {
-      console.error('[SERVER] Route computation failed:', e);
+      console.error('[SERVER] Google Route computation failed at runtime. Gracefully using intelligent Gemini backup:', e);
+      const gemFallbackResult = await runGeminiRouteFallback(origin, destination, e.message || String(e));
+      if (gemFallbackResult) {
+        return res.json(gemFallbackResult);
+      }
+
       return res.status(502).json({
         error: 'EXTERNAL_SERVICE_ERROR',
-        message: 'A ligação externa à API do Google Maps falhou ou está indisponível neste momento.',
+        message: 'A ligação externa à API do Google Maps falhou e o estimador de IA de contingência falhou.',
         details: e.message || String(e)
       });
     }

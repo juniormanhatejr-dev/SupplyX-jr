@@ -625,7 +625,6 @@ export default function LogisticsView({
           {(userType === 'logistics'
             ? [
                 { id: 'carrier_central', pt: '🚚 Painel da Transportadora', en: '🚚 Carrier Central' },
-                { id: 'transport_assignment', pt: '📦 Atribuir Carga de Transporte', en: '📦 Assign Cargo Transport' },
                 { id: 'dashboard', pt: '📊 Cockpit Analítico', en: '📊 Control Dashboard' },
                 { id: 'requests_list', pt: '📋 Monitor de Cargas', en: '📋 Cargo Monitor' },
                 { id: 'drivers', pt: '👤 Frotas & Motoristas', en: '👤 Fleets & Drivers' },

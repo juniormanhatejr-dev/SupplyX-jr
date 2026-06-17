@@ -631,22 +631,16 @@ export default function TransportAssignmentPage({
     <div className="w-full space-y-8 animate-fade-in text-[12px]">
       
       {/* SUCCESS POPUP TRANSITION */}
-      <AnimatePresence>
-        {successToast && (
-          <motion.div 
-            key="success-toast"
-            initial={{ opacity: 0, y: -50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="fixed top-6 right-6 z-50 p-4 bg-emerald-500 text-white rounded-2xl shadow-xl flex items-center gap-3 font-bold border border-emerald-400"
-          >
-            <div className="p-1 bg-white/20 rounded-full">
-              <Check className="w-4 h-4 text-white" />
-            </div>
-            <span>{successToast}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {successToast && (
+        <div 
+          className="fixed top-6 right-6 z-50 p-4 bg-emerald-500 text-white rounded-2xl shadow-xl flex items-center gap-3 font-bold border border-emerald-400 transition-all duration-300 transform animate-in fade-in slide-in-from-top-4"
+        >
+          <div className="p-1 bg-white/20 rounded-full">
+            <Check className="w-4 h-4 text-white" />
+          </div>
+          <span>{successToast}</span>
+        </div>
+      )}
 
       {/* HEADER META INFO HERO */}
       <div className={`p-6 sm:p-8 rounded-[32px] border flex flex-col md:flex-row justify-between items-start md:items-center gap-6 ${isDarkMode ? 'bg-zinc-900/50 border-white/5' : 'bg-white border-zinc-150 shadow-sm'}`}>
@@ -1205,8 +1199,8 @@ export default function TransportAssignmentPage({
                       {language === 'PT' ? 'Combos de Frota Alternativos:' : 'Alternative Fleet Options:'}
                     </span>
                     <div className="space-y-2">
-                      {recommendedVehiclesResult.alternatives.map((alt, idx) => (
-                        <div key={idx} className={`p-3 rounded-xl flex justify-between items-center border ${isDarkMode ? 'bg-zinc-950/40 border-white/5' : 'bg-white border-zinc-200 shadow-sm'}`}>
+                      {recommendedVehiclesResult.alternatives.map((alt) => (
+                        <div key={alt.name} className={`p-3 rounded-xl flex justify-between items-center border ${isDarkMode ? 'bg-zinc-950/40 border-white/5' : 'bg-white border-zinc-200 shadow-sm'}`}>
                           <span className="font-extrabold text-[10px] uppercase text-zinc-700 dark:text-zinc-300">{alt.name}</span>
                           <span className="text-[10px] font-black text-emerald-500">Max {Number(alt.maxOcc).toFixed(0)}% Ocup.</span>
                         </div>
@@ -1375,7 +1369,7 @@ export default function TransportAssignmentPage({
               </thead>
               <tbody className="divide-y divide-zinc-200 dark:divide-white/5">
                 {filteredPastAssignments.map((assignment, idx) => (
-                  <tr key={assignment.id || idx} className={`hover:bg-zinc-100/30 dark:hover:bg-white/[0.015] ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                  <tr key={assignment.id || assignment.assignmentId || `assignment-${idx}`} className={`hover:bg-zinc-100/30 dark:hover:bg-white/[0.015] ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}>
                     <td className="p-3 font-mono font-black uppercase text-supplyx-blue">{assignment.assignmentId || 'TA-UNKNOWN'}</td>
                     <td className="p-3 font-bold max-w-sm">
                       <div className="flex items-center gap-1.5">
@@ -1415,83 +1409,74 @@ export default function TransportAssignmentPage({
       </div>
 
       {/* PASTE EXCEL CELL DIALOG */}
-      <AnimatePresence>
-        {showPasteModal && (
-          <motion.div 
-            key="paste-modal"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      {showPasteModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity duration-300 animate-in fade-in"
+        >
+          <div 
+            className="absolute inset-0 cursor-pointer"
+            onClick={() => setShowPasteModal(false)}
+          />
+          <div 
+            className={`relative w-full max-w-lg rounded-3xl p-6 border shadow-2xl overflow-hidden z-10 transition-all duration-300 transform animate-in zoom-in-95 ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-200'}`}
           >
-            <div 
-              className="absolute inset-0 cursor-pointer"
-              onClick={() => setShowPasteModal(false)}
-            />
-            <motion.div 
-              initial={{ scale: 0.95, y: 15 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 15 }}
-              className={`relative w-full max-w-lg rounded-3xl p-6 border shadow-2xl overflow-hidden z-10 ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-200'}`}
-            >
-              <div className="flex justify-between items-center mb-4">
-                <span className="font-extrabold text-[12px] uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
-                  <Copy className="w-5 h-5 text-supplyx-blue" />
-                  {language === 'PT' ? 'Copiar e Colar do Excel' : 'Paste Direct from Excel'}
-                </span>
-                <button 
+            <div className="flex justify-between items-center mb-4">
+              <span className="font-extrabold text-[12px] uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
+                <Copy className="w-5 h-5 text-supplyx-blue" />
+                {language === 'PT' ? 'Copiar e Colar do Excel' : 'Paste Direct from Excel'}
+              </span>
+              <button 
+                onClick={() => setShowPasteModal(false)}
+                className={`p-1.5 rounded-xl border ${isDarkMode ? 'bg-zinc-950 border-white/5 text-zinc-400 hover:text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-650'}`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-[11px]">
+              <p className="text-zinc-500 leading-relaxed">
+                {language === 'PT' ? 'Abra sua tabela no Excel ou no Google Sheets, copie (Ctrl+C) as colunas desejadas e cole (Ctrl+V) no espaço abaixo.' : 'Open your Excel/Google sheet table, copy rows (Ctrl+C) and paste (Ctrl+V) into the text region below.'}
+              </p>
+
+              <div className={`p-3 rounded-2xl border mb-3 space-y-1 ${isDarkMode ? 'bg-zinc-950/60 border-white/5' : 'bg-zinc-50 border-zinc-200'}`}>
+                <span className="block text-[9px] text-zinc-500 font-extrabold uppercase tracking-wider">{language === 'PT' ? 'Ordem esperada das colunas:' : 'Expected template columns order:'}</span>
+                <p className="font-mono font-bold text-[9px] text-zinc-600 dark:text-zinc-400">
+                  Produto [tab] Código [tab] Categoria [tab] Qtd [tab] Unidade [tab] Comp(cm) [tab] Larg(cm) [tab] Alt(cm) [tab] Peso(kg)
+                </p>
+              </div>
+
+              <textarea
+                rows={6}
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder="Cole as colunas tabulares aqui..."
+                className={`w-full p-3 font-mono text-[10px] rounded-2xl border outline-none focus:border-supplyx-blue transition-all ${isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-white border-zinc-200 text-zinc-800'}`}
+              />
+
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
                   onClick={() => setShowPasteModal(false)}
-                  className={`p-1.5 rounded-xl border ${isDarkMode ? 'bg-zinc-950 border-white/5 text-zinc-400 hover:text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-650'}`}
+                  className={`flex-1 py-3 rounded-2xl font-black uppercase tracking-wider transition-all border ${isDarkMode ? 'bg-zinc-950 border-white/5 text-zinc-400 hover:bg-zinc-900' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'}`}
                 >
-                  <X className="w-4 h-4" />
+                  {language === 'PT' ? 'Cancelar' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePasteExcelSubmit}
+                  disabled={!pasteText.trim()}
+                  className={`flex-1 py-3 rounded-2xl font-black uppercase tracking-wider transition-all text-white ${
+                    !pasteText.trim() ? 'bg-zinc-300 dark:bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-supplyx-blue hover:bg-supplyx-blue-hover hover:shadow-lg hover:shadow-supplyx-blue/15'
+                  }`}
+                >
+                  {language === 'PT' ? 'Processar & Preencher' : 'Process & Load'}
                 </button>
               </div>
+            </div>
 
-              <div className="space-y-4 text-[11px]">
-                <p className="text-zinc-500 leading-relaxed">
-                  {language === 'PT' ? 'Abra sua tabela no Excel ou no Google Sheets, copie (Ctrl+C) as colunas desejadas e cole (Ctrl+V) no espaço abaixo.' : 'Open your Excel/Google sheet table, copy rows (Ctrl+C) and paste (Ctrl+V) into the text region below.'}
-                </p>
-
-                <div className={`p-3 rounded-2xl border mb-3 space-y-1 ${isDarkMode ? 'bg-zinc-950/60 border-white/5' : 'bg-zinc-50 border-zinc-200'}`}>
-                  <span className="block text-[9px] text-zinc-500 font-extrabold uppercase tracking-wider">{language === 'PT' ? 'Ordem esperada das colunas:' : 'Expected template columns order:'}</span>
-                  <p className="font-mono font-bold text-[9px] text-zinc-600 dark:text-zinc-400">
-                    Produto [tab] Código [tab] Categoria [tab] Qtd [tab] Unidade [tab] Comp(cm) [tab] Larg(cm) [tab] Alt(cm) [tab] Peso(kg)
-                  </p>
-                </div>
-
-                <textarea
-                  rows={6}
-                  value={pasteText}
-                  onChange={(e) => setPasteText(e.target.value)}
-                  placeholder="Cole as colunas tabulares aqui..."
-                  className={`w-full p-3 font-mono text-[10px] rounded-2xl border outline-none focus:border-supplyx-blue transition-all ${isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-white border-zinc-200 text-zinc-800'}`}
-                />
-
-                <div className="flex gap-2.5 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowPasteModal(false)}
-                    className={`flex-1 py-3 rounded-2xl font-black uppercase tracking-wider transition-all border ${isDarkMode ? 'bg-zinc-950 border-white/5 text-zinc-400 hover:bg-zinc-900' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'}`}
-                  >
-                    {language === 'PT' ? 'Cancelar' : 'Cancel'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handlePasteExcelSubmit}
-                    disabled={!pasteText.trim()}
-                    className={`flex-1 py-3 rounded-2xl font-black uppercase tracking-wider transition-all text-white ${
-                      !pasteText.trim() ? 'bg-zinc-300 dark:bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-supplyx-blue hover:bg-supplyx-blue-hover hover:shadow-lg hover:shadow-supplyx-blue/15'
-                    }`}
-                  >
-                    {language === 'PT' ? 'Processar & Preencher' : 'Process & Load'}
-                  </button>
-                </div>
-              </div>
-
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </div>
+      )}
 
     </div>
   );

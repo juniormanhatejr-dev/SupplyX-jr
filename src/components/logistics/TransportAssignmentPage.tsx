@@ -121,6 +121,7 @@ export default function TransportAssignmentPage({
   const [calculatingRoute, setCalculatingRoute] = useState(false);
   const [routeOriginFormatted, setRouteOriginFormatted] = useState('');
   const [routeDestFormatted, setRouteDestFormatted] = useState('');
+  const [routeError, setRouteError] = useState<string | null>(null);
 
   // Past assignments (loaded from Firestore)
   const [pastAssignments, setPastAssignments] = useState<any[]>([]);
@@ -224,8 +225,12 @@ export default function TransportAssignmentPage({
 
   // Integrated Mozambique driving distance lookup via backend API with direct client fallback
   const handleCalculateRoute = async () => {
-    if (!origin.trim() || !destination.trim()) return;
+    if (!origin.trim() || !destination.trim()) {
+      setRouteError(null);
+      return;
+    }
     setCalculatingRoute(true);
+    setRouteError(null);
     try {
       const response = await fetch(`/api/logistics/route?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`);
       if (response.ok) {
@@ -235,10 +240,11 @@ export default function TransportAssignmentPage({
         setRouteOriginFormatted(data.originAddress || origin);
         setRouteDestFormatted(data.destinationAddress || destination);
       } else {
-        throw new Error('API routing failed or offline');
+        const errPayload = await response.json().catch(() => ({}));
+        throw new Error(errPayload.message || 'API routing failed');
       }
-    } catch (err) {
-      console.warn('API Routing unavailable, trying direct client-side OSM routing fallback...');
+    } catch (err: any) {
+      console.warn('API Routing unavailable, trying direct client-side OSM routing fallback...', err.message);
       try {
         const clientResult = await calculateRoute(origin, destination);
         setDistanceKm(clientResult.distanceKm);
@@ -246,39 +252,11 @@ export default function TransportAssignmentPage({
         setRouteOriginFormatted(clientResult.originAddress || origin);
         setRouteDestFormatted(clientResult.destinationAddress || destination);
         console.log('Client-side route calculation successful:', clientResult);
-      } catch (clientErr) {
-        console.warn('Client-side geocoding/directions failed as well, falling back to static Moçambique matrix list:', clientErr);
-        // Pure fallback logic for common Moçambique corridors
-        const orig = origin.toLowerCase();
-        const dest = destination.toLowerCase();
-        
-        let distance = 0;
-        let duration = 0;
-
-        if (orig.includes('maputo') && dest.includes('beira')) {
-          distance = 1210; duration = 1040; // 17 horas de transito
-        } else if (orig.includes('maputo') && dest.includes('nampula')) {
-          distance = 2145; duration = 1860; // 31 horas
-        } else if (orig.includes('maputo') && dest.includes('xai')) {
-          distance = 210; duration = 180;
-        } else if (orig.includes('beira') && dest.includes('tete')) {
-          distance = 590; duration = 490;
-        } else if (orig.includes('beira') && dest.includes('chimoio')) {
-          distance = 135; duration = 110;
-        } else if (orig.includes('nampula') && dest.includes('nacala')) {
-          distance = 190; duration = 150;
-        } else if (orig.includes('pemba') && dest.includes('nampula')) {
-          distance = 405; duration = 360;
-        } else {
-          // Standard random-scaled estimation to represent realistic distances inside Moçambique based on strings length
-          distance = Math.floor(100 + (orig.length + dest.length) * 12);
-          duration = Math.floor(distance * 0.85);
-        }
-
-        setDistanceKm(distance);
-        setDurationMin(duration);
-        setRouteOriginFormatted(origin);
-        setRouteDestFormatted(destination);
+      } catch (clientErr: any) {
+        console.error('Client-side OSRM/Geocoding failed as well:', clientErr);
+        setDistanceKm(null);
+        setDurationMin(null);
+        setRouteError(clientErr.message || 'Erro ao calcular rota via OpenStreetMap/OSRM.');
       }
     } finally {
       setCalculatingRoute(false);
@@ -1050,6 +1028,12 @@ export default function TransportAssignmentPage({
                       <p className="text-[9.5px] text-zinc-500 font-medium leading-relaxed max-w-sm mx-auto">
                         Rota consolidada do {routeOriginFormatted} ao {routeDestFormatted} estimada via rede rodoviária nacional de Moçambique.
                       </p>
+                    </div>
+                  ) : routeError ? (
+                    <div key="route-error" className="py-4 px-2 space-y-2 text-red-500">
+                      <AlertTriangle className="w-8 h-8 text-red-500 mx-auto animate-pulse" />
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest">{language === 'PT' ? 'Falha no Roteamento' : 'Routing Failed'}</p>
+                      <p className="text-[9.2px] text-zinc-500 leading-normal max-w-xs mx-auto">{routeError}</p>
                     </div>
                   ) : (
                     <div key="route-idle" className="py-6 space-y-2">

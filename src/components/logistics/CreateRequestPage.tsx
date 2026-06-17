@@ -31,96 +31,7 @@ import {
 
 // Reliable road geocoding & geographic distance estimator specifically optimized for Moçambique route domains
 // Centered on major logistic airports, ports, terminals, and provincial capitals
-export function estimateMoçambiqueDistanceAndDuration(origin: string, destination: string): { distanceKm: number; durationMinutes: number } {
-  const normOrig = (origin || '').toLowerCase().trim();
-  const normDest = (destination || '').toLowerCase().trim();
 
-  const cities = [
-    { name: 'maputo', lat: -25.9692, lng: 32.5732 },
-    { name: 'matola', lat: -25.9622, lng: 32.4589 },
-    { name: 'xai-xai', lat: -25.0519, lng: 33.6442 },
-    { name: 'gaza', lat: -25.0519, lng: 33.6442 },
-    { name: 'inhambane', lat: -23.8650, lng: 35.3833 },
-    { name: 'maxixe', lat: -23.8597, lng: 35.3472 },
-    { name: 'vilankulo', lat: -22.0003, lng: 35.3152 },
-    { name: 'beira', lat: -19.8278, lng: 34.8389 },
-    { name: 'sofala', lat: -19.8278, lng: 34.8389 },
-    { name: 'chimoio', lat: -19.1164, lng: 33.4831 },
-    { name: 'manica', lat: -19.1164, lng: 33.4831 },
-    { name: 'tete', lat: -16.1564, lng: 33.5867 },
-    { name: 'quelimane', lat: -17.8764, lng: 36.8883 },
-    { name: 'zambezia', lat: -17.8764, lng: 36.8883 },
-    { name: 'nampula', lat: -15.1164, lng: 39.2667 },
-    { name: 'nacala', lat: -14.5426, lng: 40.6841 },
-    { name: 'lichinga', lat: -13.3128, lng: 35.2406 },
-    { name: 'niassa', lat: -13.3128, lng: 35.2406 },
-    { name: 'pemba', lat: -12.9740, lng: 40.5178 },
-    { name: 'cabo delgado', lat: -12.9740, lng: 40.5178 }
-  ];
-
-  let origCity = cities.find(c => normOrig.includes(c.name));
-  let destCity = cities.find(c => normDest.includes(c.name));
-
-  if (!origCity) {
-    if (normOrig.includes('pande') || normOrig.includes('temane') || normOrig.includes('bazaruto')) origCity = cities.find(c => c.name === 'inhambane');
-    else if (normOrig.includes('port') || normOrig.includes('porto')) origCity = cities[0]; // Maputo
-    else origCity = cities[0]; // Maputo centroid fallback
-  }
-
-  if (!destCity) {
-    if (normDest.includes('nacala') || normDest.includes('ilha')) destCity = cities.find(c => c.name === 'nacala');
-    else if (normDest.includes('mocuba')) destCity = cities.find(c => c.name === 'quelimane');
-    else if (normDest.includes('palma') || normDest.includes('mocimboa')) destCity = cities.find(c => c.name === 'pemba');
-    else destCity = cities[7]; // Beira centroid fallback
-  }
-
-  if (origCity && destCity) {
-    if (origCity.name === destCity.name) {
-      return { distanceKm: 25, durationMinutes: 45 }; 
-    }
-
-    const R = 6371; 
-    const dLat = (destCity.lat - origCity.lat) * Math.PI / 180;
-    const dLng = (destCity.lng - origCity.lng) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(origCity.lat * Math.PI / 180) * Math.cos(destCity.lat * Math.PI / 180) *
-              Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const airDist = R * c;
-
-    const roadDist = Math.max(30, Math.round(airDist * 1.35));
-    
-    if (origCity.name === 'maputo') {
-      if (destCity.name === 'beira') return { distanceKm: 1200, durationMinutes: 1020 };
-      if (destCity.name === 'chimoio') return { distanceKm: 1150, durationMinutes: 980 };
-      if (destCity.name === 'nampula') return { distanceKm: 2150, durationMinutes: 1800 };
-      if (destCity.name === 'quelimane') return { distanceKm: 1600, durationMinutes: 1350 };
-      if (destCity.name === 'tete') return { distanceKm: 1550, durationMinutes: 1320 };
-      if (destCity.name === 'pemba') return { distanceKm: 2450, durationMinutes: 2100 };
-      if (destCity.name === 'lichinga') return { distanceKm: 2400, durationMinutes: 2040 };
-      if (destCity.name === 'xai-xai') return { distanceKm: 210, durationMinutes: 180 };
-      if (destCity.name === 'inhambane') return { distanceKm: 470, durationMinutes: 400 };
-      if (destCity.name === 'maxixe') return { distanceKm: 460, durationMinutes: 390 };
-      if (destCity.name === 'vilankulo') return { distanceKm: 710, durationMinutes: 600 };
-    }
-    
-    if (destCity.name === 'maputo') {
-      if (origCity.name === 'beira') return { distanceKm: 1200, durationMinutes: 1020 };
-      if (origCity.name === 'chimoio') return { distanceKm: 1150, durationMinutes: 980 };
-      if (origCity.name === 'nampula') return { distanceKm: 2150, durationMinutes: 1800 };
-      if (origCity.name === 'quelimane') return { distanceKm: 1600, durationMinutes: 1350 };
-      if (origCity.name === 'tete') return { distanceKm: 1550, durationMinutes: 1320 };
-      if (origCity.name === 'pemba') return { distanceKm: 2450, durationMinutes: 2100 };
-      if (origCity.name === 'xai-xai') return { distanceKm: 210, durationMinutes: 180 };
-      if (origCity.name === 'inhambane') return { distanceKm: 470, durationMinutes: 400 };
-    }
-
-    const durationMinutes = Math.max(30, Math.round((roadDist / 70) * 60));
-    return { distanceKm: roadDist, durationMinutes };
-  }
-
-  return { distanceKm: 420, durationMinutes: 360 };
-}
 
 interface SpreadsheetItem {
   id: string;
@@ -348,28 +259,13 @@ export default function CreateRequestPage({
 
     // 2. Debounce Route API call (Avoid extreme keystroke floods, safe Android / PWA latency patterns)
     const timeout = setTimeout(async () => {
-      // Automatic Offline Local Estimator when no network connection is available (Satisfies req #6 & #7)
+      // Offline connection tracking rules - throw error instead of silent fallbacks
       if (!navigator.onLine) {
-        const geoEst = estimateMoçambiqueDistanceAndDuration(originStr, destStr);
-        const fallbackDistance = geoEst.distanceKm;
-        const mins = geoEst.durationMinutes;
-        const fallbackFreight = baseFee + (fallbackDistance * tariffPerKm);
-
-        setRouteInfo({
-          originAddress: originStr,
-          destinationAddress: destStr,
-          distanceKm: fallbackDistance,
-          durationMinutes: mins,
-          routeCalculatedAt: new Date().toISOString(),
-          cacheVersion: CACHE_VERSION,
-          estimatedFreight: fallbackFreight,
-          routeStatus: 'estimated_offline'
-        });
-
         setRouteError(language === 'PT' 
-          ? 'Conexão Offline: Usando estimativa geo-localizada exata.' 
-          : 'Connection Offline: Using exact geographical estimation.'
+          ? 'Você está offline. Ligue a sua internet para calcular a rota real OSRM.' 
+          : 'You are offline. Please connect to internet to calculate real OSRM route.'
         );
+        setIsCalculatingRoute(false);
         return;
       }
 
@@ -519,28 +415,19 @@ export default function CreateRequestPage({
             }
 
           } catch (clientErr: any) {
-            console.warn('[CreateRequestPage] Client-side OSM router also failed, using offline heuristics...', clientErr.message);
+            console.error('[CreateRequestPage] Client-side OSM router also failed:', clientErr.message);
             
-            // Apply exact geographical distance estimation
-            const geoEst = estimateMoçambiqueDistanceAndDuration(originStr, destStr);
-            const fallbackDistance = geoEst.distanceKm;
-            const mins = geoEst.durationMinutes;
-            const fallbackFreight = baseFee + (fallbackDistance * tariffPerKm);
-
             setRouteInfo({
               originAddress: originStr,
               destinationAddress: destStr,
-              distanceKm: fallbackDistance,
-              durationMinutes: mins,
-              estimatedFreight: fallbackFreight,
-              routeStatus: 'estimated_offline',
+              routeStatus: 'invalid_route',
               routeCalculatedAt: new Date().toISOString(),
               cacheVersion: CACHE_VERSION
             });
 
             setRouteError(language === 'PT' 
-              ? 'Erro ao ligar ao servidor de mapas. Aplicando estimativa geográfica geo-localizada.' 
-              : 'Error connecting to maps route server. Applying exact geographic lookup.'
+              ? `Erro ao calcular rota via OSRM: ${clientErr.message}` 
+              : `Error calculating route via OSRM: ${clientErr.message}`
             );
           }
         }
@@ -559,20 +446,9 @@ export default function CreateRequestPage({
 
   // Integrated pricing and metrics parser (Google route-focused && Automatic Freight Estimation)
   const estimatedValues = React.useMemo(() => {
-    // 1. Establish robust fallback defaults
-    const isMajorDistance = formData.destino.toLowerCase().includes('nampula') || 
-                           formData.destino.toLowerCase().includes('pemba') || 
-                           formData.destino.toLowerCase().includes('tete');
+    const resolvedDistance = routeInfo.distanceKm !== undefined ? routeInfo.distanceKm : 0;
     
-    const fallbackDistance = isMajorDistance ? 1860 : 420;
-    const fallbackDurationStr = isMajorDistance 
-      ? (language === 'PT' ? '3 - 4 Dias' : '3 - 4 Days') 
-      : (language === 'PT' ? '1 Dia' : '1 Day');
-
-    // 2. Select resolved Google Route values, otherwise use fallbacks
-    const resolvedDistance = routeInfo.distanceKm !== undefined ? routeInfo.distanceKm : fallbackDistance;
-    
-    let resolvedDurationStr = fallbackDurationStr;
+    let resolvedDurationStr = language === 'PT' ? 'Aguardando rota' : 'Awaiting route';
     if (routeInfo.durationMinutes !== undefined) {
       const mins = routeInfo.durationMinutes;
       if (mins < 60) {
@@ -591,19 +467,19 @@ export default function CreateRequestPage({
     }
 
     // Dynamic Freight Estimation: estimatedFreight = baseFee + (distanceKm * tariffPerKm) (Satisfies req #4)
-    const customEstimatedFreight = routeInfo.routeStatus === 'invalid_route' 
+    const customEstimatedFreight = (routeInfo.routeStatus === 'invalid_route' || routeInfo.distanceKm === undefined) 
       ? 0 
       : baseFee + (resolvedDistance * tariffPerKm);
 
     return {
-      distance: `${resolvedDistance.toLocaleString('pt-BR')} km`,
+      distance: routeInfo.distanceKm !== undefined ? `${resolvedDistance.toLocaleString('pt-BR')} km` : '---',
       rawDistanceKm: resolvedDistance,
-      rawDurationMin: routeInfo.durationMinutes || (isMajorDistance ? 3 * 24 * 60 : 6 * 60),
-      duration: resolvedDurationStr,
+      rawDurationMin: routeInfo.durationMinutes || 0,
+      duration: routeInfo.durationMinutes !== undefined ? resolvedDurationStr : '---',
       estimatedFreight: customEstimatedFreight,
-      freightCost: `MT ${customEstimatedFreight.toLocaleString('pt-BR')}`
+      freightCost: routeInfo.distanceKm !== undefined ? `MT ${customEstimatedFreight.toLocaleString('pt-BR')}` : '---'
     };
-  }, [formData.destino, routeInfo, language, baseFee, tariffPerKm]);
+  }, [routeInfo, language, baseFee, tariffPerKm]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -175,7 +175,7 @@ export default function CreateRequestPage({
   }, [formData.peso, formData.volume, formData.dimensions, vehicles]);
 
   // Cache Version Definition config
-  const CACHE_VERSION = 1;
+  const CACHE_VERSION = 2;
 
   // Configurable parameters for Automatic Freight Estimation (Satisfies req #4)
   const [baseFee, setBaseFee] = useState(5000); // Base fee in MZN (e.g. MT 5.000)

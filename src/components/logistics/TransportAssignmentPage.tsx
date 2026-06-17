@@ -137,6 +137,14 @@ export default function TransportAssignmentPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'todos' | 'pending' | 'completed'>('todos');
 
+  // Track component lifecycle
+  useEffect(() => {
+    console.log("Mounted: TransportAssignmentPage");
+    return () => {
+      console.log("Unmounted: TransportAssignmentPage");
+    };
+  }, []);
+
   // Load registered drivers + default fallback
   const finalDrivers = useMemo(() => {
     if (dbDrivers && dbDrivers.length > 0) {
@@ -357,7 +365,7 @@ export default function TransportAssignmentPage({
 
   // Spreadsheet Row Actions Shortcuts
   const handleAddRow = () => {
-    const newId = `row-${Date.now()}`;
+    const newId = `row-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
     setRows(prev => [
       ...prev,
       {
@@ -377,11 +385,12 @@ export default function TransportAssignmentPage({
 
   const handleDeleteRow = (id: string) => {
     if (rows.length <= 1) return; // Keep at least one row
+    console.log("Row removed:", id);
     setRows(prev => prev.filter(r => r.id !== id));
   };
 
   const handleDuplicateRow = (row: SpreadsheetRow) => {
-    const newId = `row-${Date.now()}`;
+    const newId = `row-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
     setRows(prev => {
       const idx = prev.findIndex(r => r.id === row.id);
       const updated = [...prev];
@@ -625,6 +634,7 @@ export default function TransportAssignmentPage({
       <AnimatePresence>
         {successToast && (
           <motion.div 
+            key="success-toast"
             initial={{ opacity: 0, y: -50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
@@ -1407,19 +1417,22 @@ export default function TransportAssignmentPage({
       {/* PASTE EXCEL CELL DIALOG */}
       <AnimatePresence>
         {showPasteModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          <motion.div 
+            key="paste-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <div 
+              className="absolute inset-0 cursor-pointer"
               onClick={() => setShowPasteModal(false)}
             />
             <motion.div 
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
-              className={`relative w-full max-w-lg rounded-3xl p-6 border shadow-2xl overflow-hidden ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-200'}`}
+              className={`relative w-full max-w-lg rounded-3xl p-6 border shadow-2xl overflow-hidden z-10 ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-200'}`}
             >
               <div className="flex justify-between items-center mb-4">
                 <span className="font-extrabold text-[12px] uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
@@ -1476,7 +1489,7 @@ export default function TransportAssignmentPage({
               </div>
 
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 

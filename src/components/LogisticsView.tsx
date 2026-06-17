@@ -57,6 +57,13 @@ export default function LogisticsView({
   const [localActiveSubTab, setLocalActiveSubTab] = useState<string>('dashboard');
   const activeSubTab = propActiveSubTab !== undefined ? propActiveSubTab : localActiveSubTab;
   const setActiveSubTab = propSetActiveSubTab !== undefined ? propSetActiveSubTab : setLocalActiveSubTab;
+
+  useEffect(() => {
+    console.log("Mounted: LogisticsView");
+    return () => {
+      console.log("Unmounted: LogisticsView");
+    };
+  }, []);
   const [customRequests, setCustomRequests] = useState<CargoRequest[]>(() => {
     const saved = localStorage.getItem('supplyx_freight_requests');
     const demoIds = ['TR-2025-0001', 'TR-2025-0002', 'TR-2025-0003'];

@@ -31,6 +31,7 @@ import DriversSystem from './logistics/DriversSystem';
 import InventoryFulfillment from './logistics/InventoryFulfillment';
 import LogisticsFinancial from './logistics/LogisticsFinancial';
 import CarrierCentral from './logistics/CarrierCentral';
+import TransportAssignmentPage from './logistics/TransportAssignmentPage';
 
 interface LogisticsViewProps {
   isDarkMode: boolean;
@@ -624,6 +625,7 @@ export default function LogisticsView({
           {(userType === 'logistics'
             ? [
                 { id: 'carrier_central', pt: '🚚 Painel da Transportadora', en: '🚚 Carrier Central' },
+                { id: 'transport_assignment', pt: '📦 Atribuir Carga de Transporte', en: '📦 Assign Cargo Transport' },
                 { id: 'dashboard', pt: '📊 Cockpit Analítico', en: '📊 Control Dashboard' },
                 { id: 'requests_list', pt: '📋 Monitor de Cargas', en: '📋 Cargo Monitor' },
                 { id: 'drivers', pt: '👤 Frotas & Motoristas', en: '👤 Fleets & Drivers' },
@@ -631,6 +633,7 @@ export default function LogisticsView({
               ]
             : [
                 { id: 'requests_list', pt: '📋 Minhas Cargas (Rastreio)', en: '📋 My Cargoes (Tracking)' },
+                { id: 'transport_assignment', pt: '📦 Atribuir Carga de Transporte', en: '📦 Assign Cargo Transport' },
                 { id: 'dashboard', pt: '📊 Painel de Rastreio', en: '📊 Tracking Dashboard' }
               ]
           ).map((tab) => {
@@ -763,6 +766,14 @@ export default function LogisticsView({
                 language={language}
                 drivers={drivers}
                 onAddDriver={handleAddDriver}
+              />
+            )}
+
+            {activeSubTab === 'transport_assignment' && (
+              <TransportAssignmentPage 
+                isDarkMode={isDarkMode}
+                language={language}
+                drivers={drivers}
               />
             )}
 

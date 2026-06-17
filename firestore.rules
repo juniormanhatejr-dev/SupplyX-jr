@@ -148,6 +148,17 @@ service cloud.firestore {
              data.status is string && data.status.size() <= 50;
     }
 
+    function isValidTransportAssignment(data) {
+      return data.keys().hasAll(['assignmentId', 'origin', 'destination', 'products', 'totalWeight', 'totalVolume', 'status', 'createdAt']) &&
+             data.assignmentId is string && data.assignmentId.size() <= 128 &&
+             data.origin is string && data.origin.size() <= 500 &&
+             data.destination is string && data.destination.size() <= 500 &&
+             data.products is list &&
+             data.totalWeight is number &&
+             data.totalVolume is number &&
+             data.status is string && data.status.size() <= 100;
+    }
+
     // ---------------------------------------------------------
     // 3. MATCH BLOCKS (Hardened)
     // ---------------------------------------------------------
@@ -250,6 +261,15 @@ service cloud.firestore {
       allow get: if isSignedIn();
       allow create: if isVerified() && isValidOccurrence(incoming());
       allow update: if isVerified() && isValidOccurrence(incoming());
+      allow delete: if isVerified();
+    }
+
+    // TRANSPORT ASSIGNMENTS:
+    match /transportAssignments/{assignmentId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isVerified() && isValidTransportAssignment(incoming());
+      allow update: if isVerified() && isValidTransportAssignment(incoming());
       allow delete: if isVerified();
     }
   }

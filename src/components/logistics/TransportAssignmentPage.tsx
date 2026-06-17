@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx';
 import { db, auth } from '../../lib/firebase';
 import { collection, doc, addDoc, setDoc, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { CommercialDriver } from './types';
+import { calculateRoute } from '../../services/mapRoutingService';
 
 // Mozambique realistic vehicle profiles
 interface VehicleProfile {
@@ -221,7 +222,7 @@ export default function TransportAssignmentPage({
     return Math.ceil(totalVolume / 1.5);
   }, [totalVolume]);
 
-  // Integrated Mozambique driving distance lookup via backend API
+  // Integrated Mozambique driving distance lookup via backend API with direct client fallback
   const handleCalculateRoute = async () => {
     if (!origin.trim() || !destination.trim()) return;
     setCalculatingRoute(true);
@@ -234,41 +235,51 @@ export default function TransportAssignmentPage({
         setRouteOriginFormatted(data.originAddress || origin);
         setRouteDestFormatted(data.destinationAddress || destination);
       } else {
-        throw new Error('Fallback route lookup');
+        throw new Error('API routing failed or offline');
       }
     } catch (err) {
-      console.warn('API Routing unavailable, using high-fidelity local Moçambique heuristic routing...');
-      // Pure fallback logic for common Moçambique corridors
-      const orig = origin.toLowerCase();
-      const dest = destination.toLowerCase();
-      
-      let distance = 0;
-      let duration = 0;
+      console.warn('API Routing unavailable, trying direct client-side OSM routing fallback...');
+      try {
+        const clientResult = await calculateRoute(origin, destination);
+        setDistanceKm(clientResult.distanceKm);
+        setDurationMin(clientResult.durationMinutes);
+        setRouteOriginFormatted(clientResult.originAddress || origin);
+        setRouteDestFormatted(clientResult.destinationAddress || destination);
+        console.log('Client-side route calculation successful:', clientResult);
+      } catch (clientErr) {
+        console.warn('Client-side geocoding/directions failed as well, falling back to static Moçambique matrix list:', clientErr);
+        // Pure fallback logic for common Moçambique corridors
+        const orig = origin.toLowerCase();
+        const dest = destination.toLowerCase();
+        
+        let distance = 0;
+        let duration = 0;
 
-      if (orig.includes('maputo') && dest.includes('beira')) {
-        distance = 1210; duration = 1040; // 17 horas de transito
-      } else if (orig.includes('maputo') && dest.includes('nampula')) {
-        distance = 2145; duration = 1860; // 31 horas
-      } else if (orig.includes('maputo') && dest.includes('xai')) {
-        distance = 210; duration = 180;
-      } else if (orig.includes('beira') && dest.includes('tete')) {
-        distance = 590; duration = 490;
-      } else if (orig.includes('beira') && dest.includes('chimoio')) {
-        distance = 135; duration = 110;
-      } else if (orig.includes('nampula') && dest.includes('nacala')) {
-        distance = 190; duration = 150;
-      } else if (orig.includes('pemba') && dest.includes('nampula')) {
-        distance = 405; duration = 360;
-      } else {
-        // Standard random-scaled estimation to represent realistic distances inside Moçambique based on strings length
-        distance = Math.floor(100 + (orig.length + dest.length) * 12);
-        duration = Math.floor(distance * 0.85);
+        if (orig.includes('maputo') && dest.includes('beira')) {
+          distance = 1210; duration = 1040; // 17 horas de transito
+        } else if (orig.includes('maputo') && dest.includes('nampula')) {
+          distance = 2145; duration = 1860; // 31 horas
+        } else if (orig.includes('maputo') && dest.includes('xai')) {
+          distance = 210; duration = 180;
+        } else if (orig.includes('beira') && dest.includes('tete')) {
+          distance = 590; duration = 490;
+        } else if (orig.includes('beira') && dest.includes('chimoio')) {
+          distance = 135; duration = 110;
+        } else if (orig.includes('nampula') && dest.includes('nacala')) {
+          distance = 190; duration = 150;
+        } else if (orig.includes('pemba') && dest.includes('nampula')) {
+          distance = 405; duration = 360;
+        } else {
+          // Standard random-scaled estimation to represent realistic distances inside Moçambique based on strings length
+          distance = Math.floor(100 + (orig.length + dest.length) * 12);
+          duration = Math.floor(distance * 0.85);
+        }
+
+        setDistanceKm(distance);
+        setDurationMin(duration);
+        setRouteOriginFormatted(origin);
+        setRouteDestFormatted(destination);
       }
-
-      setDistanceKm(distance);
-      setDurationMin(duration);
-      setRouteOriginFormatted(origin);
-      setRouteDestFormatted(destination);
     } finally {
       setCalculatingRoute(false);
     }

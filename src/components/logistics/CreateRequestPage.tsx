@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { CargoRequest } from './types';
 import { useAuth } from '../../contexts/AuthContext';
+import { calculateRoute } from '../../services/mapRoutingService';
 import { 
   calculateVehicleRecommendation, 
   DEFAULT_VEHICLES, 
@@ -452,29 +453,96 @@ export default function CreateRequestPage({
         }
       } catch (err: any) {
         if (active) {
-          console.warn('[CreateRequestPage] Google Maps API fallback triggered:', err.message);
+          console.warn('[CreateRequestPage] API route call failed, attempting client-side OSM routing fallback...', err.message);
           
-          // Apply exact geographical distance estimation
-          const geoEst = estimateMoçambiqueDistanceAndDuration(originStr, destStr);
-          const fallbackDistance = geoEst.distanceKm;
-          const mins = geoEst.durationMinutes;
-          const fallbackFreight = baseFee + (fallbackDistance * tariffPerKm);
+          try {
+            const clientResult = await calculateRoute(originStr, destStr);
+            
+            // Check same location / suspicious route parameters
+            const latDiff = Math.abs(clientResult.originLat - clientResult.destinationLat);
+            const lngDiff = Math.abs(clientResult.originLng - clientResult.destinationLng);
+            const sameLoc = latDiff < 0.0001 && lngDiff < 0.0001 && clientResult.distanceKm === 0;
+            const isSuspicious = sameLoc || clientResult.distanceKm <= 0 || clientResult.distanceKm > 5000;
 
-          setRouteInfo({
-            originAddress: originStr,
-            destinationAddress: destStr,
-            distanceKm: fallbackDistance,
-            durationMinutes: mins,
-            estimatedFreight: fallbackFreight,
-            routeStatus: 'estimated_offline',
-            routeCalculatedAt: new Date().toISOString(),
-            cacheVersion: CACHE_VERSION
-          });
+            if (isSuspicious) {
+              let warn = '';
+              if (sameLoc) {
+                warn = language === 'PT' 
+                  ? 'Alerta crítico: Os endereços inseridos de origem e destino resolvem para as mesmas coordenadas físicas.' 
+                  : 'Critical Alert: Handled origin and destination resolve to the identical geographical spot.';
+              } else if (clientResult.distanceKm <= 0) {
+                warn = language === 'PT' 
+                  ? 'Alerta crítico: Distância calculada inválida (0 km ou inferior).' 
+                  : 'Critical Alert: Calculated distance is zero or negative.';
+              } else {
+                warn = language === 'PT' 
+                  ? 'Alerta crítico: Distância excessiva e suspeita (> 5000 km) sugere coordenadas terrestres impossíveis.' 
+                  : 'Critical Alert: Distance is suspicious (> 5000 km), suggesting terrestrial boundary errors.';
+              }
 
-          setRouteError(language === 'PT' 
-            ? 'Erro ao ligar ao servidor de mapas. Aplicando estimativa geográfica geo-localizada.' 
-            : 'Error connecting to maps route server. Applying exact geographic lookup.'
-          );
+              setRouteInfo({
+                originAddress: clientResult.originAddress || originStr,
+                destinationAddress: clientResult.destinationAddress || destStr,
+                routeStatus: 'invalid_route',
+                cacheVersion: CACHE_VERSION,
+                estimatedFreight: 0,
+                routeCalculatedAt: new Date().toISOString()
+              });
+
+              setRouteError(warn);
+              return;
+            }
+
+            const clientFreight = baseFee + (clientResult.distanceKm * tariffPerKm);
+            const newRoute = {
+              originAddress: clientResult.originAddress,
+              destinationAddress: clientResult.destinationAddress,
+              distanceKm: clientResult.distanceKm,
+              durationMinutes: clientResult.durationMinutes,
+              originLat: clientResult.originLat,
+              originLng: clientResult.originLng,
+              destinationLat: clientResult.destinationLat,
+              destinationLng: clientResult.destinationLng,
+              routeCalculatedAt: new Date().toISOString(),
+              cacheVersion: CACHE_VERSION,
+              estimatedFreight: clientFreight,
+              routeStatus: 'estimated_offline' as const
+            };
+            setRouteInfo(newRoute);
+            setRouteError(null);
+
+            // Save to local cache
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(newRoute));
+            } catch (e) {
+              console.warn('[Cache] Unable to write route to localStorage:', e);
+            }
+
+          } catch (clientErr: any) {
+            console.warn('[CreateRequestPage] Client-side OSM router also failed, using offline heuristics...', clientErr.message);
+            
+            // Apply exact geographical distance estimation
+            const geoEst = estimateMoçambiqueDistanceAndDuration(originStr, destStr);
+            const fallbackDistance = geoEst.distanceKm;
+            const mins = geoEst.durationMinutes;
+            const fallbackFreight = baseFee + (fallbackDistance * tariffPerKm);
+
+            setRouteInfo({
+              originAddress: originStr,
+              destinationAddress: destStr,
+              distanceKm: fallbackDistance,
+              durationMinutes: mins,
+              estimatedFreight: fallbackFreight,
+              routeStatus: 'estimated_offline',
+              routeCalculatedAt: new Date().toISOString(),
+              cacheVersion: CACHE_VERSION
+            });
+
+            setRouteError(language === 'PT' 
+              ? 'Erro ao ligar ao servidor de mapas. Aplicando estimativa geográfica geo-localizada.' 
+              : 'Error connecting to maps route server. Applying exact geographic lookup.'
+            );
+          }
         }
       } finally {
         if (active) {

@@ -8,6 +8,47 @@ import {CartProvider} from './contexts/CartContext';
 import {NotificationProvider} from './contexts/NotificationContext';
 import ErrorBoundary from './components/ErrorBoundary';
 
+// Global DOM Shield to prevent removeChild / insertBefore crashes from browsers, extensions (like translation engines) or React concurrent reconciliator
+if (typeof window !== 'undefined') {
+  const originalRemoveChild = Node.prototype.removeChild;
+  Node.prototype.removeChild = function <T extends Node>(child: T): T {
+    if (this && child) {
+      if (this.contains(child)) {
+        try {
+          return originalRemoveChild.call(this, child);
+        } catch (err) {
+          console.warn('[Global DOM Shield] Ignorado erro capturado no removeChild:', err);
+          return child;
+        }
+      } else {
+        console.warn('[Global DOM Shield] Tentativa de remover um nó que não pertence a este pai:', { parent: this, child });
+        return child;
+      }
+    }
+    return child;
+  };
+
+  const originalInsertBefore = Node.prototype.insertBefore;
+  Node.prototype.insertBefore = function <T extends Node>(newNode: T, referenceNode: Node | null): T {
+    if (referenceNode && !this.contains(referenceNode)) {
+      console.warn('[Global DOM Shield] Nó de referência provido não é descendente direto do elemento pai. Realizando append como fallback:', { parent: this, newNode, referenceNode });
+      try {
+        this.appendChild(newNode);
+        return newNode;
+      } catch (err) {
+        console.warn('[Global DOM Shield] Fallback do appendChild mal sucedido:', err);
+        return newNode;
+      }
+    }
+    try {
+      return originalInsertBefore.call(this, newNode, referenceNode);
+    } catch (err) {
+      console.warn('[Global DOM Shield] Ignorado erro capturado no insertBefore:', err);
+      return newNode;
+    }
+  };
+}
+
 // Safe Logger utility helper
 const log = (msg: string, type: 'info' | 'error' = 'info') => {
   if (typeof window !== 'undefined' && (window as any).__startup_log) {

@@ -1018,12 +1018,12 @@ export default function TransportAssignmentPage({
               <div className="flex flex-col justify-center">
                 <div className={`p-5 rounded-2xl flex flex-col items-center justify-center text-center ${isDarkMode ? 'bg-zinc-950/60 border border-white/5' : 'bg-zinc-50 decoration-zinc-100 border border-zinc-200 shadow-sm'}`}>
                   {calculatingRoute ? (
-                    <div className="py-6 space-y-2">
+                    <div key="route-calculating" className="py-6 space-y-2">
                       <RefreshCw className="w-8 h-8 text-supplyx-blue animate-spin mx-auto" />
                       <p className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-widest">{language === 'PT' ? 'Calculando Rota Real EN1...' : 'Calculating real route...'}</p>
                     </div>
                   ) : distanceKm && durationMin ? (
-                    <div className="py-2 space-y-3">
+                    <div key="route-calculated" className="py-2 space-y-3">
                       <div className="grid grid-cols-2 gap-6 divide-x divide-zinc-250 dark:divide-white/5">
                         <div className="px-4">
                           <span className="block text-[9px] text-zinc-500 font-black uppercase tracking-wider mb-0.5">{language === 'PT' ? 'DISTÂNCIA REAL' : 'DRIVING DISTANCE'}</span>
@@ -1041,7 +1041,7 @@ export default function TransportAssignmentPage({
                       </p>
                     </div>
                   ) : (
-                    <div className="py-6 space-y-2">
+                    <div key="route-idle" className="py-6 space-y-2">
                       <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto" />
                       <p className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-widest">Aguardando coordenadas viárias</p>
                     </div>
@@ -1142,7 +1142,7 @@ export default function TransportAssignmentPage({
             </div>
 
             {recommendedVehiclesResult.primary ? (
-              <div className="space-y-6">
+              <div key="rec-primary" className="space-y-6">
                 <div>
                   <h4 className="text-sm font-black italic text-zinc-900 dark:text-white uppercase leading-tight mb-1">
                     {recommendedVehiclesResult.primary.name}
@@ -1210,7 +1210,7 @@ export default function TransportAssignmentPage({
                 )}
               </div>
             ) : (
-              <div className="py-8 text-center text-zinc-400 font-bold space-y-1">
+              <div key="rec-empty" className="py-8 text-center text-zinc-400 font-bold space-y-1">
                 <p>{language === 'PT' ? 'Aguardando Lançamento de Itens' : 'Awaiting item entries'}</p>
                 <p className="text-[10px] font-medium text-zinc-500">Insira valores na planilha de produtos para calcular.</p>
               </div>

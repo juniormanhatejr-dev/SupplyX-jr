@@ -780,6 +780,7 @@ export default function LogisticsView({
                 isDarkMode={isDarkMode}
                 language={language}
                 drivers={drivers}
+                onNavigate={onNavigate}
               />
             )}
 

@@ -41,9 +41,10 @@ interface QuotationDocumentProps {
     items: QuotationItem[];
   };
   innerRef?: React.RefObject<HTMLDivElement>;
+  language?: 'PT' | 'EN';
 }
 
-const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef }) => {
+const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef, language = 'PT' }) => {
   const COLORS = {
     teal: '#0f9fa8',
     darkBlue: '#06213a',
@@ -53,6 +54,97 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
     textMuted: '#718096',
     white: '#ffffff',
   };
+
+  const text = {
+    PT: {
+      verified: 'Fornecedor Verificado',
+      clientInfo: 'Informação do Cliente',
+      contact: 'Contacto',
+      manager: 'Gestor',
+      centralProcurement: 'Central Procurement',
+      name: 'Nome:',
+      nuit: 'NUIT:',
+      address: 'Endereço:',
+      platformId: 'ID Platform:',
+      validity: `Esta cotação é válida por ${data.validityDays} dias`,
+      validityLabel: 'Validade:',
+      docNo: 'Doc #:',
+      originalDate: 'Data original:',
+      continuation: 'COTAÇÃO CONTINUAÇÃO (PÁG. {pageNumber})',
+      tableDesc: 'Descrição do Material',
+      tableQty: 'Quant.',
+      tableUnit: 'Un.',
+      tablePrice: 'P. Unitário',
+      tableVat: 'IVA (%)',
+      tableTotal: 'Total',
+      continues: 'A cotação continua na próxima página — verifique a Folha {pageNumber + 1}...',
+      verificationTitle: 'Informação de Verificação',
+      verificationText: 'A SupplyX Platform garante a autenticidade deste fornecedor e a integridade documental desta cotação. Os preços apresentados são finais para processamento via plataforma.',
+      digitalValidation: 'VALIDAÇÃO DIGITAL',
+      paymentData: 'Dados de Pagamento (Fornecedor)',
+      bankInfo: 'Contas Bancárias',
+      mobileWallets: 'Carteiras Móveis',
+      subtotalLabel: 'Subtotal:',
+      totalDiscountLabel: 'Desconto Total',
+      totalVatLabel: 'IVA Total:',
+      finalTotal: 'TOTAL FINAL',
+      signatureLabel: 'Assinatura & Carimbo Eletrónico',
+      verifiedVia: 'Verificado via SupplyX Platform',
+      pageOf: 'PÁGINA {pageNumber} DE {totalPages}',
+      byPlatform: 'Gestão Documental & Intermediação: Manhate Link África, Lda - Registada em Moçambique sob Nuit 400123456',
+      documentValidity: 'Este documento é gerado automaticamente e possui validade jurídica de cotação em território Moçambicano.',
+      quoteNoLabel: 'Cotação Nº:',
+      dateLabel: 'Data:',
+      sobConsulta: 'Sob Consulta',
+      email: 'Email:',
+      phone: 'Tel:',
+      alvara: 'Alvará'
+    },
+    EN: {
+      verified: 'Verified Supplier',
+      clientInfo: 'Client Information',
+      contact: 'Contact',
+      manager: 'Manager',
+      centralProcurement: 'Central Procurement',
+      name: 'Name:',
+      nuit: 'NUIT (Tax ID):',
+      address: 'Address:',
+      platformId: 'Platform ID:',
+      validity: `This quotation is valid for ${data.validityDays} days`,
+      validityLabel: 'Validity:',
+      docNo: 'Doc #:',
+      originalDate: 'Original Date:',
+      continuation: 'QUOTATION CONTINUATION (PAGE {pageNumber})',
+      tableDesc: 'Material Description',
+      tableQty: 'Qty.',
+      tableUnit: 'Unit',
+      tablePrice: 'Unit Price',
+      tableVat: 'VAT (%)',
+      tableTotal: 'Total',
+      continues: 'Quotation continues on next page — check Page {pageNumber + 1}...',
+      verificationTitle: 'Verification Information',
+      verificationText: 'SupplyX Platform guarantees the authenticity of this supplier and the document integrity of this quote. Prices shown are final for processing via the platform.',
+      digitalValidation: 'DIGITAL VALIDATION',
+      paymentData: 'Payment Details (Supplier)',
+      bankInfo: 'Bank Accounts',
+      mobileWallets: 'Mobile Wallets',
+      subtotalLabel: 'Subtotal:',
+      totalDiscountLabel: 'Total Discount',
+      totalVatLabel: 'Total VAT:',
+      finalTotal: 'GRAND TOTAL',
+      signatureLabel: 'Signature & Electronic Stamp',
+      verifiedVia: 'Verified via SupplyX Platform',
+      pageOf: 'PAGE {pageNumber} OF {totalPages}',
+      byPlatform: 'Document Management & Intermediation: Manhate Link Africa, Lda - Registered in Mozambique under Nuit 400123456',
+      documentValidity: 'This document is automatically generated and has legal validity as a quotation in Mozambican territory.',
+      quoteNoLabel: 'Quotation No:',
+      dateLabel: 'Date:',
+      sobConsulta: 'Under Consultation',
+      email: 'Email:',
+      phone: 'Phone:',
+      alvara: 'License'
+    }
+  }[language || 'PT'];
 
   const calculateSubtotal = () => {
     return data.items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
@@ -76,7 +168,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
   const discountPercent = data.items[0]?.discount || 0;
 
   const formatCurrency = (value: number) => {
-    if (value === 0) return 'Sob Consulta';
+    if (value === 0) return text.sobConsulta;
     return value.toLocaleString('pt-MZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' MT';
   };
 
@@ -293,9 +385,9 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                         <p style={{ margin: '1px 0' }}>{data.supplier.address}</p>
                         <p style={{ margin: '1px 0' }}>
                           NUIT: <span style={{ fontWeight: 800 }}>{data.supplier.nuit}</span> 
-                          {data.supplier.license ? ` | Alvará: ${data.supplier.license}` : ''}
+                          {data.supplier.license ? ` | ${text.alvara}: ${data.supplier.license}` : ''}
                         </p>
-                        <p style={{ margin: '1px 0' }}>Email: {data.supplier.email} | Tel: {data.supplier.phone}</p>
+                        <p style={{ margin: '1px 0' }}>Email: {data.supplier.email} | {text.phone} {data.supplier.phone}</p>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
                         {data.supplier.isVerified && (
@@ -313,7 +405,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                             letterSpacing: '0.5px'
                           }}>
                             <CheckCircle2 size={10} />
-                            Fornecedor Verificado
+                            {text.verified}
                           </div>
                         )}
                         <div style={{ fontSize: '8px', color: COLORS.textMuted, fontWeight: 600 }}>
@@ -368,7 +460,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                     justifyContent: 'space-between',
                     alignItems: 'center'
                   }}>
-                    <span style={{ fontWeight: 800, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Cotação Nº:</span>
+                    <span style={{ fontWeight: 800, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{text.quoteNoLabel}</span>
                     <span style={{ fontWeight: 900, fontSize: '14px' }}>{data.quoteNumber}</span>
                   </div>
                   <div style={{ 
@@ -380,7 +472,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                     alignItems: 'center',
                     gap: '10px'
                   }}>
-                    <span style={{ fontWeight: 800, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Data:</span>
+                    <span style={{ fontWeight: 800, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{text.dateLabel}</span>
                     <span style={{ fontWeight: 900, fontSize: '14px' }}>{data.date}</span>
                   </div>
                 </div>
@@ -398,7 +490,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                       letterSpacing: '0.5px',
                       borderRadius: '6px 6px 0 0'
                     }}>
-                      Informação do Cliente
+                      {text.clientInfo}
                     </div>
                     <div style={{ 
                       padding: '10px 12px', 
@@ -411,7 +503,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <tbody>
                           <tr>
-                            <td style={{ color: COLORS.textMuted, fontSize: '9px', fontWeight: 700, padding: '3px 0', width: '80px', textTransform: 'uppercase' }}>Nome:</td>
+                            <td style={{ color: COLORS.textMuted, fontSize: '9px', fontWeight: 700, padding: '3px 0', width: '80px', textTransform: 'uppercase' }}>{text.name}</td>
                             <td style={{ fontWeight: 800, color: COLORS.darkBlue }}>{data.client.name}</td>
                           </tr>
                           <tr>
@@ -419,11 +511,11 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                             <td style={{ fontWeight: 700 }}>{data.client.nuit}</td>
                           </tr>
                           <tr>
-                            <td style={{ color: COLORS.textMuted, fontSize: '9px', fontWeight: 700, padding: '3px 0', textTransform: 'uppercase' }}>Endereço:</td>
+                            <td style={{ color: COLORS.textMuted, fontSize: '9px', fontWeight: 700, padding: '3px 0', textTransform: 'uppercase' }}>{text.address}</td>
                             <td style={{ fontWeight: 700 }}>{data.client.address}</td>
                           </tr>
                           <tr>
-                            <td style={{ color: COLORS.textMuted, fontSize: '9px', fontWeight: 700, padding: '3px 0', textTransform: 'uppercase' }}>ID Platform:</td>
+                            <td style={{ color: COLORS.textMuted, fontSize: '9px', fontWeight: 700, padding: '3px 0', textTransform: 'uppercase' }}>{text.platformId}</td>
                             <td style={{ fontWeight: 700 }}>SX-CLI-{data.client.nuit.slice(-4)}</td>
                           </tr>
                         </tbody>
@@ -442,7 +534,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                       letterSpacing: '0.5px',
                       borderRadius: '6px 6px 0 0'
                     }}>
-                      Contacto
+                      {text.contact}
                     </div>
                     <div style={{ 
                       padding: '10px 12px', 
@@ -459,12 +551,12 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                             <td style={{ fontWeight: 700, fontSize: '10px' }}>{data.client.email}</td>
                           </tr>
                           <tr>
-                            <td style={{ color: COLORS.textMuted, fontSize: '9px', fontWeight: 700, padding: '3px 0', textTransform: 'uppercase' }}>Tel:</td>
+                            <td style={{ color: COLORS.textMuted, fontSize: '9px', fontWeight: 700, padding: '3px 0', textTransform: 'uppercase' }}>{text.phone}</td>
                             <td style={{ fontWeight: 700 }}>{data.client.phone}</td>
                           </tr>
                           <tr>
-                            <td style={{ color: COLORS.textMuted, fontSize: '9px', fontWeight: 700, padding: '3px 0', textTransform: 'uppercase' }}>Gestor:</td>
-                            <td style={{ fontWeight: 700 }}>Central Procurement</td>
+                            <td style={{ color: COLORS.textMuted, fontSize: '9px', fontWeight: 700, padding: '3px 0', textTransform: 'uppercase' }}>{text.manager}:</td>
+                            <td style={{ fontWeight: 700 }}>{text.centralProcurement}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -481,7 +573,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                     letterSpacing: '0.5px',
                     margin: '0 0 8px 5px'
                   }}>
-                    Validade: <span style={{ color: COLORS.teal }}>Esta cotação é válida por {data.validityDays} dias</span>
+                    {text.validityLabel} <span style={{ color: COLORS.teal }}>{text.validity}</span>
                   </p>
                 </div>
               </>
@@ -490,11 +582,11 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
               <div style={{ position: 'relative', zIndex: 10, display: 'flex', justifyContent: 'space-between', borderBottom: `2px solid ${COLORS.darkBlue}`, paddingBottom: '8px', marginBottom: '15px', alignItems: 'flex-end' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <SupplyXLogo size="sm" showText={true} />
-                  <span style={{ fontSize: '10px', fontWeight: 900, color: COLORS.teal, letterSpacing: '0.5px', fontStyle: 'italic', textTransform: 'uppercase' }}>| COTAÇÃO CONTINUAÇÃO (PÁG. {pageNumber})</span>
+                  <span style={{ fontSize: '10px', fontWeight: 900, color: COLORS.teal, letterSpacing: '0.5px', fontStyle: 'italic', textTransform: 'uppercase' }}>| {text.continuation.replace('{pageNumber}', pageNumber.toString())}</span>
                 </div>
                 <div style={{ textAlign: 'right', fontSize: '9px', fontWeight: 700, color: COLORS.textMuted }}>
-                  <p style={{ margin: 0, fontWeight: 800, color: COLORS.darkBlue }}>Doc #: {data.quoteNumber}</p>
-                  <p style={{ margin: 0, fontSize: '8px' }}>Data original: {data.date}</p>
+                  <p style={{ margin: 0, fontWeight: 800, color: COLORS.darkBlue }}>{text.docNo} {data.quoteNumber}</p>
+                  <p style={{ margin: 0, fontSize: '8px' }}>{text.originalDate} {data.date}</p>
                 </div>
               </div>
             )}
@@ -504,12 +596,12 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
               <table style={{ width: '100%', borderCollapse: 'collapse', borderRadius: '6px', overflow: 'hidden' }}>
                 <thead>
                   <tr style={{ backgroundColor: COLORS.darkBlue, color: COLORS.white }}>
-                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase' }}>Descrição do Material</th>
-                    <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', width: '60px' }}>Quant.</th>
-                    <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', width: '50px' }}>Un.</th>
-                    <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', width: '90px' }}>P. Unitário</th>
-                    <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', width: '60px' }}>IVA (%)</th>
-                    <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', width: '100px', backgroundColor: COLORS.teal }}>Total</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase' }}>{text.tableDesc}</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', width: '60px' }}>{text.tableQty}</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', width: '50px' }}>{text.tableUnit}</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', width: '90px' }}>{text.tablePrice}</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', width: '60px' }}>{text.tableVat}</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', width: '100px', backgroundColor: COLORS.teal }}>{text.tableTotal}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -531,7 +623,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
 
               {!isLastPage && (
                 <div style={{ marginTop: '15px', textAlign: 'right', fontStyle: 'italic', color: COLORS.teal, fontSize: '9.5px', fontWeight: 800, letterSpacing: '0.5px' }}>
-                  A cotação continua na próxima página — verifique a Folha {pageNumber + 1}...
+                  {text.continues.replace('{pageNumber + 1}', (pageNumber + 1).toString())}
                 </div>
               )}
             </div>
@@ -563,11 +655,10 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                       </div>
                       <div>
                         <p style={{ margin: '0 0 3px 0', fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', color: COLORS.darkBlue }}>
-                          Informação de Verificação
+                          {text.verificationTitle}
                         </p>
                         <p style={{ margin: 0, fontSize: '8px', fontWeight: 600, color: COLORS.textMuted, fontStyle: 'italic', lineHeight: '1.3' }}>
-                          A SupplyX Platform garante a autenticidade deste fornecedor e a integridade documental desta cotação. 
-                          Os preços apresentados são finais para processamento via plataforma.
+                          {text.verificationText}
                         </p>
                       </div>
                     </div>
@@ -589,16 +680,16 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                       }}>
                         <QrCode size={52} color={COLORS.darkBlue} />
                       </div>
-                      <p style={{ fontSize: '7px', fontWeight: 800, margin: 0, color: COLORS.textMuted }}>VALIDAÇÃO DIGITAL</p>
+                      <p style={{ fontSize: '7px', fontWeight: 800, margin: 0, color: COLORS.textMuted }}>{text.digitalValidation}</p>
                     </div>
 
                     {/* Banking and Wallets Details */}
                     <div style={{ flex: 1, minWidth: '0' }}>
-                      <p style={{ fontSize: '9px', fontWeight: 800, color: COLORS.darkBlue, textTransform: 'uppercase', marginBottom: '4px' }}>Dados de Pagamento (Fornecedor)</p>
+                      <p style={{ fontSize: '9px', fontWeight: 800, color: COLORS.darkBlue, textTransform: 'uppercase', marginBottom: '4px' }}>{text.paymentData}</p>
                       
                       {data.supplier.bankAccounts && data.supplier.bankAccounts.length > 0 && (
                         <div style={{ marginBottom: '6px' }}>
-                          <p style={{ fontSize: '8px', fontWeight: 800, color: COLORS.teal, textTransform: 'uppercase', marginBottom: '2px' }}>Contas Bancárias</p>
+                          <p style={{ fontSize: '8px', fontWeight: 800, color: COLORS.teal, textTransform: 'uppercase', marginBottom: '2px' }}>{text.bankInfo}</p>
                           {data.supplier.bankAccounts.map((acc, i) => (
                             <div key={i} style={{ fontSize: '8px', fontWeight: 700, color: COLORS.textDark, marginBottom: '2px', paddingLeft: '4px', borderLeft: `2px solid ${COLORS.teal}` }}>
                               <p style={{ margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{acc.bankName}: {acc.accountNumber} {acc.nib ? `/ NIB: ${acc.nib}` : ''}</p>
@@ -609,7 +700,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
 
                       {data.supplier.mobileWallets && data.supplier.mobileWallets.length > 0 && (
                         <div>
-                          <p style={{ fontSize: '8px', fontWeight: 800, color: COLORS.teal, textTransform: 'uppercase', marginBottom: '2px' }}>Carteiras Móveis</p>
+                          <p style={{ fontSize: '8px', fontWeight: 800, color: COLORS.teal, textTransform: 'uppercase', marginBottom: '2px' }}>{text.mobileWallets}</p>
                           {data.supplier.mobileWallets.map((wallet, i) => (
                             <div key={i} style={{ fontSize: '8px', fontWeight: 700, color: COLORS.textDark, marginBottom: '2px', paddingLeft: '4px', borderLeft: `2px solid ${COLORS.teal}` }}>
                               <p style={{ margin: 0 }}>{wallet.provider}: {wallet.number} ({wallet.name})</p>
@@ -625,15 +716,15 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                   <div style={{ border: `1px solid ${COLORS.borderGray}`, borderRadius: '8px', overflow: 'hidden' }}>
                     <div style={{ padding: '10px 12px', backgroundColor: COLORS.lightGray, display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 700, color: COLORS.textMuted }}>
-                        <span>Subtotal:</span>
+                        <span>{text.subtotalLabel}</span>
                         <span>{formatCurrency(subtotal)}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 700, color: '#e53e3e' }}>
-                        <span>Desconto Total {discountPercent > 0 ? `(${discountPercent}%)` : ''}:</span>
+                        <span>{text.totalDiscountLabel} {discountPercent > 0 ? `(${discountPercent}%)` : ''}:</span>
                         <span>-{formatCurrency(totalDiscount)}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 700, color: COLORS.textDark }}>
-                        <span>IVA Total:</span>
+                        <span>{text.totalVatLabel}</span>
                         <span>{formatCurrency(totalVAT)}</span>
                       </div>
                     </div>
@@ -646,7 +737,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                       alignItems: 'flex-end',
                       gap: '2px'
                     }}>
-                      <span style={{ fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', opacity: 0.8 }}>TOTAL FINAL</span>
+                      <span style={{ fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', opacity: 0.8 }}>{text.finalTotal}</span>
                       <span style={{ fontSize: '18px', fontWeight: 900 }}>{formatCurrency(grandTotal)}</span>
                     </div>
                   </div>
@@ -672,8 +763,8 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
                         />
                       )}
                     </div>
-                    <p style={{ fontSize: '8px', fontWeight: 800, margin: 0, color: COLORS.textMuted, textTransform: 'uppercase' }}>Assinatura & Carimbo Eletrónico</p>
-                    <p style={{ fontSize: '6px', fontWeight: 600, margin: '1px 0', color: COLORS.textMuted }}>Verificado via SupplyX Platform</p>
+                    <p style={{ fontSize: '8px', fontWeight: 800, margin: 0, color: COLORS.textMuted, textTransform: 'uppercase' }}>{text.signatureLabel}</p>
+                    <p style={{ fontSize: '6px', fontWeight: 600, margin: '1px 0', color: COLORS.textMuted }}>{text.verifiedVia}</p>
                   </div>
                 </div>
               </div>
@@ -697,16 +788,16 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef })
               }}
             >
               <div style={{ fontSize: '7.5px', color: COLORS.textMuted, fontWeight: 700, lineHeight: '1.3' }}>
-                {data.supplier.address} | Tel: {data.supplier.phone} | Email: {data.supplier.email}<br />
-                <span style={{ fontSize: '7px', opacity: 0.8 }}>Gestão Documental & Intermediação: Manhate Link África, Lda - Registada em Moçambique sob Nuit 400123456</span><br />
-                <span style={{ fontSize: '6px', opacity: 0.6 }}>Este documento é gerado automaticamente e possui validade jurídica de cotação em território Moçambicano.</span>
+                {data.supplier.address} | {text.phone} {data.supplier.phone} | Email: {data.supplier.email}<br />
+                <span style={{ fontSize: '7px', opacity: 0.8 }}>{text.byPlatform}</span><br />
+                <span style={{ fontSize: '6px', opacity: 0.6 }}>{text.documentValidity}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                   <span style={{ fontSize: '7.5px', fontWeight: 900, fontStyle: 'italic' }}>Powered by</span>
                   <SupplyXLogo size="sm" showText={false} />
                 </div>
-                <div style={{ fontSize: '8px', fontWeight: 900, color: COLORS.teal }}>PÁGINA {pageNumber} DE {totalPages}</div>
+                <div style={{ fontSize: '8px', fontWeight: 900, color: COLORS.teal }}>{text.pageOf.replace('{pageNumber}', pageNumber.toString()).replace('{totalPages}', totalPages.toString())}</div>
               </div>
             </div>
           </div>

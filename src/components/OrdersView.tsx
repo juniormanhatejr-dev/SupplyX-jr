@@ -2394,7 +2394,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
   const invoiceTemplate = (
     <div id="pdf-template-container" style={{ position: 'fixed', left: '-5000px', top: 0, width: '210mm', pointerEvents: 'none', zIndex: -100 }}>
-      <QuotationDocument data={quotationData} innerRef={invoiceRef} />
+      <QuotationDocument data={quotationData} innerRef={invoiceRef} language={language} />
     </div>
   );
 
@@ -3796,7 +3796,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                 </div>
                 <div className="flex-grow overflow-auto p-4 sm:p-8 bg-zinc-100 shadow-inner flex flex-col items-center">
                   <div className="max-w-[210mm] w-full">
-                    <QuotationDocument data={quotationData} />
+                    <QuotationDocument data={quotationData} language={language} />
                   </div>
                 </div>
               </motion.div>
@@ -4326,7 +4326,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             {/* Document Content */}
             <div className="flex-grow overflow-auto p-4 sm:p-8 bg-zinc-100 dark:bg-zinc-950 flex flex-col items-center">
               <div className="max-w-[210mm] w-full bg-white rounded-2xl shadow-xl p-4 sm:p-8 text-zinc-900">
-                <QuotationDocument data={getPreviewData(selectedRealQuoteForPreview)} />
+                <QuotationDocument data={getPreviewData(selectedRealQuoteForPreview)} language={language} />
               </div>
             </div>
           </div>

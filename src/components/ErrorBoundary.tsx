@@ -57,7 +57,27 @@ export default class ErrorBoundary extends React.Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
-      const errorMsg = this.state.error?.message || 'Erro desconhecido.';
+      const language = (typeof window !== 'undefined' && window.localStorage.getItem('supplyx_language') as 'PT' | 'EN') || 'PT';
+      const prompt = {
+        PT: {
+          unknownError: 'Erro desconhecido.',
+          title: 'Crash Detectado — Error Boundary',
+          subtitle: 'O SupplyX encontrou um erro no nível de componente React e impediu o encerramento do app.',
+          errorMessage: 'MENSAGEM DE ERRO:',
+          stackTrace: 'PILHA DE CHAMADAS (STACK TRACE):',
+          buttonReset: 'Limpar Cache e Recarregar'
+        },
+        EN: {
+          unknownError: 'Unknown error.',
+          title: 'Crash Detected — Error Boundary',
+          subtitle: 'SupplyX encountered an error in a React component and prevented the application from crashing completely.',
+          errorMessage: 'ERROR MESSAGE:',
+          stackTrace: 'CALL STACK (STACK TRACE):',
+          buttonReset: 'Clear Cache & Reload'
+        }
+      }[language];
+
+      const errorMsg = this.state.error?.message || prompt.unknownError;
       const errorStack = this.state.error?.stack || '';
       const componentStack = this.state.errorInfo?.componentStack || '';
 
@@ -73,8 +93,8 @@ export default class ErrorBoundary extends React.Component<Props, State> {
                 <AlertOctagon className="w-6 h-6 animate-pulse" />
               </div>
               <div>
-                <h1 className="text-sm font-black uppercase tracking-wider text-red-400">Crash Detectado — Error Boundary</h1>
-                <p className="text-xs text-slate-400 font-medium">O SupplyX encontrou um erro no nível de componente React e impediu o encerramento do app.</p>
+                <h1 className="text-sm font-black uppercase tracking-wider text-red-400">{prompt.title}</h1>
+                <p className="text-xs text-slate-400 font-medium">{prompt.subtitle}</p>
               </div>
             </div>
 
@@ -82,7 +102,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
               <div className="bg-[#161F2B] border border-red-500/10 p-4 rounded-xl">
                 <h3 className="text-xs font-bold text-red-400 mb-1 flex items-center gap-1.5 font-mono">
                   <AlertTriangle className="w-3.5 h-3.5" />
-                  MENSAGEM DE ERRO:
+                  {prompt.errorMessage}
                 </h3>
                 <p className="text-xs text-amber-200 font-mono select-text bg-black/30 p-2 rounded border border-white/5 break-all">
                   {errorMsg}
@@ -91,7 +111,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
 
               {(errorStack || componentStack) && (
                 <div className="bg-[#161F2B] border border-white/5 p-4 rounded-xl space-y-3">
-                  <h3 className="text-xs font-bold text-slate-400 font-mono">PILHA DE CHAMADAS (STACK TRACE):</h3>
+                  <h3 className="text-xs font-bold text-slate-400 font-mono">{prompt.stackTrace} {language === 'PT' ? 'PILHA DE CHAMADAS (STACK TRACE):' : 'CALL STACK:'}</h3>
                   <div className="max-h-48 overflow-y-auto font-mono text-[10px] text-zinc-400 space-y-2 select-text bg-black/40 p-3 rounded border border-white/5 custom-scrollbar">
                     {errorStack && (
                       <div>
@@ -116,7 +136,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
                 className="flex items-center justify-center gap-2 px-5 h-11 bg-red-600 hover:bg-red-700 active:scale-[0.98] transition-all text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-red-600/20"
               >
                 <RotateCcw className="w-4 h-4" />
-                Limpar Cache e Recarregar
+                {prompt.buttonReset}
               </button>
             </div>
           </div>

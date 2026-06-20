@@ -31,14 +31,16 @@ export default defineConfig(({mode}) => {
               if (id.includes('recharts') || id.includes('d3') || id.includes('react-resize-detector')) {
                 return 'chart-vendor';
               }
-              if (id.includes('motion')) {
-                return 'motion-vendor';
-              }
-              if (id.includes('react') || id.includes('scheduler') || id.includes('react-dom')) {
+              // Consolidate core UI dependencies (react, motion, lucide-react) under one vendor chunk
+              // to prevent circular-import-like Temporal Dead Zone (TDZ) initialization and load order issues in the browser.
+              if (
+                id.includes('react') || 
+                id.includes('scheduler') || 
+                id.includes('react-dom') || 
+                id.includes('lucide-react') || 
+                id.includes('motion')
+              ) {
                 return 'react-vendor';
-              }
-              if (id.includes('lucide-react')) {
-                return 'icons-vendor';
               }
               return 'vendor';
             }

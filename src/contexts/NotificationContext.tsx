@@ -130,7 +130,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
   const isDarkMode = currentTheme;
 
   const [permission, setPermission] = useState<NotificationPermission>(
-    typeof window !== 'undefined' ? Notification.permission : 'default'
+    (typeof window !== 'undefined' && typeof Notification !== 'undefined') ? Notification.permission : 'default'
   );
   const [activeNotification, setActiveNotification] = useState<{ title: string; body: string; chatId?: string } | null>(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -400,7 +400,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
     audioRef.current?.play().catch(() => {});
 
     // Browser notification
-    if (permission === 'granted' && document.hidden) {
+    if (permission === 'granted' && document.hidden && typeof Notification !== 'undefined') {
       new Notification(title, {
         body,
         icon: '/favicon.ico' // Or a custom icon

@@ -382,7 +382,6 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
 
     const q = query(
       collection(db, `chats/${activeRoom.id}/messages`),
-      where('participants', 'array-contains', auth.currentUser.uid),
       orderBy('createdAt', 'asc'),
       limit(100)
     );

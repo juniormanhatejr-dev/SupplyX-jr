@@ -18,35 +18,6 @@ export default defineConfig(({mode}) => {
     },
     build: {
       chunkSizeWarningLimit: 1200,
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (id.includes('node_modules')) {
-              if (id.includes('firebase')) {
-                return 'firebase-vendor';
-              }
-              if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('xlsx')) {
-                return 'doc-vendor';
-              }
-              if (id.includes('recharts') || id.includes('d3') || id.includes('react-resize-detector')) {
-                return 'chart-vendor';
-              }
-              // Consolidate core UI dependencies (react, motion, lucide-react) under one vendor chunk
-              // to prevent circular-import-like Temporal Dead Zone (TDZ) initialization and load order issues in the browser.
-              if (
-                id.includes('react') || 
-                id.includes('scheduler') || 
-                id.includes('react-dom') || 
-                id.includes('lucide-react') || 
-                id.includes('motion')
-              ) {
-                return 'react-vendor';
-              }
-              return 'vendor';
-            }
-          }
-        }
-      }
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Info, FileText, AlertCircle, Trash2, CheckCheck } from 'lucide-react';
+import { Bell, Tag, MapPin, CheckCircle2, X, Clock, Info, FileText, AlertCircle, Trash2, CheckCheck, Eye, ChevronRight, Calendar } from 'lucide-react';
 import { useState } from 'react';
 import { useNotifications, getNotificationRoute } from '../contexts/NotificationContext';
 
@@ -32,6 +32,7 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
     deleteAllNotifications
   } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
+  const [selectedNotificationForDetail, setSelectedNotificationForDetail] = useState<any | null>(null);
   
   const totalUnread = unreadNotifications;
 
@@ -64,6 +65,12 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
     if (diff < 60) return t.justNow;
     if (diff < 3600) return `${Math.floor(diff / 60)}m ${t.ago}`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ${t.ago}`;
+    return date.toLocaleDateString(language === 'PT' ? 'pt-PT' : 'en-US');
+  };
+
+  const formatDate = (createdAt: any) => {
+    if (!createdAt) return '';
+    const date = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
     return date.toLocaleDateString(language === 'PT' ? 'pt-PT' : 'en-US');
   };
 
@@ -171,11 +178,7 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                         key={n.id} 
                         onClick={() => {
                           if (!n.read) markNotificationAsRead(n.id);
-                          const route = getNotificationRoute(n);
-                          window.dispatchEvent(new CustomEvent('navigate-app', { 
-                            detail: { tab: route.tab, payload: route.payload } 
-                          }));
-                          setIsOpen(false);
+                          setSelectedNotificationForDetail(n);
                         }}
                         className={`p-6 flex gap-6 transition-all relative group cursor-pointer ${
                           !n.read ? (isDarkMode ? 'bg-supplyx-blue/5' : 'bg-supplyx-blue/5') : ''
@@ -184,7 +187,7 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${getColorClass(n.type)}`}>
                           {getIcon(n.type)}
                         </div>
-                        <div className="flex-1 min-w-0 pr-8">
+                        <div className="flex-1 min-w-0 pr-12">
                           <p className={`text-[12px] font-black uppercase italic leading-tight mb-1 ${isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>
                             {n.title}
                           </p>
@@ -195,7 +198,21 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                              <Clock className="w-3 h-3" /> {formatTime(n.createdAt)}
                           </span>
                         </div>
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-40 sm:group-hover:opacity-100 transition-opacity flex items-center gap-2 z-10">
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-40 sm:group-hover:opacity-100 transition-opacity flex items-center gap-1.5 z-10">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!n.read) markNotificationAsRead(n.id);
+                              setSelectedNotificationForDetail(n);
+                            }}
+                            className={`p-2 rounded-lg transition-colors ${
+                              isDarkMode ? 'hover:bg-supplyx-blue/15 text-zinc-400 hover:text-supplyx-blue' : 'hover:bg-brand/5 text-zinc-500 hover:text-brand'
+                            }`}
+                            title={language === 'PT' ? 'Ver Detalhes' : 'View Details'}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -206,7 +223,7 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
                             }`}
                             title={language === 'PT' ? 'Eliminar' : 'Delete'}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
@@ -228,6 +245,117 @@ export default function NotificationCenter({ isDarkMode, language, onViewAll, us
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Detailed Notification Modal */}
+      <AnimatePresence>
+        {selectedNotificationForDetail && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedNotificationForDetail(null)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className={`w-full max-w-xl rounded-[32px] border p-8 relative overflow-hidden shadow-3xl z-[60] text-left ${
+                isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-white border-zinc-200 text-zinc-900'
+              }`}
+            >
+              {/* Top Row with Type Icon */}
+              <div className="flex justify-between items-start mb-6">
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${getColorClass(selectedNotificationForDetail.type)}`}>
+                    {getIcon(selectedNotificationForDetail.type)}
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 font-mono">
+                      {selectedNotificationForDetail.type === 'promotion' ? (language === 'PT' ? 'PROMOÇÃO' : 'PROMOTION') :
+                       selectedNotificationForDetail.type === 'quote_request' ? (language === 'PT' ? 'COTAÇÃO' : 'QUOTE REQUEST') :
+                       selectedNotificationForDetail.type === 'order' ? (language === 'PT' ? 'PEDIDO' : 'ORDER') :
+                       selectedNotificationForDetail.type === 'supplier' ? (language === 'PT' ? 'FORNECEDOR' : 'SUPPLIER') :
+                       selectedNotificationForDetail.type === 'system' ? (language === 'PT' ? 'SISTEMA' : 'SYSTEM') :
+                       (language === 'PT' ? 'STOCK / ALERTA' : 'STOCK / ALERT')}
+                    </span>
+                    <h3 className="text-xl font-black uppercase italic tracking-tighter mt-1">
+                      {selectedNotificationForDetail.title}
+                    </h3>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedNotificationForDetail(null)}
+                  className={`p-2 rounded-xl transition-all ${
+                    isDarkMode ? 'hover:bg-white/10 text-zinc-400 hover:text-white' : 'hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900'
+                  }`}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Priority & Timing */}
+              <div className="flex flex-wrap gap-3 items-center mb-6 py-3 border-y border-zinc-800/10">
+                <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                  selectedNotificationForDetail.priority === 'high' ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' :
+                  selectedNotificationForDetail.priority === 'medium' ? 'bg-amber-500/10 text-amber-500 border-amber-500/10' :
+                  'bg-zinc-500/10 text-zinc-400 border-zinc-500/10'
+                }`}>
+                  {language === 'PT' ? 'Prioridade' : 'Priority'}: {selectedNotificationForDetail.priority || 'medium'}
+                </div>
+                <div className="text-[10px] font-black uppercase text-zinc-500 tracking-[0.1em] flex items-center gap-1 font-mono">
+                  <Clock className="w-3.5 h-3.5 text-supplyx-blue" />
+                  {formatTime(selectedNotificationForDetail.createdAt)}
+                </div>
+                <div className="text-[10px] font-black uppercase text-zinc-500 tracking-[0.1em] flex items-center gap-1 font-mono">
+                  <Calendar className="w-3.5 h-3.5 text-supplyx-blue" />
+                  {formatDate(selectedNotificationForDetail.createdAt)}
+                </div>
+              </div>
+
+              {/* Message Body */}
+              <div className="mb-8">
+                <p className={`text-base font-medium leading-relaxed font-sans ${isDarkMode ? 'text-zinc-300' : 'text-zinc-600'}`}>
+                  {selectedNotificationForDetail.message}
+                </p>
+              </div>
+
+              {/* Call to Actions */}
+              <div className="flex flex-wrap gap-4 justify-end pt-4 border-t border-zinc-800/10">
+                <button
+                  onClick={() => setSelectedNotificationForDetail(null)}
+                  className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                    isDarkMode ? 'bg-zinc-900 border-white/5 text-zinc-400 hover:text-white' : 'bg-zinc-100 border-zinc-200 text-zinc-700 hover:bg-zinc-200'
+                  }`}
+                >
+                  {language === 'PT' ? 'Fechar' : 'Close'}
+                </button>
+
+                {(() => {
+                  const route = getNotificationRoute(selectedNotificationForDetail);
+                  return (
+                    <button
+                      onClick={() => {
+                        setSelectedNotificationForDetail(null);
+                        setIsOpen(false);
+                        window.dispatchEvent(new CustomEvent('navigate-app', { 
+                          detail: { tab: route.tab, payload: route.payload } 
+                        }));
+                      }}
+                      className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-supplyx-blue text-white shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                    >
+                      <span>{language === 'PT' ? 'Ir para página correspondente' : 'Navigate corresponding page'}</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  );
+                })()}
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

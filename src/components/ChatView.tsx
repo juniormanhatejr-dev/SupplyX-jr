@@ -85,15 +85,51 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
   const [roomConfirmDeleteId, setRoomConfirmDeleteId] = useState<string | null>(null);
 
   const [activeUserIds, setActiveUserIds] = useState<string[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   useEffect(() => {
     const q = query(collection(db, 'users'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      const usersData = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+      setAllUsers(usersData);
       setActiveUserIds(snapshot.docs.map(doc => doc.id));
     }, (err) => {
-      console.error('Error listening to user ids:', err);
+      console.error('Error listening to users:', err);
     });
     return () => unsubscribe();
   }, []);
+
+  const recommendedContacts = useMemo(() => {
+    if (!auth.currentUser) return [];
+    
+    // Determine target roles for direct communication matching
+    let allowedTypes: string[] = [];
+    if (userType === 'supplier') {
+      allowedTypes = ['buyer', 'logistics'];
+    } else if (userType === 'buyer') {
+      allowedTypes = ['supplier', 'logistics'];
+    } else if (userType === 'logistics') {
+      allowedTypes = ['supplier', 'buyer'];
+    } else {
+      allowedTypes = ['supplier', 'buyer', 'logistics'];
+    }
+
+    const filtered = allUsers.filter(u => 
+      u.uid !== auth.currentUser?.uid && 
+      allowedTypes.includes(u.type)
+    );
+
+    // Make sure we have at least one logistics operator or a client demo contact
+    if (allowedTypes.includes('logistics') && !filtered.some(u => u.uid === 'ops_logistica_default')) {
+      filtered.push({
+        uid: 'ops_logistica_default',
+        name: language === 'PT' ? 'Suporte Logístico SupplyX' : 'SupplyX Logistics Support',
+        type: 'logistics',
+        city: 'Maputo'
+      });
+    }
+
+    return filtered;
+  }, [allUsers, userType, language]);
 
    const displayedRooms = useMemo(() => {
     return rooms;
@@ -578,6 +614,46 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
             )}
           </div>
         </div>
+
+        {/* Recommended Contacts / Quick Contacts */}
+        {!searchTerm && recommendedContacts.length > 0 && (
+          <div className={`px-6 py-4 border-b shrink-0 ${isDarkMode ? 'border-zinc-850 bg-zinc-950/20' : 'border-zinc-100 bg-zinc-50/20'}`}>
+            <p className="text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-3 flex items-center justify-between">
+              <span>{language === 'PT' ? 'Conectar Funções' : 'Connect Roles'}</span>
+              <span className="text-[8px] bg-supplyx-blue/10 text-supplyx-blue px-2 py-0.5 rounded-full uppercase tracking-widest">B2B</span>
+            </p>
+            <div className="flex gap-4 overflow-x-auto pb-2 pt-1 scrollbar-hide">
+              {recommendedContacts.map((u) => (
+                <button
+                  key={u.uid}
+                  type="button"
+                  onClick={() => startNewChat(u)}
+                  className="flex flex-col items-center gap-1.5 min-w-[70px] max-w-[80px] shrink-0 group hover:scale-105 active:scale-95 transition-all text-center"
+                >
+                  <div className={`w-11 h-11 rounded-[16px] flex items-center justify-center font-black text-xs relative shadow-md ${
+                    isDarkMode 
+                      ? 'bg-zinc-900 text-supplyx-blue border border-white/5 group-hover:border-supplyx-blue/50' 
+                      : 'bg-brand/10 text-brand border border-zinc-100 group-hover:border-brand/40'
+                  }`}>
+                    {u.name?.charAt(0).toUpperCase()}
+                    <span className={`absolute -bottom-1 -right-1 px-1 py-0.5 rounded-full text-[6px] font-black uppercase tracking-tight leading-none ${
+                      u.type === 'logistics' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
+                      u.type === 'supplier' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                      'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    }`}>
+                      {u.type === 'logistics' ? (language === 'PT' ? 'LOG' : 'LOG') :
+                       u.type === 'supplier' ? (language === 'PT' ? 'FORN' : 'SUPP') :
+                       (language === 'PT' ? 'COMP' : 'BUY')}
+                    </span>
+                  </div>
+                  <span className={`text-[10px] font-bold tracking-tight truncate w-full ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                    {u.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto scrollbar-hide py-2">
           {displayedRooms.length > 0 ? displayedRooms.map((room) => (

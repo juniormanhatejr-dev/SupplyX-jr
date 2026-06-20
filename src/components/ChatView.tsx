@@ -95,18 +95,9 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     return () => unsubscribe();
   }, []);
 
-  const displayedRooms = useMemo(() => {
-    if (activeUserIds.length === 0 && rooms.length > 0) return rooms;
-    return rooms.filter(room => {
-      return room.participants.every(pId => 
-        pId === auth.currentUser?.uid || 
-        activeUserIds.includes(pId) || 
-        pId.startsWith('ops_logistica_') || 
-        pId === 'buyer_demo_uid' || 
-        pId === 'supplier_demo_uid'
-      );
-    });
-  }, [rooms, activeUserIds]);
+   const displayedRooms = useMemo(() => {
+    return rooms;
+  }, [rooms]);
 
   // Automatically select room if initialRecipientId is provided, or create one if it doesn't exist yet!
   const hasAttemptedAutoStart = useRef<string | null>(null);

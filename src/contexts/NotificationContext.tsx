@@ -95,8 +95,40 @@ export const getNotificationRoute = (n: any) => {
   };
 };
 
-export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkMode?: boolean; language?: 'PT' | 'EN' }> = ({ children, isDarkMode = true, language = 'PT' }) => {
+export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkMode?: boolean; language?: 'PT' | 'EN' }> = ({ children, isDarkMode: initialIsDarkMode = true, language: initialLanguage = 'PT' }) => {
   const { user } = useAuth();
+  
+  const [currentLanguage, setCurrentLanguage] = useState<'PT' | 'EN'>('PT');
+  const [currentTheme, setCurrentTheme] = useState<boolean>(true);
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const savedLang = localStorage.getItem('supplyx_language');
+      if (savedLang === 'PT' || savedLang === 'EN') {
+        setCurrentLanguage(savedLang);
+      } else {
+        setCurrentLanguage(initialLanguage);
+      }
+      const savedTheme = localStorage.getItem('supplyx_theme');
+      setCurrentTheme(savedTheme !== 'light');
+    };
+
+    handleStorageChange(); // sync on mount
+    
+    window.addEventListener('language-changed', handleStorageChange);
+    window.addEventListener('theme-changed', handleStorageChange);
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('language-changed', handleStorageChange);
+      window.removeEventListener('theme-changed', handleStorageChange);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [initialLanguage, initialIsDarkMode]);
+
+  const language = currentLanguage;
+  const isDarkMode = currentTheme;
+
   const [permission, setPermission] = useState<NotificationPermission>(
     typeof window !== 'undefined' ? Notification.permission : 'default'
   );

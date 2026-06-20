@@ -55,10 +55,12 @@ export default function App() {
     } else {
       document.documentElement.classList.remove('dark');
     }
+    window.dispatchEvent(new Event('theme-changed'));
   }, [isDarkMode]);
 
   useEffect(() => {
     localStorage.setItem('supplyx_language', language);
+    window.dispatchEvent(new Event('language-changed'));
   }, [language]);
   const [selectedCategory, setSelectedCategory] = useState('Tudo');
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -211,8 +213,14 @@ export default function App() {
   }
 
   const handleNavigateWithPayload = (tab: string, payload?: any) => {
-    if (tab === 'Mensagens' && payload?.userId) {
-      setInitialRecipientId(payload.userId);
+    if (tab === 'Mensagens') {
+      if (payload?.userId) {
+        setInitialRecipientId(payload.userId);
+        setInitialChatId(null);
+      } else if (payload?.chatId) {
+        setInitialChatId(payload.chatId);
+        setInitialRecipientId(null);
+      }
     }
     if (tab === 'Pedidos / Cotações' && payload?.showForm) {
       setShowQuoteFormDirectly(true);
@@ -225,6 +233,9 @@ export default function App() {
     }
     if (tab === 'Logística') {
       setLogisticsPayload(payload);
+      if (payload?.subTab) {
+        setLogisticsSubTab(payload.subTab);
+      }
     }
     
     if (tab !== activeTab) {

@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx';
 import { db, auth } from '../../lib/firebase';
 import { collection, doc, addDoc, setDoc, getDocs, query, orderBy, serverTimestamp, where, updateDoc, increment } from 'firebase/firestore';
 import { CommercialDriver } from './types';
+import { notificationService } from '../../services/notificationService';
 
 // Mozambique realistic vehicle profiles
 interface VehicleProfile {
@@ -670,7 +671,38 @@ export default function TransportAssignmentPage({
       const docRef = doc(collection(db, 'transportAssignments'));
       await setDoc(docRef, cargoAssignedData);
       
-      triggerToast('Carga atribuída e registada com sucesso no Firestore!');
+      triggerToast(language === 'PT' ? 'Carga atribuída e registada com sucesso no Firestore!' : 'Cargo assigned and registered successfully in Firestore!');
+
+      // 2. Chat communication and system notification dispatch
+      if (carrierObj && carrierObj.id && carrierObj.id !== 'trans_personalizada') {
+        const text = language === 'PT'
+          ? `Olá! Uma nova carga de produtos foi atribuída à sua transportadora:
+📦 ID da Carga: ${cargoAssignedData.assignmentId}
+📍 Origem: ${cargoAssignedData.origin}
+🏁 Destino: ${cargoAssignedData.destination}
+⚖️ Peso Total: ${totalWeight.toFixed(1)} kg
+📐 Volume Total: ${totalVolume.toFixed(1)} m³`
+          : `Hello! A new cargo assignment has been successfully delegated to your fleet:
+📦 Cargo ID: ${cargoAssignedData.assignmentId}
+📍 Origin: ${cargoAssignedData.origin}
+🏁 Destination: ${cargoAssignedData.destination}
+⚖️ Total Weight: ${totalWeight.toFixed(1)} kg
+📐 Total Volume: ${totalVolume.toFixed(1)} m³`;
+
+        // Send direct message using our established routine
+        await handleSendDirectMessage(carrierObj.id, carrierObj.name, text);
+
+        // Dispatches standard notification so they receive live counts (which opens "Logística" -> "requests_list")
+        await notificationService.sendNotification({
+          userId: carrierObj.id,
+          senderId: auth.currentUser?.uid,
+          title: language === 'PT' ? 'Módulo Logística: Nova Carga' : 'Logistics Module: New Cargo',
+          message: language === 'PT'
+            ? `Carga ID ${cargoAssignedData.assignmentId} de ${cargoAssignedData.origin} para ${cargoAssignedData.destination} foi atribuída à sua empresa.`
+            : `Cargo assignment ID ${cargoAssignedData.assignmentId} from ${cargoAssignedData.origin} to ${cargoAssignedData.destination} was assigned to your company.`,
+          type: 'quote_request'
+        });
+      }
       
       // Reset rows to placeholder after successful saving
       setRows([

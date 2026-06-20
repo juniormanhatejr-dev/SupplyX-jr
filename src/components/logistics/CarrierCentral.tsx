@@ -21,6 +21,7 @@ import { CargoRequest } from './types';
 import { db, auth } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { collection, doc, setDoc } from 'firebase/firestore';
+import ChatView from '../ChatView';
 
 interface CarrierCentralProps {
   isDarkMode: boolean;
@@ -1017,7 +1018,9 @@ export default function CarrierCentral({
 
         {/* TAB 4: CARGO SPECIFIC DIAL CHAT (CONVERSAS) */}
         {carrierTab === 'chat' && (
-          <div className="min-h-[400px]" />
+          <div className="min-h-[600px] rounded-[32px] border border-white/5 bg-zinc-900/40 overflow-hidden">
+            <ChatView isDarkMode={isDarkMode} language={language} userType="logistics" />
+          </div>
         )}
 
       </div>

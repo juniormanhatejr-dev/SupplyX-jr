@@ -513,9 +513,10 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
         updatedAt: serverTimestamp(),
         [`unreadCount.${otherId}`]: increment(1)
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error uploading file:', err);
-      alert(language === 'PT' ? 'Erro ao carregar arquivo' : 'Error uploading file');
+      const errMsg = err?.message || (language === 'PT' ? 'Erro ao carregar arquivo' : 'Error uploading file');
+      alert(language === 'PT' ? `Erro ao carregar arquivo: ${errMsg}` : `Error uploading file: ${errMsg}`);
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -809,15 +810,43 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                                 src={msg.fileUrl} 
                                 alt={msg.fileName} 
                                 className="max-w-full rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
-                                onClick={() => window.open(msg.fileUrl, '_blank')}
+                                onClick={async () => {
+                                  if (msg.fileUrl?.startsWith('local-file://')) {
+                                    const { getFileFromIndexedDB } = await import('../lib/firebase');
+                                    const fileData = await getFileFromIndexedDB(msg.fileUrl);
+                                    if (fileData) {
+                                      const w = window.open();
+                                      if (w) {
+                                        w.document.write(`<img src="${fileData.dataUrl}" style="max-width:105%; max-height:100%; display:block; margin:auto;" />`);
+                                      }
+                                    }
+                                  } else {
+                                    window.open(msg.fileUrl, '_blank');
+                                  }
+                                }}
                                 referrerPolicy="no-referrer"
                               />
                             ) : (
                               <a 
-                                href={msg.fileUrl} 
-                                target="_blank" 
+                                href={msg.fileUrl?.startsWith('local-file://') ? '#' : msg.fileUrl} 
+                                target={msg.fileUrl?.startsWith('local-file://') ? undefined : "_blank"} 
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-2 underline"
+                                onClick={async (e) => {
+                                  if (msg.fileUrl?.startsWith('local-file://')) {
+                                    e.preventDefault();
+                                    const { getFileFromIndexedDB } = await import('../lib/firebase');
+                                    const fileData = await getFileFromIndexedDB(msg.fileUrl);
+                                    if (fileData) {
+                                      const link = document.createElement('a');
+                                      link.href = fileData.dataUrl;
+                                      link.download = fileData.name || 'file';
+                                      document.body.appendChild(link);
+                                      link.click();
+                                      document.body.removeChild(link);
+                                    }
+                                  }
+                                }}
                               >
                                 <Paperclip className="w-4 h-4" />
                                 {msg.fileName || 'Arquivo'}

@@ -24,6 +24,25 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    if (src && src.startsWith('local-file://')) {
+      setIsLoaded(false);
+      import('../../lib/firebase').then(({ getFileFromIndexedDB }) => {
+        getFileFromIndexedDB(src).then((fileData) => {
+          if (fileData) {
+            setCurrentSrc(fileData.dataUrl);
+            setHasError(false);
+            setIsLoaded(true);
+          } else {
+            setHasError(true);
+          }
+        });
+      }).catch((err) => {
+        console.error('Failed to import firebase inside OptimizedImage:', err);
+        setHasError(true);
+      });
+      return;
+    }
+
     setCurrentSrc(src);
     setHasError(false);
 

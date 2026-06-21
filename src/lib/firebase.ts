@@ -247,7 +247,11 @@ export async function uploadFile(path: string, file: File): Promise<string> {
 
     if (response.ok) {
       const data = await response.json();
-      console.log('[UPLOAD] Server proxy success:', data.url);
+      console.log('[UPLOAD] Server proxy success (first 50 chars):', data.url ? data.url.substring(0, 50) + '...' : 'none');
+      if (data.url && data.url.startsWith('data:') && data.url.length > 800000) {
+        console.warn('[UPLOAD] Server proxy returned a huge Base64 URL (>800KB). Diverting to local IndexedDB fallback...');
+        return await saveFileToIndexedDB(file);
+      }
       return data.url;
     }
     console.warn('[UPLOAD] Server proxy failed, trying direct Storage:', await response.text());
@@ -287,37 +291,122 @@ export async function uploadFile(path: string, file: File): Promise<string> {
     if (file.type.startsWith('image/')) {
       console.log('Resorting to robust Base64 local fallback with Canvas compression...');
       try {
-        const base64Url = await compressWithCanvas(file);
-        console.log('Base64 Canvas compression fallback successful. URL length:', base64Url.length);
+        let base64Url = await compressWithCanvas(file, 600, 600, 0.4);
+        console.log('Base64 Canvas compression fallback successful. Initial URL length:', base64Url.length);
+        
+        // Dynamic Downscaling to fit Firestore's 1MB limit safely (approx. 800k characters max)
+        if (base64Url.length > 800000) {
+          console.log('Base64 too big (> 800KB). Retrying compression with 400x400 and 0.25 quality...');
+          base64Url = await compressWithCanvas(file, 400, 400, 0.25);
+          console.log('Second attempt URL length:', base64Url.length);
+        }
+        
+        if (base64Url.length > 800000) {
+          console.log('Base64 still too big. Retrying with ultra compression (250x250, 0.15 quality)...');
+          base64Url = await compressWithCanvas(file, 250, 250, 0.15);
+          console.log('Ultra compressed URL length:', base64Url.length);
+        }
+
+        if (base64Url.length > 800000) {
+          throw new Error('A imagem é grande demais após a compressão máxima para armazenamento direto.');
+        }
         return base64Url;
-      } catch (canvasErr) {
-        console.error('Canvas compression fallback also failed, trying basic FileReader:', canvasErr);
+      } catch (canvasErr: any) {
+        console.error('Canvas compression fallback failed:', canvasErr);
+        // Canvas compression/size constraint failed, fallback to local IndexedDB store
+        console.log('Storing image in local IndexedDB due to high-resolution / compatibility fallback...');
+        return await saveFileToIndexedDB(file);
       }
-
-      // If Canvas itself fails, try reading as simple small Base64
-      if (fileToUpload.size < 900000) {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64 = reader.result as string;
-            if (base64.length > 1048576) {
-              reject(new Error('Imagem excessivamente grande para o modo de compatibilidade (Vercel/Base64). Tente uma imagem abaixo de 800KB.'));
-            } else {
-              console.log('Simple Base64 reading fallback successful');
-              resolve(base64);
-            }
-          };
-          reader.onerror = () => reject(new Error('Falha ao processar arquivo para fallback local.'));
-          reader.readAsDataURL(fileToUpload);
-        });
-      }
-    }
-
-    if (isCorsError) {
-      throw new Error('Configuração de Domínio: O carregamento falhou. Tente uma imagem de outro tamanho para usar o modo de compatibilidade automática.');
     } else {
-      throw new Error(`Falha no carregamento: ${error.message || 'Erro desconhecido.'}`);
+      // If it's a non-image file, we can store it in IndexedDB fallback store instead of failing
+      console.log('Storing non-image file in local IndexedDB due to compatibility fallback...');
+      return await saveFileToIndexedDB(file);
     }
   }
+}
+
+// Save a file to IndexedDB and return a reference string "local-file://<uuid>"
+export async function saveFileToIndexedDB(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('supplyx_local_files', 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains('files')) {
+        db.createObjectStore('files');
+      }
+    };
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction('files', 'readwrite');
+      const store = tx.objectStore('files');
+      const uuid = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11);
+      
+      const fileData = {
+        name: file.name,
+        type: file.type,
+        data: file
+      };
+      
+      const putRequest = store.put(fileData, uuid);
+      putRequest.onsuccess = () => {
+        resolve(`local-file://${uuid}`);
+      };
+      putRequest.onerror = () => {
+        reject(new Error('Failed to save file to local IndexedDB'));
+      };
+    };
+    request.onerror = () => {
+      reject(new Error('Failed to open local IndexedDB'));
+    };
+  });
+}
+
+// Retrieve a File or data URL from IndexedDB matching "local-file://<uuid>"
+export async function getFileFromIndexedDB(refUrl: string): Promise<{ name: string; type: string; dataUrl: string; file: File } | null> {
+  if (!refUrl.startsWith('local-file://')) return null;
+  const uuid = refUrl.substring('local-file://'.length);
+  
+  return new Promise((resolve) => {
+    const request = indexedDB.open('supplyx_local_files', 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains('files')) {
+        db.createObjectStore('files');
+      }
+    };
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction('files', 'readonly');
+      const store = tx.objectStore('files');
+      const getRequest = store.get(uuid);
+      getRequest.onsuccess = () => {
+        const result = getRequest.result;
+        if (!result) {
+          resolve(null);
+          return;
+        }
+        
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          resolve({
+            name: result.name,
+            type: result.type,
+            dataUrl: reader.result as string,
+            file: result.data
+          });
+        };
+        reader.onerror = () => {
+          resolve(null);
+        };
+        reader.readAsDataURL(result.data);
+      };
+      getRequest.onerror = () => {
+        resolve(null);
+      };
+    };
+    request.onerror = () => {
+      resolve(null);
+    };
+  });
 }
 

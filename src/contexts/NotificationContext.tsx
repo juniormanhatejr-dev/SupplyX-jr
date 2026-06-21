@@ -290,7 +290,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
 
             if (lastSenderId && lastSenderId !== currentUserId && (now - updatedAt < 30000 || !chatData.updatedAt)) {
               const otherParticipantId = chatData.participants.find((id: string) => id !== currentUserId);
-              const senderName = chatData.participantNames[otherParticipantId] || (language === 'PT' ? 'Nova Mensagem' : 'New Message');
+              const senderName = chatData.participantNames?.[otherParticipantId] || (language === 'PT' ? 'Nova Mensagem' : 'New Message');
               const body = chatData.lastMessage || '';
               console.log(`[NotificationContext] Dynamic new message alert from ${senderName}: "${body.substring(0, 30)}..."`);
               triggerNotification(senderName, body, change.doc.id);

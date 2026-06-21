@@ -537,7 +537,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     if (otherId === 'supplier_demo_uid') {
       return language === 'PT' ? 'Fornecedor B2B (Demo)' : 'B2B Supplier (Demo)';
     }
-    return resolvedNames[otherId] || room.participantNames[otherId] || t.user;
+    return resolvedNames[otherId] || room.participantNames?.[otherId] || t.user;
   };
 
   const getOtherParticipantId = (room: ChatRoom) => {

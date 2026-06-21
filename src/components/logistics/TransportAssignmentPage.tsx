@@ -143,6 +143,26 @@ export default function TransportAssignmentPage({
   const [pasteText, setPasteText] = useState('');
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
+  // User Profile details
+  const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
+
+  // Fetch current user's profile information from Firestore so assignments have context
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (auth.currentUser) {
+        try {
+          const fetchedDocs = await getDocs(query(collection(db, 'users'), where('__name__', '==', auth.currentUser.uid)));
+          if (!fetchedDocs.empty) {
+            setCurrentUserProfile(fetchedDocs.docs[0].data());
+          }
+        } catch (e) {
+          console.warn('Error fetching user profile in assignment page:', e);
+        }
+      }
+    };
+    fetchUserProfile();
+  }, []);
+
   // Search & Filter state for past assignments
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'todos' | 'pending' | 'completed'>('todos');
@@ -632,6 +652,9 @@ export default function TransportAssignmentPage({
       assignmentId: `TA-${Math.floor(100000 + Math.random() * 900000)}`,
       origin,
       destination,
+      userId: auth.currentUser?.uid || 'anonymous',
+      userName: currentUserProfile?.companyName || currentUserProfile?.name || auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Cliente / Fornecedor',
+      userType: currentUserProfile?.type || 'buyer',
       pickupDate,
       deliveryDate,
       priority,

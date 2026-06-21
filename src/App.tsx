@@ -78,6 +78,38 @@ export default function App() {
   const [logisticsPayload, setLogisticsPayload] = useState<any>(null);
   const [logisticsSubTab, setLogisticsSubTab] = useState<string>('dashboard');
 
+  const handleNavigateWithPayload = (tab: string, payload?: any) => {
+    if (tab === 'Mensagens') {
+      if (payload?.userId) {
+        setInitialRecipientId(payload.userId);
+        setInitialChatId(null);
+      } else if (payload?.chatId) {
+        setInitialChatId(payload.chatId);
+        setInitialRecipientId(null);
+      }
+    }
+    if (tab === 'Pedidos / Cotações' && payload?.showForm) {
+      setShowQuoteFormDirectly(true);
+    }
+    if (tab === 'Ajustes' && payload?.edit) {
+      setShouldEditProfile(true);
+    }
+    if (tab === 'Produtos / Materiais' && payload?.searchQuery) {
+      setPersistentSearchQuery(payload.searchQuery);
+    }
+    if (tab === 'Logística') {
+      setLogisticsPayload(payload);
+      if (payload?.subTab) {
+        setLogisticsSubTab(payload.subTab);
+      }
+    }
+    
+    if (tab !== activeTab) {
+      setPrevTab(activeTab);
+    }
+    setActiveTab(tab);
+  };
+
   useEffect(() => {
     const handleNavigate = (e: any) => {
       if (e.detail?.userId) {
@@ -211,38 +243,6 @@ export default function App() {
       />
     );
   }
-
-  const handleNavigateWithPayload = (tab: string, payload?: any) => {
-    if (tab === 'Mensagens') {
-      if (payload?.userId) {
-        setInitialRecipientId(payload.userId);
-        setInitialChatId(null);
-      } else if (payload?.chatId) {
-        setInitialChatId(payload.chatId);
-        setInitialRecipientId(null);
-      }
-    }
-    if (tab === 'Pedidos / Cotações' && payload?.showForm) {
-      setShowQuoteFormDirectly(true);
-    }
-    if (tab === 'Ajustes' && payload?.edit) {
-      setShouldEditProfile(true);
-    }
-    if (tab === 'Produtos / Materiais' && payload?.searchQuery) {
-      setPersistentSearchQuery(payload.searchQuery);
-    }
-    if (tab === 'Logística') {
-      setLogisticsPayload(payload);
-      if (payload?.subTab) {
-        setLogisticsSubTab(payload.subTab);
-      }
-    }
-    
-    if (tab !== activeTab) {
-      setPrevTab(activeTab);
-    }
-    setActiveTab(tab);
-  };
 
   const renderContent = () => {
     const commonProps = { isDarkMode, language, userType: profile?.type };

@@ -19,7 +19,8 @@ import {
   ListFilter
 } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, onSnapshot, query, where, getDocs, setDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, getDocs, getDoc, setDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
 
 // Decoupled sub-system views
 import { CargoRequest, CommercialDriver, StorageWarehouse, FinancialLedger } from './logistics/types';
@@ -52,6 +53,7 @@ export default function LogisticsView({
   activeSubTab: propActiveSubTab,
   setActiveSubTab: propSetActiveSubTab
 }: LogisticsViewProps) {
+  const { profile } = useAuth();
   
   // Tab Routing ('dashboard' | 'detailed_request' | 'create_request' | 'requests_list' | 'available_loads' | 'drivers' | 'inventory' | 'financial')
   const [localActiveSubTab, setLocalActiveSubTab] = useState<string>('dashboard');
@@ -112,6 +114,9 @@ export default function LogisticsView({
 
   // 2. Active Fleets / Drivers list
   const [drivers, setDrivers] = useState<CommercialDriver[]>([]);
+
+  // Real-time direct transport assignments matching B2B logistics flow
+  const [dbAssignments, setDbAssignments] = useState<any[]>([]);
 
   // 3. Storage Warehouses list
   const [warehouses] = useState<StorageWarehouse[]>(() => {
@@ -244,6 +249,31 @@ export default function LogisticsView({
   // Helper to update structural fields in Firestore freight_orders
   const syncRequestToFirestore = async (req: CargoRequest) => {
     try {
+      if ((req as any).isDirectAssignment) {
+        // Translate status back to database representation: display Status -> Firestore status representation
+        let dbStatus = 'pending';
+        if (req.status === 'Entregue' || req.status === 'Concluído') dbStatus = 'completed';
+        else if (req.status === 'Em trânsito') dbStatus = 'in_transit';
+        else if (req.status === 'Em recolha') dbStatus = 'in_recolha';
+
+        const docRef = doc(db, 'transportAssignments', req.id);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const updatePayload: any = {
+            status: dbStatus,
+            updatedAt: new Date().toISOString()
+          };
+          if (req.feedbackClient) updatePayload.feedbackClient = req.feedbackClient;
+          if (req.feedbackCarrier) updatePayload.feedbackCarrier = req.feedbackCarrier;
+          if (req.podSignature) updatePayload.podSignature = req.podSignature;
+          if (req.podPhoto) updatePayload.podPhoto = req.podPhoto;
+          if (req.logisticsReplies) updatePayload.logisticsReplies = req.logisticsReplies;
+
+          await updateDoc(docRef, updatePayload);
+        }
+        return;
+      }
+
       const q = query(collection(db, 'freight_orders'), where('id', '==', req.id));
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
@@ -332,6 +362,76 @@ export default function LogisticsView({
     }
   }, []);
 
+  // Real-time listener for transportAssignments collection
+  useEffect(() => {
+    try {
+      const q = query(collection(db, 'transportAssignments'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const firestoreList: any[] = [];
+        snapshot.forEach((docSnap) => {
+          firestoreList.push({
+            id: docSnap.id,
+            ...docSnap.data()
+          });
+        });
+        setDbAssignments(firestoreList);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, 'transportAssignments');
+      });
+      return () => unsubscribe();
+    } catch (err) {
+      console.warn('Failed to initialize Firestore listener for transportAssignments:', err);
+    }
+  }, []);
+
+  // Map direct transport assignments to CargoRequest schema for consistent rendering and detailed interaction
+  const mappedAssignmentsAsRequests = useMemo(() => {
+    return dbAssignments.map((item) => {
+      const mappedId = item.id || item.assignmentId;
+      const productsList = item.products || [];
+      const prodNames = productsList.map((p: any) => p.productName || p.name).join(', ') || 'Produtos';
+      const totalWeightVal = item.totalWeightKg || item.totalWeight || 0;
+      const totalVolVal = item.totalVolumeM3 || item.totalVolume || 0;
+
+      // Translate database status to display Status (PT)
+      let displayStatus = 'Atribuído';
+      if (item.status === 'completed') displayStatus = 'Entregue';
+      else if (item.status === 'in_transit') displayStatus = 'Em trânsito';
+      else if (item.status === 'in_recolha') displayStatus = 'Em recolha';
+
+      return {
+        id: mappedId,
+        tipoCarga: prodNames,
+        quantidade: String(productsList.reduce((sum: number, p: any) => sum + (p.quantity || 1), 0)),
+        peso: `${totalWeightVal.toFixed(1)} kg`,
+        volume: `${totalVolVal.toFixed(2)} m³`,
+        origem: item.origin || 'Desconhecido',
+        destino: item.destination || 'Desconhecido',
+        dataColeta: item.pickupDate || item.createdAt?.substring(0, 10) || '',
+        prazoEntrega: item.deliveryDate || '',
+        observacoes: item.notes || '',
+        requester: item.userType === 'supplier' ? 'Supplier' : 'Client',
+        requesterName: item.userName || 'Remetente Direto',
+        freightResponsibility: 'Client',
+        deliveryMode: 'Expresso',
+        status: displayStatus,
+        proposalsCount: 0,
+        rating: 5,
+        assignedCarrier: item.transporterName || '',
+        buyerId: item.userType === 'buyer' ? item.userId : undefined,
+        supplierId: item.userType === 'supplier' ? item.userId : undefined,
+        userId: item.userId,
+        isDirectAssignment: true, // Custom flag to help us update in the DB!
+        items: productsList.map((p: any) => ({
+          name: p.productName || p.name,
+          quantity: String(p.quantity || 1),
+          weight: p.totalWeightKg ? `${p.totalWeightKg} kg` : undefined,
+          volume: p.totalVolumeM3 ? `${p.totalVolumeM3} m³` : undefined
+        }))
+      } as CargoRequest;
+    });
+  }, [dbAssignments]);
+
   // Intercept incoming order payloads (e.g. from Purchase views)
   useEffect(() => {
     if (initialPayload?.tipoCarga) {
@@ -341,23 +441,51 @@ export default function LogisticsView({
 
   // Dynamically filter requests based on the user's logged-in role
   const displayedRequests = useMemo(() => {
+    let requestsMerged = [...customRequests];
+
     if (userType === 'logistics') {
-      return customRequests.filter(req => !hiddenDossiers.includes(req.id));
+      // Find direct assignments targeted to this carrier
+      const myUid = auth.currentUser?.uid;
+      const myCompany = (profile?.companyName || profile?.name || '').toLowerCase().trim();
+
+      const myDirects = mappedAssignmentsAsRequests.filter(item => {
+        const isTargetedToMe = (item as any).userId === myUid || 
+          (item as any).supplierId === myUid ||
+          (item as any).buyerId === myUid ||
+          (item as any).transporterId === myUid ||
+          (item.assignedCarrier && myCompany && item.assignedCarrier.toLowerCase().trim().includes(myCompany));
+        return isTargetedToMe || (item as any).transporterId === 'trans_personalizada';
+      });
+
+      // Filter out duplicates
+      const filteredDirects = myDirects.filter(dr => !requestsMerged.some(cm => cm.id === dr.id));
+      requestsMerged = [...filteredDirects, ...requestsMerged];
+
+      return requestsMerged.filter(req => !hiddenDossiers.includes(req.id));
     }
-    // Buyers see ONLY their own created requests
+
     if (userType === 'buyer') {
-      return customRequests.filter(req => 
-        req.buyerId === auth.currentUser?.uid
+      const myDirects = mappedAssignmentsAsRequests.filter(item => item.buyerId === auth.currentUser?.uid || item.userId === auth.currentUser?.uid);
+      const filteredDirects = myDirects.filter(dr => !requestsMerged.some(cm => cm.id === dr.id));
+      requestsMerged = [...filteredDirects, ...requestsMerged];
+
+      return requestsMerged.filter(req => 
+        req.buyerId === auth.currentUser?.uid || req.userId === auth.currentUser?.uid
       );
     }
-    // Suppliers see ONLY their own created/assigned requests
+
     if (userType === 'supplier') {
-      return customRequests.filter(req => 
-        req.supplierId === auth.currentUser?.uid
+      const myDirects = mappedAssignmentsAsRequests.filter(item => item.supplierId === auth.currentUser?.uid || item.userId === auth.currentUser?.uid);
+      const filteredDirects = myDirects.filter(dr => !requestsMerged.some(cm => cm.id === dr.id));
+      requestsMerged = [...filteredDirects, ...requestsMerged];
+
+      return requestsMerged.filter(req => 
+        req.supplierId === auth.currentUser?.uid || req.userId === auth.currentUser?.uid
       );
     }
+
     return [];
-  }, [customRequests, userType, hiddenDossiers]);
+  }, [customRequests, userType, hiddenDossiers, mappedAssignmentsAsRequests, profile, auth.currentUser?.uid]);
 
   // If user is registered as logistics, default to carrier_central dashboard, otherwise 'requests_list'
   useEffect(() => {
@@ -455,6 +583,41 @@ export default function LogisticsView({
   };
 
   const handleChangeRequestStatus = (id: string, newStatus: string) => {
+    // Check if it is a direct assignment
+    const matchedDirect = dbAssignments.find(a => a.id === id || a.assignmentId === id);
+    if (matchedDirect) {
+      const docId = matchedDirect.id || id;
+      const cargoName = matchedDirect.assignmentId || 'Carga Direta';
+      
+      // Translate display status to DB representation
+      let dbStatus = 'pending';
+      if (newStatus === 'Entregue' || newStatus === 'Concluído') dbStatus = 'completed';
+      else if (newStatus === 'Em trânsito') dbStatus = 'in_transit';
+      else if (newStatus === 'Em recolha') dbStatus = 'in_recolha';
+      else if (newStatus === 'Atribuído') dbStatus = 'pending';
+
+      try {
+        const docRef = doc(db, 'transportAssignments', docId);
+        updateDoc(docRef, {
+          status: dbStatus,
+          updatedAt: new Date().toISOString()
+        });
+
+        // Create a notification for status change
+        const newNotif = {
+          id: `nt-${Date.now()}`,
+          title: 'Status de Entrega Atualizado',
+          text: `A carga direta [${cargoName}] mudou para o status [${newStatus}].`,
+          time: 'Agora mesmo',
+          type: 'success'
+        };
+        syncNotificationsToLocalStorage([newNotif, ...logisticsNotifications]);
+      } catch (err) {
+        console.error('Error updating direct assignment status:', err);
+      }
+      return;
+    }
+
     const matchedCargo = customRequests.find(r => r.id === id);
     const cargoName = matchedCargo ? matchedCargo.tipoCarga : 'Carga';
     
@@ -494,7 +657,7 @@ export default function LogisticsView({
     // Create a notification for status change
     const newNotif = {
       id: `nt-${Date.now()}`,
-      title: 'Status de Entrega Atualizado',
+      title: 'Status de Delivery Atualizado',
       text: `A carga [${cargoName}] mudou para o status [${newStatus}].`,
       time: 'Agora mesmo',
       type: 'success'
@@ -588,6 +751,13 @@ export default function LogisticsView({
   };
 
   const handleUpdateFeedback = (id: string, role: 'client' | 'carrier', rating: number, comment: string) => {
+    const matchedDirect = mappedAssignmentsAsRequests.find(a => a.id === id);
+    if (matchedDirect) {
+      const feedbackObj = role === 'client' ? { feedbackClient: { rating, comment } } : { feedbackCarrier: { rating, comment } };
+      syncRequestToFirestore({ ...matchedDirect, ...feedbackObj });
+      return;
+    }
+
     const updated = customRequests.map(r => {
       if (r.id === id) {
         if (role === 'client') {
@@ -602,6 +772,12 @@ export default function LogisticsView({
   };
 
   const handleUpdateCargoPod = (id: string, signature: string, photo: string) => {
+    const matchedDirect = mappedAssignmentsAsRequests.find(a => a.id === id);
+    if (matchedDirect) {
+      syncRequestToFirestore({ ...matchedDirect, podSignature: signature, podPhoto: photo });
+      return;
+    }
+
     const updated = customRequests.map(r => {
       if (r.id === id) {
         return { ...r, podSignature: signature, podPhoto: photo };
@@ -612,6 +788,12 @@ export default function LogisticsView({
   };
 
   const handleUpdateCargoRequest = (id: string, updatedFields: Partial<CargoRequest>) => {
+    const matchedDirect = mappedAssignmentsAsRequests.find(a => a.id === id);
+    if (matchedDirect) {
+      syncRequestToFirestore({ ...matchedDirect, ...updatedFields });
+      return;
+    }
+
     const updated = customRequests.map(r => {
       if (r.id === id) {
         return { ...r, ...updatedFields };

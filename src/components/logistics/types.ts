@@ -53,6 +53,8 @@ export interface CargoRequest {
   utilizationVolumePercent?: number;
   vehicleCompatibilityScore?: number;
   vehicleWarningMsg?: string;
+  userId?: string;
+  isDirectAssignment?: boolean;
 }
 
 export interface CarrierProposal {

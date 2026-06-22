@@ -56,7 +56,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
 
     setIsLoaded(false);
 
-    // Setup active network load timeout (e.g., 4000ms)
+    // Setup active network load timeout (e.g., 30000ms for stable image generation)
     // If the image fails to load or hangs (e.g. Pollinations.ai or slow hosting),
     // we handle it proactively rather than staying in an eternal blank/blurry state.
     if (src) {
@@ -65,7 +65,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
           console.warn(`[OptimizedImage] Timeout triggered for: ${src}`);
           handleLoadFallback();
         }
-      }, 4000);
+      }, 30000);
     }
 
     return () => {
@@ -78,8 +78,32 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   const handleLoadFallback = () => {
     // If it's a product image or general placeholder, let's load a fast reliable high-res alternative
     // If it's a profile/avatar image (determined by alt or container classes) we can use a smart avatar
+    const lowerSrc = src ? src.toLowerCase() : '';
+    const lowerAlt = alt ? alt.toLowerCase() : '';
+    const isCement = lowerSrc.includes('cimento') || lowerSrc.includes('cement') || lowerAlt.includes('cimento') || lowerAlt.includes('cement');
+    const isSand = lowerSrc.includes('areia') || lowerSrc.includes('sand') || lowerAlt.includes('areia') || lowerAlt.includes('sand');
+    const isStone = lowerSrc.includes('brita') || lowerSrc.includes('pedra') || lowerSrc.includes('gravel') || lowerSrc.includes('stone') || lowerAlt.includes('brita') || lowerAlt.includes('pedra');
+    const isBrick = lowerSrc.includes('bloco') || lowerSrc.includes('tijolo') || lowerSrc.includes('brick') || lowerAlt.includes('bloco') || lowerAlt.includes('tijolo') || lowerAlt.includes('brick');
+    const isIron = lowerSrc.includes('ferro') || lowerSrc.includes('aço') || lowerSrc.includes('varão') || lowerSrc.includes('rebar') || lowerSrc.includes('steel') || lowerAlt.includes('ferro') || lowerAlt.includes('aço') || lowerAlt.includes('varão') || lowerAlt.includes('rebar') || lowerAlt.includes('steel');
+    const isPaint = lowerSrc.includes('tinta') || lowerSrc.includes('paint') || lowerAlt.includes('tinta') || lowerAlt.includes('paint');
+    const isPipe = lowerSrc.includes('tubo') || lowerSrc.includes('cano') || lowerSrc.includes('pvc') || lowerSrc.includes('pipe') || lowerAlt.includes('tubo') || lowerAlt.includes('cano') || lowerAlt.includes('pvc') || lowerAlt.includes('pipe');
+
     if (src && (src.includes('avatar') || src.includes('profile') || alt.toLowerCase().includes('perfil') || alt.toLowerCase().includes('avatar') || alt.toLowerCase().includes('usuario') || alt.toLowerCase().includes('user'))) {
       setCurrentSrc('https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80'); // Fast reliable high-res default profile
+    } else if (isCement) {
+      setCurrentSrc('https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=600&auto=format&fit=crop&q=80'); // Construction/materials related
+    } else if (isSand) {
+      setCurrentSrc('https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=600&auto=format&fit=crop&q=80');
+    } else if (isStone) {
+      setCurrentSrc('https://images.unsplash.com/photo-1576086213369-97a306d36557?w=600&auto=format&fit=crop&q=80');
+    } else if (isBrick) {
+      setCurrentSrc('https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?w=600&auto=format&fit=crop&q=80');
+    } else if (isIron) {
+      setCurrentSrc('https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?w=600&auto=format&fit=crop&q=80');
+    } else if (isPaint) {
+      setCurrentSrc('https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=600&auto=format&fit=crop&q=80');
+    } else if (isPipe) {
+      setCurrentSrc('https://images.unsplash.com/photo-1585314062340-f1a5a7c9328d?w=600&auto=format&fit=crop&q=80');
     } else {
       setCurrentSrc('https://images.unsplash.com/photo-1581094288338-2314dddb7ec3?w=500&q=80'); // Fast reliable default industrial product
     }

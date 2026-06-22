@@ -439,7 +439,7 @@ export default function LogisticsView({
     }
   }, [initialPayload]);
 
-  // Dynamically filter requests based on the user's logged-in role
+  // Dynamically filter and sort requests based on the user's logged-in role
   const displayedRequests = useMemo(() => {
     let requestsMerged = [...customRequests];
 
@@ -460,31 +460,55 @@ export default function LogisticsView({
       // Filter out duplicates
       const filteredDirects = myDirects.filter(dr => !requestsMerged.some(cm => cm.id === dr.id));
       requestsMerged = [...filteredDirects, ...requestsMerged];
-
-      return requestsMerged.filter(req => !hiddenDossiers.includes(req.id));
-    }
-
-    if (userType === 'buyer') {
+    } else if (userType === 'buyer') {
       const myDirects = mappedAssignmentsAsRequests.filter(item => item.buyerId === auth.currentUser?.uid || item.userId === auth.currentUser?.uid);
       const filteredDirects = myDirects.filter(dr => !requestsMerged.some(cm => cm.id === dr.id));
       requestsMerged = [...filteredDirects, ...requestsMerged];
-
-      return requestsMerged.filter(req => 
-        req.buyerId === auth.currentUser?.uid || req.userId === auth.currentUser?.uid
-      );
-    }
-
-    if (userType === 'supplier') {
+    } else if (userType === 'supplier') {
       const myDirects = mappedAssignmentsAsRequests.filter(item => item.supplierId === auth.currentUser?.uid || item.userId === auth.currentUser?.uid);
       const filteredDirects = myDirects.filter(dr => !requestsMerged.some(cm => cm.id === dr.id));
       requestsMerged = [...filteredDirects, ...requestsMerged];
-
-      return requestsMerged.filter(req => 
-        req.supplierId === auth.currentUser?.uid || req.userId === auth.currentUser?.uid
-      );
+    } else {
+      requestsMerged = [];
     }
 
-    return [];
+    const filtered = requestsMerged.filter(req => {
+      const isHidden = hiddenDossiers.includes(req.id);
+      if (isHidden) return false;
+      
+      if (userType === 'logistics') return true;
+      if (userType === 'buyer') {
+        return req.buyerId === auth.currentUser?.uid || req.userId === auth.currentUser?.uid;
+      }
+      if (userType === 'supplier') {
+        return req.supplierId === auth.currentUser?.uid || req.userId === auth.currentUser?.uid;
+      }
+      return false;
+    });
+
+    // Sort requests: "Em concurso" comes first, then "Em processo" (active/pending/transit), then "Entregues" last
+    return [...filtered].sort((a, b) => {
+      const getStatusRank = (status: string) => {
+        const s = (status || '').toLowerCase();
+        if (s.includes('concurso')) {
+          return 1; // "em concurso" first
+        }
+        if (s.includes('entregue') || s.includes('delivered')) {
+          return 3; // "entregues" last
+        }
+        return 2; // "em processo" / in progress in the middle
+      };
+
+      const rankA = getStatusRank(a.status);
+      const rankB = getStatusRank(b.status);
+      
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+      
+      // Secondary sorting: sort alphabetically by ID descending so newer ones are on top
+      return b.id.localeCompare(a.id);
+    });
   }, [customRequests, userType, hiddenDossiers, mappedAssignmentsAsRequests, profile, auth.currentUser?.uid]);
 
   // If user is registered as logistics, default to carrier_central dashboard, otherwise 'requests_list'
@@ -963,6 +987,10 @@ export default function LogisticsView({
                 language={language}
                 drivers={drivers}
                 onNavigate={onNavigate}
+                onSelectRequest={(requestId) => {
+                  setSelectedRequestId(requestId);
+                  setActiveSubTab('detailed_request');
+                }}
               />
             )}
 

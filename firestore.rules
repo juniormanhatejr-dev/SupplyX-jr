@@ -191,6 +191,9 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow list: if isSignedIn() && (get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) || isAdmin());
         allow create: if isVerified() && isValidMessage(incoming()) && (get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) || isAdmin());
+        allow update: if isVerified() && (get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) || isAdmin()) && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['deletedBy'])
+        );
         allow delete: if isVerified() && (request.auth.uid == existing().senderId || isAdmin());
       }
     }
@@ -232,7 +235,7 @@ service cloud.firestore {
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isVerified() && isValidNotification(incoming());
       allow update: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin()) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['read'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['read', 'deleted'])
       );
       allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
     }

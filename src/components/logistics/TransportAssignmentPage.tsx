@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { db, auth } from '../../lib/firebase';
-import { collection, doc, addDoc, setDoc, getDocs, query, orderBy, serverTimestamp, where, updateDoc, increment } from 'firebase/firestore';
+import { collection, doc, addDoc, setDoc, getDocs, query, orderBy, serverTimestamp, where, updateDoc, increment, deleteDoc } from 'firebase/firestore';
 import { CommercialDriver } from './types';
 import { notificationService } from '../../services/notificationService';
 
@@ -65,13 +65,15 @@ interface TransportAssignmentPageProps {
   language: 'PT' | 'EN';
   drivers?: CommercialDriver[];
   onNavigate?: (tab: string, payload?: any) => void;
+  onSelectRequest?: (id: string) => void;
 }
 
 export default function TransportAssignmentPage({
   isDarkMode,
   language,
   drivers: dbDrivers = [],
-  onNavigate
+  onNavigate,
+  onSelectRequest
 }: TransportAssignmentPageProps) {
   // Spreadsheet state
   const [rows, setRows] = useState<SpreadsheetRow[]>([
@@ -136,8 +138,9 @@ export default function TransportAssignmentPage({
   const [loadingPast, setLoadingPast] = useState(true);
 
   // Assignment selection state
-  const [selectedTransporter, setSelectedTransporter] = useState('trans_lalgy');
+  const [selectedTransporter, setSelectedTransporter] = useState('');
   const [selectedDriverId, setSelectedDriverId] = useState('DR-002');
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState('');
@@ -275,18 +278,6 @@ export default function TransportAssignmentPage({
   const finalCarriers = useMemo(() => {
     const map = new Map();
     
-    // Add realistic defaults
-    DEFAULT_TRANSPORTERS.forEach(t => {
-      map.set(t.id, {
-        id: t.id,
-        name: t.name,
-        phone: t.id === 'trans_lalgy' ? '+258 84 311 9900' : t.id === 'trans_mft' ? '+258 82 455 1122' : t.id === 'trans_canico' ? '+258 86 500 2030' : t.id === 'trans_zambeze' ? '+258 84 777 8888' : '+258 85 909 0101',
-        email: t.id === 'trans_lalgy' ? 'contato@lalgy.co.mz' : t.id === 'trans_mft' ? 'operacoes@mft.co.mz' : t.id === 'trans_canico' ? 'atendimento@canico.co.mz' : t.id === 'trans_zambeze' ? 'vendas@zambezelog.co.mz' : 'geral@transmoc.co.mz',
-        location: t.id === 'trans_lalgy' ? 'Matola, EN4' : t.id === 'trans_mft' ? 'Porto de Maputo' : t.id === 'trans_canico' ? 'Beira, EN6' : t.id === 'trans_zambeze' ? 'Tete, Margem Zambeze' : 'Nampula Centro',
-        isFromDb: false
-      });
-    });
-    
     // Merge Firestore retrieved ones (overriding if name is match or keeping unique profile ID)
     dbCarriers.forEach(c => {
       const email = c.email || `${c.id}@supplyx.co.mz`;
@@ -304,6 +295,12 @@ export default function TransportAssignmentPage({
     
     return Array.from(map.values());
   }, [dbCarriers]);
+
+  useEffect(() => {
+    if (finalCarriers && finalCarriers.length > 0 && !selectedTransporter) {
+      setSelectedTransporter(finalCarriers[0].id);
+    }
+  }, [finalCarriers, selectedTransporter]);
 
   // Handle direct messaging with carrier
   const handleSendDirectMessage = async (carrierId: string, carrierName: string, text: string) => {
@@ -753,6 +750,45 @@ export default function TransportAssignmentPage({
       triggerToast('Atribuição efetuada localmente (Sem conexão cloud temporária)');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteAssignment = async (docId: string | undefined, assignmentId?: string) => {
+    if (!window.confirm(language === 'PT' ? 'Tem a certeza de que deseja eliminar este registo de atribuição?' : 'Are you sure you want to delete this assignment record?')) {
+      return;
+    }
+    try {
+      if (docId) {
+        try {
+          const docRef = doc(db, 'transportAssignments', docId);
+          await deleteDoc(docRef);
+        } catch (dbErr) {
+          console.warn('Could not delete from Firestore using docId:', dbErr);
+        }
+      } else if (assignmentId) {
+        try {
+          const q = query(collection(db, 'transportAssignments'), where('assignmentId', '==', assignmentId));
+          const snap = await getDocs(q);
+          for (const docSnap of snap.docs) {
+            await deleteDoc(doc(db, 'transportAssignments', docSnap.id));
+          }
+        } catch (dbErr) {
+          console.warn('Could not query and delete by assignmentId in Firestore:', dbErr);
+        }
+      }
+      
+      const updated = pastAssignments.filter(a => {
+        const matchesId = docId && a.id === docId;
+        const matchesAssignmentId = assignmentId && a.assignmentId === assignmentId;
+        return !matchesId && !matchesAssignmentId;
+      });
+      
+      setPastAssignments(updated);
+      localStorage.setItem('supplyx_local_transport_assignments', JSON.stringify(updated));
+      triggerToast(language === 'PT' ? 'Registo eliminado com sucesso!' : 'Record deleted successfully!');
+    } catch (err) {
+      console.error('Error deleting assignment:', err);
+      alert(language === 'PT' ? 'Erro ao eliminar registo' : 'Error deleting record');
     }
   };
 
@@ -1545,91 +1581,6 @@ export default function TransportAssignmentPage({
             )}
           </div>
 
-          {/* FINAL ASSIGNMENT ACTIONS CONTAINER */}
-          <div className={`p-6 rounded-[28px] border ${isDarkMode ? 'bg-zinc-900/40 border-white/5' : 'bg-white border-zinc-150 shadow-sm'}`}>
-            <h3 className="font-extrabold text-[12px] uppercase tracking-wider mb-4 flex items-center gap-1.5 text-zinc-500">
-              <Layers className="w-5 h-5 text-emerald-500" />
-              {language === 'PT' ? 'Alocação de Recurso & Assinatura' : 'Resource Allocation & Contract'}
-            </h3>
-
-            <div className="space-y-4">
-              
-              <div>
-                <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1.5">{language === 'PT' ? 'Transportador Geral Moçambique' : 'Select Mozambique Carrier'}</label>
-                <select
-                  value={selectedTransporter}
-                  onChange={(e) => setSelectedTransporter(e.target.value)}
-                  className={`w-full p-3 rounded-xl border font-bold text-[11px] outline-none focus:border-supplyx-blue transition-all ${isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-855'}`}
-                >
-                  {DEFAULT_TRANSPORTERS.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1.5">{language === 'PT' ? 'Frotas & Motorista Credenciado (EN1)' : 'Fleets & Certified Driver'}</label>
-                <select
-                  value={selectedDriverId}
-                  onChange={(e) => setSelectedDriverId(e.target.value)}
-                  className={`w-full p-3 rounded-xl border font-mono font-bold text-[11.5px] outline-none focus:border-supplyx-blue transition-all ${isDarkMode ? 'bg-zinc-950 border-white/5 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-855'}`}
-                >
-                  {finalDrivers.map(d => (
-                    <option key={d.id} value={d.id}>
-                      {d.name} ({d.vehicle} - {d.capacity})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* ESTIMATE FEE MEMOS */}
-              <div className={`p-4 rounded-2xl space-y-2 border ${isDarkMode ? 'bg-zinc-950 border-white/5' : 'bg-zinc-100 border-zinc-200'}`}>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500 font-bold">{language === 'PT' ? 'Estimativa de Custos' : 'Fuel/Freight Index'}</span>
-                  <span className="font-mono font-black italic">
-                    {distanceKm ? (distanceKm * 280).toLocaleString('pt-BR') : '---'} MZN
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500 font-bold">{language === 'PT' ? 'Portagens Rodoviárias (Aprox)' : 'Average Toll gate fees'}</span>
-                  <span className="font-mono font-black">
-                    {distanceKm ? distanceKm > 600 ? '4.800 MZN' : '1.200 MZN' : '---'} MZN
-                  </span>
-                </div>
-                <div className="border-t border-dashed border-zinc-300 dark:border-white/10 pt-2 flex justify-between font-extrabold text-[12px]">
-                  <span>{language === 'PT' ? 'Total Indicativo' : 'Projected Cost Outlay'}</span>
-                  <span className="text-supplyx-blue font-mono font-black select-all">
-                    {distanceKm ? (distanceKm * 285 + (distanceKm > 600 ? 4800 : 1200)).toLocaleString('pt-BR') : '---'} MZN
-                  </span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleConfirmAssignment}
-                disabled={isSubmitting || rows.length === 0}
-                className={`w-full py-4 rounded-2xl flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[11px] border border-transparent shadow-xl transition-all ${
-                  isSubmitting || rows.length === 0
-                    ? 'bg-zinc-300 dark:bg-zinc-850 text-zinc-500 cursor-not-allowed shadow-none'
-                    : 'bg-emerald-500 hover:bg-emerald-600 active:scale-[0.99] hover:shadow-emerald-500/10 text-white'
-                }`}
-              >
-                {isSubmitting ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                    <span>{language === 'PT' ? 'Registando no Firestore...' : 'Registering Assignment...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    <span>{language === 'PT' ? 'Atribuir Transporte' : 'Assign Cargo Transport'}</span>
-                  </>
-                )}
-              </button>
-
-            </div>
-          </div>
-
         </div>
 
       </div>
@@ -1695,12 +1646,25 @@ export default function TransportAssignmentPage({
                   <th className="p-3">Motorista</th>
                   <th className="p-3 text-center">Data Criação</th>
                   <th className="p-3 text-center">Status</th>
+                  <th className="p-3 text-center">{language === 'PT' ? 'Ações' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 dark:divide-white/5">
                 {filteredPastAssignments.map((assignment, idx) => (
                   <tr key={assignment.id || assignment.assignmentId || `assignment-${idx}`} className={`hover:bg-zinc-100/30 dark:hover:bg-white/[0.015] ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                    <td className="p-3 font-mono font-black uppercase text-supplyx-blue">{assignment.assignmentId || 'TA-UNKNOWN'}</td>
+                    <td className="p-3 font-mono font-black uppercase text-supplyx-blue">
+                      {onSelectRequest && assignment.assignmentId ? (
+                        <button
+                          onClick={() => onSelectRequest(assignment.assignmentId)}
+                          className="hover:underline text-left text-supplyx-blue text-xs font-black cursor-pointer flex items-center gap-1.5 hover:opacity-80 transition-all"
+                          title={language === 'PT' ? 'Configurar / Aceder Dossiê' : 'Access Dossier'}
+                        >
+                          <Eye className="w-3.5 h-3.5 inline" /> {assignment.assignmentId}
+                        </button>
+                      ) : (
+                        <span>{assignment.assignmentId || 'TA-UNKNOWN'}</span>
+                      )}
+                    </td>
                     <td className="p-3 font-bold max-w-sm">
                       <div className="flex items-center gap-1.5">
                         <span className="truncate">{assignment.origin}</span>
@@ -1729,6 +1693,34 @@ export default function TransportAssignmentPage({
                       <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wide bg-amber-500/10 text-amber-500">
                         {assignment.status === 'pending' ? 'Pendente' : assignment.status}
                       </span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {onSelectRequest && assignment.assignmentId && (
+                          <button
+                            onClick={() => onSelectRequest(assignment.assignmentId)}
+                            className={`p-2 rounded-xl transition-all ${
+                              isDarkMode 
+                                ? 'bg-supplyx-blue/10 text-supplyx-blue hover:bg-supplyx-blue/25' 
+                                : 'bg-blue-50 text-supplyx-blue hover:bg-blue-100'
+                            }`}
+                            title={language === 'PT' ? 'Ver Dossiê' : 'View Dossier'}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteAssignment(assignment.id, assignment.assignmentId)}
+                          className={`p-2 rounded-xl transition-all ${
+                            isDarkMode 
+                              ? 'bg-red-500/10 text-red-400 hover:bg-red-500/25' 
+                              : 'bg-red-50 text-red-500 hover:bg-red-100'
+                          }`}
+                          title={language === 'PT' ? 'Eliminar Registo' : 'Delete Record'}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

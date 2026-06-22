@@ -96,7 +96,7 @@ export const getNotificationRoute = (n: any) => {
 };
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkMode?: boolean; language?: 'PT' | 'EN' }> = ({ children, isDarkMode: initialIsDarkMode = true, language: initialLanguage = 'PT' }) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   
   const [currentLanguage, setCurrentLanguage] = useState<'PT' | 'EN'>('PT');
   const [currentTheme, setCurrentTheme] = useState<boolean>(true);
@@ -154,55 +154,60 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
     if (!user) return;
 
     const currentUserId = user.uid;
+    const userRole = profile?.type;
     
     // Automatic system alerts constructor to populate Firestore notifications specifically for currentUserId
     const syncRealtimeAlerts = async () => {
       try {
-        // 1. Check for suppliers
-        const qSuppliers = query(collection(db, 'users'), where('type', '==', 'supplier'));
-        const suppliersSnap = await getDocs(qSuppliers);
-        for (const sDoc of suppliersSnap.docs) {
-          const supplier = sDoc.data();
-          const supplierId = sDoc.id;
-          const notifId = `notif_new_supplier_${supplierId}_for_${currentUserId}`;
-          
-          const notifDocSnap = await getDoc(doc(db, 'notifications', notifId));
-          if (!notifDocSnap.exists()) {
-            await setDoc(doc(db, 'notifications', notifId), {
-              userId: currentUserId,
-              title: language === 'PT' ? `🆕 Novo Fornecedor Juntou-se` : `🆕 New Supplier Joined`,
-              message: language === 'PT' 
-                ? `O fornecedor ${supplier.name || supplier.companyName || 'Novo Fornecedor'} agora está operando no setor ${supplier.sector || 'Obras'} a partir de ${supplier.city || 'Moçambique'}.`
-                : `Supplier ${supplier.name || supplier.companyName || 'New Supplier'} is now operating in the ${supplier.sector || 'Construction'} sector from ${supplier.city || 'Mozambique'}.`,
-              type: 'supplier',
-              priority: 'medium',
-              read: false,
-              createdAt: serverTimestamp()
-            });
+        // 1. Check for suppliers - ONLY for buyers
+        if (userRole === 'buyer') {
+          const qSuppliers = query(collection(db, 'users'), where('type', '==', 'supplier'));
+          const suppliersSnap = await getDocs(qSuppliers);
+          for (const sDoc of suppliersSnap.docs) {
+            const supplier = sDoc.data();
+            const supplierId = sDoc.id;
+            const notifId = `notif_new_supplier_${supplierId}_for_${currentUserId}`;
+            
+            const notifDocSnap = await getDoc(doc(db, 'notifications', notifId));
+            if (!notifDocSnap.exists()) {
+              await setDoc(doc(db, 'notifications', notifId), {
+                userId: currentUserId,
+                title: language === 'PT' ? `🆕 Novo Fornecedor Juntou-se` : `🆕 New Supplier Joined`,
+                message: language === 'PT' 
+                  ? `O fornecedor ${supplier.name || supplier.companyName || 'Novo Fornecedor'} agora está operando no setor ${supplier.sector || 'Obras'} a partir de ${supplier.city || 'Moçambique'}.`
+                  : `Supplier ${supplier.name || supplier.companyName || 'New Supplier'} is now operating in the ${supplier.sector || 'Construction'} sector from ${supplier.city || 'Mozambique'}.`,
+                type: 'supplier',
+                priority: 'medium',
+                read: false,
+                createdAt: serverTimestamp()
+              });
+            }
           }
         }
 
-        // 2. Check for products on sale
-        const qProducts = query(collection(db, 'products'), where('onSale', '==', true));
-        const productsSnap = await getDocs(qProducts);
-        for (const pDoc of productsSnap.docs) {
-          const product = pDoc.data();
-          const pId = pDoc.id;
-          const notifId = `notif_promo_product_${pId}_for_${currentUserId}`;
+        // 2. Check for products on sale - ONLY for buyers
+        if (userRole === 'buyer') {
+          const qProducts = query(collection(db, 'products'), where('onSale', '==', true));
+          const productsSnap = await getDocs(qProducts);
+          for (const pDoc of productsSnap.docs) {
+            const product = pDoc.data();
+            const pId = pDoc.id;
+            const notifId = `notif_promo_product_${pId}_for_${currentUserId}`;
 
-          const notifDocSnap = await getDoc(doc(db, 'notifications', notifId));
-          if (!notifDocSnap.exists()) {
-            await setDoc(doc(db, 'notifications', notifId), {
-              userId: currentUserId,
-              title: language === 'PT' ? `⚡ Promoção Especial: ${product.name}` : `⚡ Special Offer: ${product.name}`,
-              message: language === 'PT'
-                ? `Não perca: o produto ${product.name} está em promoção imperdível por apenas MT ${product.salePrice || product.price}!`
-                : `Don't miss out: product ${product.name} is on special sale for just MT ${product.salePrice || product.price}!`,
-              type: 'promotion',
-              priority: 'high',
-              read: false,
-              createdAt: serverTimestamp()
-            });
+            const notifDocSnap = await getDoc(doc(db, 'notifications', notifId));
+            if (!notifDocSnap.exists()) {
+              await setDoc(doc(db, 'notifications', notifId), {
+                userId: currentUserId,
+                title: language === 'PT' ? `⚡ Promoção Especial: ${product.name}` : `⚡ Special Offer: ${product.name}`,
+                message: language === 'PT'
+                  ? `Não perca: o produto ${product.name} está em promoção imperdível por apenas MT ${product.salePrice || product.price}!`
+                  : `Don't miss out: product ${product.name} is on special sale for just MT ${product.salePrice || product.price}!`,
+                type: 'promotion',
+                priority: 'high',
+                read: false,
+                createdAt: serverTimestamp()
+              });
+            }
           }
         }
 
@@ -292,24 +297,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
               const otherParticipantId = chatData.participants.find((id: string) => id !== currentUserId);
               const senderName = chatData.participantNames?.[otherParticipantId] || (language === 'PT' ? 'Nova Mensagem' : 'New Message');
               const body = chatData.lastMessage || '';
-              console.log(`[NotificationContext] Dynamic new message alert from ${senderName}: "${body.substring(0, 30)}..."`);
-              triggerNotification(senderName, body, change.doc.id);
-
-              // Log standard db notification for message to unify system alerts
-              const msgNotifId = `notif_msg_${change.doc.id}_${updatedAt}_for_${currentUserId}`;
-              getDoc(doc(db, 'notifications', msgNotifId)).then((notifDocSnap) => {
-                if (!notifDocSnap.exists()) {
-                  setDoc(doc(db, 'notifications', msgNotifId), {
-                    userId: currentUserId,
-                    title: language === 'PT' ? `💬 Nova Mensagem de ${senderName}` : `💬 New Message from ${senderName}`,
-                    message: body,
-                    type: 'system',
-                    priority: 'high',
-                    read: false,
-                    createdAt: serverTimestamp()
-                  }).catch(e => console.warn('[NotificationContext] Error saving chat notification doc:', e));
-                }
-              }).catch(e => console.warn('[NotificationContext] Error getting chat notification doc:', e));
+              console.log(`[NotificationContext] New messages alerts are completely suppressed. No notification shown/triggered.`);
+              
+              // No triggerNotification and no Firestore notification log write for chats 
+              // strictly matching: "Ao receber uma mensagem nova o app não deve dar notificação dessa mensagem."
             }
           }
         });
@@ -331,6 +322,29 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
       
       // Filter out deleted notifications (which we mark with deleted: true to prevent automatic re-creation by syncRealtimeAlerts)
       fetched = fetched.filter((n: any) => !n.deleted);
+
+      // SIFT out buyer-specific alerts (promotion/supplier) if current user is supplier or logistics
+      if (userRole && userRole !== 'buyer') {
+        fetched = fetched.filter((n: any) => {
+          const type = (n.type || '').toLowerCase();
+          const title = (n.title || '').toLowerCase();
+          const message = (n.message || '').toLowerCase();
+
+          const isProductPromo = type === 'promotion' || 
+                                 type === 'supplier' || 
+                                 title.includes('promoção') || 
+                                 title.includes('promo') || 
+                                 title.includes('sale') || 
+                                 title.includes('⚡') ||
+                                 title.includes('fornecedor') ||
+                                 title.includes('supplier') ||
+                                 title.includes('produto') ||
+                                 title.includes('product') ||
+                                 message.includes('produto') ||
+                                 message.includes('product');
+          return !isProductPromo;
+        });
+      }
       
       // Sort in memory by createdAt descending to avoid index errors
       fetched.sort((a, b) => {
@@ -357,6 +371,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
           if (change.type === 'added') {
             const notif = change.doc.data();
             if (notif.deleted) return;
+            
+            // Skip alert popup if this is product promotion/addition and user is not buyer
+            if (userRole && userRole !== 'buyer') {
+              const type = (notif.type || '').toLowerCase();
+              const title = (notif.title || '').toLowerCase();
+              if (type === 'promotion' || type === 'supplier' || title.includes('⚡') || title.includes('promo') || title.includes('fornecedor')) {
+                return;
+              }
+            }
+
             console.log(`[NotificationContext] Dynamic new system/alert notification received: "${notif.title}"`);
             triggerNotification(notif.title, notif.message);
           }
@@ -393,9 +417,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
       unsubscribeCarriers();
       unsubscribeOccurrences();
     };
-  }, [user?.uid, language]);
+  }, [user?.uid, profile?.type, language]);
 
   const triggerNotification = (title: string, body: string, chatId?: string) => {
+    // Suppress chat and message alert popups or sound completely
+    if (chatId || title.includes('💬') || title.toLowerCase().includes('mensagem') || title.toLowerCase().includes('message')) {
+      console.log('[NotificationContext] Dynamic message notification suppressed successfully.');
+      return;
+    }
+
     // Play sound
     audioRef.current?.play().catch(() => {});
 

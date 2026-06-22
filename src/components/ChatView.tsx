@@ -34,7 +34,8 @@ import {
   limit,
   getDocs,
   getDoc,
-  increment
+  increment,
+  arrayUnion
 } from 'firebase/firestore';
 
 interface ChatRoom {
@@ -55,6 +56,7 @@ interface Message {
   fileType?: string;
   fileName?: string;
   createdAt: any;
+  deletedBy?: string[];
 }
 
 const formatLogisticsNameFromUid = (uid: string): string | null => {
@@ -117,16 +119,6 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
       u.uid !== auth.currentUser?.uid && 
       allowedTypes.includes(u.type)
     );
-
-    // Make sure we have at least one logistics operator or a client demo contact
-    if (allowedTypes.includes('logistics') && !filtered.some(u => u.uid === 'ops_logistica_default')) {
-      filtered.push({
-        uid: 'ops_logistica_default',
-        name: language === 'PT' ? 'Suporte Logístico SupplyX' : 'SupplyX Logistics Support',
-        type: 'logistics',
-        city: 'Maputo'
-      });
-    }
 
     return filtered;
   }, [allUsers, userType, language]);
@@ -417,7 +409,10 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
   const handleDeleteMessage = async (messageId: string) => {
     if (!activeRoom || !auth.currentUser) return;
     try {
-      await deleteDoc(doc(db, `chats/${activeRoom.id}/messages`, messageId));
+      const ref = doc(db, `chats/${activeRoom.id}/messages`, messageId);
+      await updateDoc(ref, {
+        deletedBy: arrayUnion(auth.currentUser.uid)
+      });
     } catch (err) {
       console.error('Error deleting message:', err);
     }
@@ -788,7 +783,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 scrollbar-hide">
-              {messages.map((msg, i) => {
+              {messages.filter(msg => !msg.deletedBy?.includes(auth.currentUser?.uid)).map((msg, i) => {
                 const isMine = msg.senderId === auth.currentUser?.uid;
                 return (
                   <motion.div 

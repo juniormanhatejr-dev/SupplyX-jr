@@ -295,6 +295,8 @@ export default function ProductsView({
 
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSearchingImages, setIsSearchingImages] = useState(false);
+  const [googleImageResults, setGoogleImageResults] = useState<string[]>([]);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -605,11 +607,53 @@ export default function ProductsView({
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const prods = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        fromCache: snapshot.metadata.fromCache
-      })) as (Product & { fromCache: boolean })[];
+      const prods = snapshot.docs.map(doc => {
+        const data = doc.data();
+        let image = data.image || '';
+
+        // Auto-fix typical generic stock/concrete images for construction materials
+        const nameLower = (data.name || '').toLowerCase();
+        
+        const isCement = nameLower.includes('cimento') || nameLower.includes('cement');
+        const isSand = nameLower.includes('areia') || nameLower.includes('sand');
+        const isStone = nameLower.includes('brita') || nameLower.includes('pedra') || nameLower.includes('gravel') || nameLower.includes('stone');
+        const isBrick = nameLower.includes('bloco') || nameLower.includes('tijolo') || nameLower.includes('brick');
+        const isIron = nameLower.includes('ferro') || nameLower.includes('aço') || nameLower.includes('varão') || nameLower.includes('rebar') || nameLower.includes('steel');
+        const isPaint = nameLower.includes('tinta') || nameLower.includes('paint');
+        const isPipe = nameLower.includes('tubo') || nameLower.includes('cano') || nameLower.includes('pvc') || nameLower.includes('pipe');
+
+        // Check if image is missing, empty, or uses a generic, concrete-mixer/industrial texture
+        const isInvalidOrGeneric = !image || 
+          image.includes('photo-1581094288338-2314dddb7ec3') || 
+          image.includes('photo-1589939705384-5185137a7f0f') ||
+          image.includes('photo-1518152006812-edab29b069ac') ||
+          image.includes('placeholder') ||
+          image === '';
+
+        if (isCement && isInvalidOrGeneric) {
+          // This is a beautiful image of a sack of standard construction cement
+          image = 'https://image.pollinations.ai/prompt/photorealistic%20single%20paper%20bag%20of%20dry%20cement%20standard%20brand%20for%20mozambique%20construction%20industry%20dugongo%20style%2520or%2520limak%20standing%20on%20site%20floor?width=600&height=600&nologo=true';
+        } else if (isSand && isInvalidOrGeneric) {
+          image = 'https://image.pollinations.ai/prompt/photorealistic%20construction%20river%20sand%20pile%20building%20material%20carrinha%20de%20areia%20mo%C3%A7ambique?width=600&height=600&nologo=true';
+        } else if (isStone && isInvalidOrGeneric) {
+          image = 'https://image.pollinations.ai/prompt/photorealistic%20crushed%20stone%20brita%20gravel%20of%20construction%20pile%20for%20concrete?width=600&height=600&nologo=true';
+        } else if (isBrick && isInvalidOrGeneric) {
+          image = 'https://image.pollinations.ai/prompt/photorealistic%20concrete%20cinder%20blocks%20stacked%20on%20construction%20site%20blocos%20de%20cimento%20mo%C3%A7ambique?width=600&height=600&nologo=true';
+        } else if (isIron && isInvalidOrGeneric) {
+          image = 'https://image.pollinations.ai/prompt/photorealistic%20bundles%20of%20steel%20rebar%20rods%20varoes%20de%20ferro%20para%20construcao%20mocambique?width=600&height=600&nologo=true';
+        } else if (isPaint && isInvalidOrGeneric) {
+          image = 'https://image.pollinations.ai/prompt/photorealistic%20large%20paint%20bucket%20white%20plastic%20paila%20de%20tinta%20for%20wall%20painting?width=600&height=600&nologo=true';
+        } else if (isPipe && isInvalidOrGeneric) {
+          image = 'https://image.pollinations.ai/prompt/photorealistic%20blue%20and%20grey%20pvc%20plumbing%20pipes%20stacked%20neatly%20tubos%20de%20construcao?width=600&height=600&nologo=true';
+        }
+
+        return {
+          id: doc.id,
+          ...data,
+          image,
+          fromCache: snapshot.metadata.fromCache
+        };
+      }) as (Product & { fromCache: boolean })[];
       setProducts(prods);
     }, (err) => {
       handleFirestoreError(err, OperationType.LIST, 'products');
@@ -704,6 +748,31 @@ export default function ProductsView({
       console.error("AI Classification failed", error);
     } finally {
       setIsClassifying(false);
+    }
+  };
+
+  const handleGoogleImageSearch = async () => {
+    if (!editingProduct?.name) return;
+    setIsSearchingImages(true);
+    setGoogleImageResults([]);
+    try {
+      const res = await fetch('/api/products/search-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productName: editingProduct.name })
+      });
+      const data = await res.json();
+      if (data.images && Array.isArray(data.images) && data.images.length > 0) {
+        setGoogleImageResults(data.images);
+        // Automatically select the first search result
+        setEditingProduct(prev => prev ? { ...prev, image: data.images[0] } : null);
+      } else {
+        alert(language === 'PT' ? 'Nenhuma imagem de produto real encontrada nas fontes reguladas.' : 'No matching product photos found.');
+      }
+    } catch (err) {
+      console.error('Error fetching Google images:', err);
+    } finally {
+      setIsSearchingImages(false);
     }
   };
 
@@ -1029,7 +1098,26 @@ export default function ProductsView({
                         // Automatic dynamic generation of material product images via dynamic URL
                         const fallbackUrl = 'https://images.unsplash.com/photo-1581094288338-2314dddb7ec3?w=600&q=80';
                         if (!editingProduct.image || editingProduct.image === fallbackUrl) {
-                          const promptParam = encodeURIComponent(`photorealistic studio high-quality shot of product material: ${editingProduct.name.trim()}, realistic texture, professional lighting, clean white backdrop, isolated`);
+                          const nameLower = editingProduct.name.trim().toLowerCase();
+                          let customPrompt = `photorealistic studio high-quality shot of product material: ${editingProduct.name.trim()}, realistic texture, professional lighting, clean white backdrop, isolated`;
+                          
+                          if (nameLower.includes('cimento') || nameLower.includes('cement')) {
+                            customPrompt = `photorealistic front view of a 50kg paper bag of construction cement, Mozambican brand Dugongo style or Limak CIF, sealed cement paper sack standing on site floor, hyperrealistic 8k`;
+                          } else if (nameLower.includes('areia') || nameLower.includes('sand')) {
+                            customPrompt = `photorealistic pile of construction river sand for concrete mixing, fine textured sand, isolated on plain layout`;
+                          } else if (nameLower.includes('brita') || nameLower.includes('pedra') || nameLower.includes('gravel')) {
+                            customPrompt = `photorealistic pile of building crushed gravel stones, brita, concrete ingredients, high resolution`;
+                          } else if (nameLower.includes('bloco') || nameLower.includes('tijolo') || nameLower.includes('brick')) {
+                            customPrompt = `photorealistic stacked concrete cinder blocks or red clay building bricks, blocks for construction, isolated, professional lighting`;
+                          } else if (nameLower.includes('ferro') || nameLower.includes('aço') || nameLower.includes('varão') || nameLower.includes('rebar') || nameLower.includes('steel')) {
+                            customPrompt = `photorealistic bundle of metallic construction steel rebar rods, varões de ferro, building materials`;
+                          } else if (nameLower.includes('tinta') || nameLower.includes('paint')) {
+                            customPrompt = `photorealistic large white plastic paint bucket, tin of wall paint, clean packaging, isolated`;
+                          } else if (nameLower.includes('tubo') || nameLower.includes('cano') || nameLower.includes('pvc')) {
+                            customPrompt = `photorealistic blue or grey PVC plumbing pipes stacked neatly, plastic tubes, construction hydraulics`;
+                          }
+
+                          const promptParam = encodeURIComponent(customPrompt);
                           const generatedUrl = `https://image.pollinations.ai/prompt/${promptParam}?width=600&height=600&nologo=true`;
                           setEditingProduct(prev => ({ ...prev, image: generatedUrl }));
                         }
@@ -1155,53 +1243,21 @@ export default function ProductsView({
                     </button>
                   </div>
                 </div>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center px-1">
-                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.imageUrl}</label>
-                      <button
-                        type="button"
-                        disabled={isGeneratingImage || !editingProduct?.name || editingProduct.name.trim().length <= 2}
-                        onClick={() => {
-                          if (!editingProduct?.name) return;
-                          setIsGeneratingImage(true);
-                          const promptParam = encodeURIComponent(`photorealistic studio high-quality shot of product: ${editingProduct.name.trim()} hardware material, beautiful 3D display, clean industrial lighting, solid studio background`);
-                          const generatedUrl = `https://image.pollinations.ai/prompt/${promptParam}?width=600&height=600&nologo=true&seed=${Math.floor(Math.random()*100000)}`;
-                          
-                          const img = new Image();
-                          img.src = generatedUrl;
-                          img.onload = () => {
-                            setEditingProduct(prev => prev ? { ...prev, image: generatedUrl } : null);
-                            setIsGeneratingImage(false);
-                          };
-                          img.onerror = () => {
-                            setEditingProduct(prev => prev ? { ...prev, image: generatedUrl } : null);
-                            setIsGeneratingImage(false);
-                          };
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-teal-500/10 text-teal-400 text-[8.5px] font-black uppercase tracking-widest hover:bg-teal-500/25 transition-all disabled:opacity-40 flex items-center gap-1.5"
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block px-1">
+                      {language === 'PT' ? 'Imagem do Produto' : 'Product Image'}
+                    </label>
+
+                    {/* Prominent Manual Upload Container */}
+                    <div className="flex flex-col gap-4">
+                      <label 
+                        className={`w-full py-8 px-6 rounded-3xl border-2 border-dashed flex flex-col items-center justify-center text-center cursor-pointer transition-all relative group overflow-hidden ${
+                          isDarkMode 
+                            ? 'bg-zinc-950/60 border-zinc-800 hover:border-brand/60 hover:bg-brand/5' 
+                            : 'bg-zinc-50 border-zinc-200 hover:border-brand/40 hover:bg-brand/5'
+                        }`}
+                        id="label-manual-image-upload"
                       >
-                        {isGeneratingImage ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin text-teal-400" />
-                            {language === 'PT' ? '⏳ Gerando...' : '⏳ Generating...'}
-                          </>
-                        ) : (
-                          language === 'PT' ? '✨ Gerar Foto por IA' : '✨ Generate Photo via AI'
-                        )}
-                      </button>
-                    </div>
-                    <div className="flex gap-4">
-                      <div className="flex-1 space-y-2">
-                        <input 
-                          type="text"
-                          value={editingProduct?.image || ''}
-                          onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
-                          className={`w-full p-4 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'}`}
-                          placeholder="https://..."
-                        />
-                        <p className="text-[9px] font-bold text-zinc-400 uppercase ml-1 italic">{language === 'PT' ? '* Carregamento automático ao selecionar arquivo, ou use a IA acima' : '* Auto-uploads on file selection, or use AI generation above'}</p>
-                      </div>
-                      <label className={`shrink-0 flex flex-col items-center justify-center w-24 h-24 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:bg-brand/5 hover:border-brand/50 relative group ${isDarkMode ? 'bg-zinc-950 border-zinc-800 text-zinc-500' : 'bg-zinc-50 border-zinc-100 text-zinc-400'}`}>
                         <input 
                           type="file" 
                           accept="image/*" 
@@ -1209,24 +1265,72 @@ export default function ProductsView({
                           onChange={handleProductImageUpload} 
                           disabled={isUploading}
                         />
+                        
                         {isUploading ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <Loader2 className="w-6 h-6 animate-spin text-brand" />
-                            <span className="text-[8px] font-black uppercase text-brand">Up...</span>
+                          <div className="flex flex-col items-center gap-3">
+                            <Loader2 className="w-8 h-8 animate-spin text-brand" />
+                            <div className="space-y-1">
+                              <span className="text-[11px] font-black uppercase text-brand tracking-widest block">
+                                {language === 'PT' ? 'Enviando arquivo...' : 'Uploading file...'}
+                              </span>
+                              <span className="text-[9px] font-bold text-zinc-400 block">
+                                {language === 'PT' ? 'Salvando com segurança no servidor local...' : 'Saving securely to local server...'}
+                              </span>
+                            </div>
+                          </div>
+                        ) : editingProduct?.image ? (
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="w-20 h-20 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-md">
+                              <img 
+                                src={editingProduct.image} 
+                                alt="Uploaded preview" 
+                                className="w-full h-full object-cover" 
+                                referrerPolicy="no-referrer"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-full">
+                                {language === 'PT' ? '✓ Imagem Carregada Pessoalmente' : '✓ Personally Uploaded Image'}
+                              </div>
+                              <span className="text-[9px] font-bold text-zinc-400 block hover:text-brand transition-colors mt-1">
+                                {language === 'PT' ? 'Clique ou arraste um novo arquivo para substituir' : 'Click or drag a new file to replace'}
+                              </span>
+                            </div>
                           </div>
                         ) : (
-                          <>
-                            <Camera className="w-6 h-6 group-hover:scale-110 transition-transform mb-1" />
-                            <span className="text-[8px] font-black uppercase">{language === 'PT' ? 'Carregar' : 'Upload'}</span>
-                          </>
-                        )}
-                        {/* Status Overlay */}
-                        {editingProduct?.image && !isUploading && (
-                          <div className="absolute -top-1 -right-1 bg-emerald-500 text-white p-1 rounded-full border-2 border-white dark:border-zinc-900">
-                             <CheckCircle2 className="w-3 h-3" />
+                          <div className="flex flex-col items-center gap-3">
+                            <div className={`p-4 rounded-full ${isDarkMode ? 'bg-zinc-900 text-brand' : 'bg-brand/10 text-brand'} group-hover:scale-110 transition-transform duration-300`}>
+                              <Camera className="w-7 h-7" />
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-xs font-black uppercase tracking-widest text-[#3B82F6] block">
+                                {language === 'PT' ? 'Carregar Imagem Pessoalmente' : 'Upload Image Personally'}
+                              </span>
+                              <span className="text-[10px] font-medium text-zinc-400 block max-w-sm">
+                                {language === 'PT' ? 'Arraste uma foto aqui ou clique para selecionar do seu telemóvel ou computador.' : 'Drag a photo here or click to browse from device.'}
+                              </span>
+                            </div>
                           </div>
                         )}
                       </label>
+
+                      {/* Advanced Direct URL Link */}
+                      <div className="space-y-1.5">
+                        <label className="text-[8.5px] font-black text-zinc-400 uppercase tracking-widest block px-1">
+                          {language === 'PT' ? 'Ou insira a URL direta da imagem (Opcional)' : 'Or enter a direct image URL (Optional)'}
+                        </label>
+                        <input 
+                          type="text"
+                          value={editingProduct?.image || ''}
+                          onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
+                          className={`w-full p-3.5 rounded-2xl text-xs font-bold outline-none border-2 transition-all ${
+                            isDarkMode 
+                              ? 'bg-zinc-950 border-zinc-800 text-white focus:border-brand/50' 
+                              : 'bg-zinc-50 border-zinc-100 focus:border-brand/30'
+                          }`}
+                          placeholder="https://exemplo.com/foto.jpg"
+                        />
+                      </div>
                     </div>
                   </div>
 

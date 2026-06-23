@@ -145,6 +145,7 @@ export default function TransportAssignmentPage({
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string | undefined; assignmentId?: string } | null>(null);
 
   // User Profile details
   const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
@@ -754,9 +755,6 @@ export default function TransportAssignmentPage({
   };
 
   const handleDeleteAssignment = async (docId: string | undefined, assignmentId?: string) => {
-    if (!window.confirm(language === 'PT' ? 'Tem a certeza de que deseja eliminar este registo de atribuição?' : 'Are you sure you want to delete this assignment record?')) {
-      return;
-    }
     try {
       if (docId) {
         try {
@@ -788,7 +786,7 @@ export default function TransportAssignmentPage({
       triggerToast(language === 'PT' ? 'Registo eliminado com sucesso!' : 'Record deleted successfully!');
     } catch (err) {
       console.error('Error deleting assignment:', err);
-      alert(language === 'PT' ? 'Erro ao eliminar registo' : 'Error deleting record');
+      triggerToast(language === 'PT' ? 'Erro ao eliminar registo' : 'Error deleting record');
     }
   };
 
@@ -1572,6 +1570,37 @@ export default function TransportAssignmentPage({
                     </div>
                   </div>
                 )}
+
+                {/* DYNAMIC CONFIRMED ATRIBUTION ACTION BUTTON REQUESTED BY USER */}
+                <div className="pt-4 border-t border-zinc-250 dark:border-white/10 mt-5">
+                  <button
+                    onClick={handleConfirmAssignment}
+                    disabled={isSubmitting || rows.length === 0}
+                    type="button"
+                    className={`w-full py-3.5 px-4 rounded-2xl font-black uppercase tracking-wider text-[11px] flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 cursor-pointer ${
+                      isSubmitting 
+                        ? 'bg-zinc-400 text-zinc-100 cursor-not-allowed'
+                        : 'bg-emerald-600 hover:bg-emerald-750 text-white shadow-emerald-600/10 hover:shadow-emerald-600/20'
+                    }`}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        {language === 'PT' ? 'Atribuindo Carga...' : 'Assigning Cargo...'}
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4.5 h-4.5" />
+                        {language === 'PT' ? 'Atribuir Carga' : 'Assign Load'}
+                      </>
+                    )}
+                  </button>
+                  <p className="text-[9.5px] text-zinc-500 font-bold text-center mt-2.5">
+                    {language === 'PT' 
+                      ? 'Confirmar plano de cubagem e enviar dados de rota/veículo' 
+                      : 'Confirm cubing blueprint and dispatch routing/fleet logs'}
+                  </p>
+                </div>
               </div>
             ) : (
               <div key="rec-empty" className="py-8 text-center text-zinc-400 font-bold space-y-1">
@@ -1710,7 +1739,7 @@ export default function TransportAssignmentPage({
                           </button>
                         )}
                         <button
-                          onClick={() => handleDeleteAssignment(assignment.id, assignment.assignmentId)}
+                          onClick={() => setDeleteConfirm({ id: assignment.id, assignmentId: assignment.assignmentId || 'TA-PRE-GEN' })}
                           className={`p-2 rounded-xl transition-all ${
                             isDarkMode 
                               ? 'bg-red-500/10 text-red-400 hover:bg-red-500/25' 
@@ -1796,6 +1825,61 @@ export default function TransportAssignmentPage({
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRM PORTABLE MODAL - BYPASS WINDOW.CONFIRM POPUPS INSIDE IFRAME */}
+      {deleteConfirm && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity duration-300 animate-in fade-in"
+        >
+          <div 
+            className="absolute inset-0 cursor-pointer"
+            onClick={() => setDeleteConfirm(null)}
+          />
+          <div 
+            className={`relative w-full max-w-sm rounded-[32px] p-6 border shadow-2xl overflow-hidden z-10 transition-all duration-300 transform animate-in zoom-in-95 ${isDarkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-zinc-200'}`}
+          >
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-500/10 flex items-center justify-center text-red-600 dark:text-red-400">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className={`text-sm font-black uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-zinc-800'}`}>
+                  {language === 'PT' ? 'Eliminar Registo' : 'Delete Record'}
+                </h3>
+                <p className="text-[10.5px] text-zinc-550 dark:text-zinc-400 mt-2 font-semibold select-none leading-relaxed">
+                  {language === 'PT' 
+                    ? `Tem a certeza que deseja excluir o registo de atribuição ${deleteConfirm.assignmentId || ''}? Esta ação apagará permanentemente o registo do Firestore.` 
+                    : `Are you sure you want to permanently delete assignment record ${deleteConfirm.assignmentId || ''} from firestore? This action is irreversible.`}
+                </p>
+              </div>
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirm(null)}
+                  className={`flex-1 py-2.5 rounded-xl text-[10.5px] font-bold uppercase transition-all border ${
+                    isDarkMode 
+                      ? 'bg-zinc-950 border-white/5 text-zinc-400 hover:bg-zinc-900' 
+                      : 'bg-zinc-50 border-zinc-200 text-zinc-650 hover:bg-zinc-100'
+                  }`}
+                >
+                  {language === 'PT' ? 'Cancelar' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const { id, assignmentId } = deleteConfirm;
+                    setDeleteConfirm(null);
+                    await handleDeleteAssignment(id, assignmentId);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-[10.5px] font-bold uppercase transition-all bg-red-600 hover:bg-red-750 text-white shadow-lg shadow-red-600/15"
+                >
+                  {language === 'PT' ? 'Eliminar' : 'Delete'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

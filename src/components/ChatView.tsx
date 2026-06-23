@@ -14,7 +14,10 @@ import {
   UserPlus,
   Clock,
   Trash2,
-  ArrowLeft
+  ArrowLeft,
+  Video,
+  FileText,
+  Download
 } from 'lucide-react';
 import ProfileModal from './ProfileModal';
 import { OptimizedImage } from './ui/OptimizedImage';
@@ -408,6 +411,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
 
   const handleDeleteMessage = async (messageId: string) => {
     if (!activeRoom || !auth.currentUser) return;
+    const docPath = `chats/${activeRoom.id}/messages/${messageId}`;
     try {
       const ref = doc(db, `chats/${activeRoom.id}/messages`, messageId);
       await updateDoc(ref, {
@@ -415,6 +419,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
       });
     } catch (err) {
       console.error('Error deleting message:', err);
+      handleFirestoreError(err, OperationType.UPDATE, docPath);
     }
   };
 
@@ -515,6 +520,44 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDownloadFile = async (fileUrlTxt: string | undefined, fileNameTxt: string) => {
+    if (!fileUrlTxt) return;
+    try {
+      if (fileUrlTxt.startsWith('local-file://')) {
+        const { getFileFromIndexedDB } = await import('../lib/firebase');
+        const fileData = await getFileFromIndexedDB(fileUrlTxt);
+        if (fileData) {
+          const link = document.createElement('a');
+          link.href = fileData.dataUrl;
+          link.download = fileData.name || fileNameTxt || 'arquivo';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      } else {
+        const response = await fetch(fileUrlTxt);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = fileNameTxt || 'arquivo';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      }
+    } catch (err) {
+      console.warn('CORS or network blocked direct blob fetch, using fallback hyperlink download:', err);
+      const link = document.createElement('a');
+      link.href = fileUrlTxt;
+      link.download = fileNameTxt || 'arquivo';
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -822,30 +865,34 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                                 referrerPolicy="no-referrer"
                               />
                             ) : (
-                              <a 
-                                href={msg.fileUrl?.startsWith('local-file://') ? '#' : msg.fileUrl} 
-                                target={msg.fileUrl?.startsWith('local-file://') ? undefined : "_blank"} 
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 underline"
-                                onClick={async (e) => {
-                                  if (msg.fileUrl?.startsWith('local-file://')) {
-                                    e.preventDefault();
-                                    const { getFileFromIndexedDB } = await import('../lib/firebase');
-                                    const fileData = await getFileFromIndexedDB(msg.fileUrl);
-                                    if (fileData) {
-                                      const link = document.createElement('a');
-                                      link.href = fileData.dataUrl;
-                                      link.download = fileData.name || 'file';
-                                      document.body.appendChild(link);
-                                      link.click();
-                                      document.body.removeChild(link);
-                                    }
-                                  }
-                                }}
-                              >
-                                <Paperclip className="w-4 h-4" />
-                                {msg.fileName || 'Arquivo'}
-                              </a>
+                              <div className="flex flex-col gap-2 p-2.5 rounded-2xl bg-black/10 dark:bg-white/5 border border-white/5 w-[240px] max-w-full text-white">
+                                <div className="flex items-center gap-2.5">
+                                  {msg.fileType?.includes('video') ? (
+                                    <Video className="w-5 h-5 text-amber-500 shrink-0" />
+                                  ) : msg.fileType?.includes('pdf') ? (
+                                    <FileText className="w-5 h-5 text-red-500 shrink-0" />
+                                  ) : (
+                                    <FileText className="w-5 h-5 text-sky-400 shrink-0" />
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[11px] font-bold truncate">
+                                      {msg.fileName || 'Arquivo'}
+                                    </p>
+                                    <p className="text-[8.5px] text-white/60 uppercase font-black tracking-wider">
+                                      {msg.fileType?.split('/')[1] || 'DOC/VIDEO'}
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadFile(msg.fileUrl, msg.fileName || 'arquivo')}
+                                  className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 transition-all text-white font-black text-[9.5px] uppercase tracking-wider cursor-pointer"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  {language === 'PT' ? 'Baixar Arquivo' : 'Download File'}
+                                </button>
+                              </div>
                             )}
                             {msg.text && !msg.text.startsWith('[') && <p>{msg.text}</p>}
                           </div>

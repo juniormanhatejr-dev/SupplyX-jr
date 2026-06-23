@@ -33,6 +33,20 @@ if (!admin.apps.length) {
 const storage = admin.storage();
 const bucket = storage.bucket(storageBucket);
 
+let isStorageBucketActive = false;
+async function verifyStorageBucket() {
+  if (!storageBucket) return;
+  try {
+    const [exists] = await bucket.exists();
+    isStorageBucketActive = exists;
+    console.log(`[SERVER] Firebase GCS Bucket check: active=${isStorageBucketActive}`);
+  } catch (err: any) {
+    isStorageBucketActive = false;
+    console.log(`[SERVER] GCS storage bucket is bypassed or not provisioned: ${err.message}`);
+  }
+}
+verifyStorageBucket();
+
 console.log(`[SERVER] Using Firebase bucket: ${storageBucket || 'UNDEFINED'}`);
 
 let aiClient: any = null;
@@ -562,7 +576,7 @@ async function startServer() {
       const extension = contentType.split('/')[1] || 'jpeg';
       const destination = `products/${Date.now()}_${cleanName}.${extension}`;
 
-      if (storageBucket && bucket) {
+      if (storageBucket && isStorageBucketActive && bucket) {
         console.log(`[SERVER] Storing downloaded image to Firebase Storage: ${destination}`);
         const fileRef = bucket.file(destination);
         await fileRef.save(buffer, {
@@ -955,8 +969,8 @@ async function startServer() {
       const file = req.file;
       const destination = req.body.path;
 
-      if (!storageBucket) {
-        throw new Error('Firebase Storage bucket is not configured.');
+      if (!storageBucket || !isStorageBucketActive) {
+        throw new Error('Firebase Storage bucket is offline or not configured.');
       }
 
       if (!file || !destination) {
@@ -979,7 +993,7 @@ async function startServer() {
       console.log(`[SERVER] Upload success: ${publicUrl}`);
       res.json({ url: publicUrl });
     } catch (error: any) {
-      console.warn('[SERVER] Storage bucket upload failed, attempting local Base64 data URL encoding:', error.message);
+      console.log('[SERVER] Info: Storage upload fallback initiated - self-encoding Base64 payload:', error.message);
       const file = req.file;
       if (file && file.buffer) {
         try {

@@ -159,6 +159,18 @@ service cloud.firestore {
              data.status is string && data.status.size() <= 100;
     }
 
+    function isValidFile(data) {
+      return data.keys().hasAll(['id', 'file_name', 'original_name', 'file_type', 'file_size', 'storage_path', 'blob_url', 'uploaded_by']) &&
+             data.id is string &&
+             data.file_name is string && data.file_name.size() <= 500 &&
+             data.original_name is string && data.original_name.size() <= 500 &&
+             data.file_type is string &&
+             data.file_size is number &&
+             data.storage_path is string &&
+             data.blob_url is string &&
+             data.uploaded_by is string;
+    }
+
     // ---------------------------------------------------------
     // 3. MATCH BLOCKS (Hardened)
     // ---------------------------------------------------------
@@ -272,6 +284,15 @@ service cloud.firestore {
       allow create: if isVerified() && isValidTransportAssignment(incoming());
       allow update: if isVerified() && isValidTransportAssignment(incoming());
       allow delete: if isVerified();
+    }
+
+    // FILES:
+    match /files/{fileId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isVerified() && isValidFile(incoming());
+      allow update: if isVerified() && (existing().uploaded_by == request.auth.uid || isAdmin());
+      allow delete: if isVerified() && (existing().uploaded_by == request.auth.uid || isAdmin());
     }
   }
 }

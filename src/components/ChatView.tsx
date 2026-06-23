@@ -20,6 +20,7 @@ import {
   Download
 } from 'lucide-react';
 import ProfileModal from './ProfileModal';
+import { FileViewerModal } from './FileViewerModal';
 import { OptimizedImage } from './ui/OptimizedImage';
 import UserPresenceIndicator from './UserPresenceIndicator';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -218,6 +219,13 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // File Preview States
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewFileUrl, setPreviewFileUrl] = useState('');
+  const [previewFileName, setPreviewFileName] = useState('');
+  const [previewFileType, setPreviewFileType] = useState('');
+  const [previewFileId, setPreviewFileId] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -490,19 +498,39 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
 
     setIsUploading(true);
     try {
-      const { uploadFile } = await import('../lib/firebase');
-      const path = `chats/${activeRoom.id}/${Date.now()}_${file.name}`;
-      const url = await uploadFile(path, file);
+      const idToken = await auth.currentUser.getIdToken();
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('message_id', activeRoom.id);
+      formData.append('category', file.type.startsWith('image/') ? 'photo' : 'others');
 
-      const isImage = file.type.startsWith('image/');
+      const response = await fetch('/api/files/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'x-user-id': auth.currentUser.uid,
+          'x-user-email': auth.currentUser.email || ''
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({ error: 'Upload failed' }));
+        throw new Error(errJson.error || 'Server upload failed');
+      }
+
+      const uploadResult = await response.json();
+      const fileData = uploadResult.file;
+      const isImage = fileData.file_type.startsWith('image/');
       
       await addDoc(collection(db, `chats/${activeRoom.id}/messages`), {
         senderId: auth.currentUser.uid,
         participants: activeRoom.participants, // Added for Rule Pillar 8 compliance
-        text: isImage ? `[Imagem: ${file.name}]` : `[Arquivo: ${file.name}]`,
-        fileUrl: url,
-        fileType: file.type,
-        fileName: file.name,
+        text: isImage ? `[Imagem: ${fileData.original_name}]` : `[Arquivo: ${fileData.original_name}]`,
+        fileId: fileData.id,
+        fileUrl: fileData.blob_url,
+        fileType: fileData.file_type,
+        fileName: fileData.original_name,
         createdAt: serverTimestamp()
       });
 
@@ -520,44 +548,6 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const handleDownloadFile = async (fileUrlTxt: string | undefined, fileNameTxt: string) => {
-    if (!fileUrlTxt) return;
-    try {
-      if (fileUrlTxt.startsWith('local-file://')) {
-        const { getFileFromIndexedDB } = await import('../lib/firebase');
-        const fileData = await getFileFromIndexedDB(fileUrlTxt);
-        if (fileData) {
-          const link = document.createElement('a');
-          link.href = fileData.dataUrl;
-          link.download = fileData.name || fileNameTxt || 'arquivo';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }
-      } else {
-        const response = await fetch(fileUrlTxt);
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = fileNameTxt || 'arquivo';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(blobUrl);
-      }
-    } catch (err) {
-      console.warn('CORS or network blocked direct blob fetch, using fallback hyperlink download:', err);
-      const link = document.createElement('a');
-      link.href = fileUrlTxt;
-      link.download = fileNameTxt || 'arquivo';
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
     }
   };
 
@@ -853,13 +843,18 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                                     const { getFileFromIndexedDB } = await import('../lib/firebase');
                                     const fileData = await getFileFromIndexedDB(msg.fileUrl);
                                     if (fileData) {
-                                      const w = window.open();
-                                      if (w) {
-                                        w.document.write(`<img src="${fileData.dataUrl}" style="max-width:105%; max-height:100%; display:block; margin:auto;" />`);
-                                      }
+                                      setPreviewFileUrl(fileData.dataUrl);
+                                      setPreviewFileName(msg.fileName || 'local_image');
+                                      setPreviewFileType(msg.fileType || 'image/png');
+                                      setPreviewFileId(undefined);
+                                      setIsPreviewOpen(true);
                                     }
                                   } else {
-                                    window.open(msg.fileUrl, '_blank');
+                                    setPreviewFileUrl(msg.fileUrl || '');
+                                    setPreviewFileName(msg.fileName || 'image');
+                                    setPreviewFileType(msg.fileType || 'image/png');
+                                    setPreviewFileId((msg as any).fileId);
+                                    setIsPreviewOpen(true);
                                   }
                                 }}
                                 referrerPolicy="no-referrer"
@@ -879,18 +874,46 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                                       {msg.fileName || 'Arquivo'}
                                     </p>
                                     <p className="text-[8.5px] text-white/60 uppercase font-black tracking-wider">
-                                      {msg.fileType?.split('/')[1] || 'DOC/VIDEO'}
+                                      {msg.fileType?.split('/')[1] || 'DOCUMENTO'}
                                     </p>
                                   </div>
                                 </div>
                                 
                                 <button
-                                  type="button"
-                                  onClick={() => handleDownloadFile(msg.fileUrl, msg.fileName || 'arquivo')}
-                                  className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 transition-all text-white font-black text-[9.5px] uppercase tracking-wider cursor-pointer"
+                                  onClick={async (e) => {
+                                    e.preventDefault();
+                                    if (msg.fileUrl?.startsWith('local-file://')) {
+                                      try {
+                                        const { getFileFromIndexedDB } = await import('../lib/firebase');
+                                        const fileData = await getFileFromIndexedDB(msg.fileUrl);
+                                        if (fileData) {
+                                          const link = document.createElement('a');
+                                          link.href = fileData.dataUrl;
+                                          link.download = fileData.name || msg.fileName || 'arquivo';
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                        } else {
+                                          const errorMsg = language === 'PT'
+                                            ? "Este arquivo foi guardado temporariamente no dispositivo local do remetente e não pôde ser sincronizado com o servidor. Por favor, peça ao remetente para reenviar o arquivo."
+                                            : "This file was temporarily stored on the sender's local device and could not be synchronized with the server. Please ask the sender to resend the file.";
+                                          alert(errorMsg);
+                                        }
+                                      } catch (err) {
+                                        console.error('Error downloading local file:', err);
+                                      }
+                                    } else {
+                                      setPreviewFileUrl(msg.fileUrl || '');
+                                      setPreviewFileName(msg.fileName || 'Documento');
+                                      setPreviewFileType(msg.fileType || 'application/pdf');
+                                      setPreviewFileId((msg as any).fileId);
+                                      setIsPreviewOpen(true);
+                                    }
+                                  }}
+                                  className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 transition-all text-white font-black text-[9.5px] uppercase tracking-wider cursor-pointer no-underline hover:no-underline"
                                 >
                                   <Download className="w-3.5 h-3.5" />
-                                  {language === 'PT' ? 'Baixar Arquivo' : 'Download File'}
+                                  {language === 'PT' ? 'Baixar / Visualizar' : 'Download / View'}
                                 </button>
                               </div>
                             )}
@@ -985,6 +1008,48 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
         onEdit={() => onNavigate?.('Ajustes')}
         isDarkMode={isDarkMode}
         language={language}
+      />
+
+      <FileViewerModal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        fileUrl={previewFileUrl}
+        fileName={previewFileName}
+        fileType={previewFileType}
+        fileId={previewFileId}
+        onDownloadSecure={async (fileId, altUrl, name) => {
+          try {
+            const idToken = await auth.currentUser?.getIdToken();
+            const res = await fetch(`/api/files/${fileId}/download`, {
+              headers: {
+                'Authorization': idToken ? `Bearer ${idToken}` : '',
+                'x-user-id': auth.currentUser?.uid || '',
+                'x-user-email': auth.currentUser?.email || ''
+              }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.downloadUrl) {
+                const a = document.createElement('a');
+                a.href = data.downloadUrl;
+                a.download = name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                return;
+              }
+            }
+          } catch (err) {
+            console.error('Failed secure download request in ChatView:', err);
+          }
+          // Direct fallback
+          const a = document.createElement('a');
+          a.href = altUrl;
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }}
       />
     </motion.div>
   );

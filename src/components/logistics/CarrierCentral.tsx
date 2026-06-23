@@ -148,14 +148,34 @@ export default function CarrierCentral({
     }
 
     // Update cargo request details: increment proposalsCount, transition status, and record driver bid
+    const formattedPrice = `MT ${numPriceInput.toLocaleString('pt-BR')} MZN`;
+    const formattedText = `🚚 PROPOSTA DE FRETE ENVIADA POR ${carrierName}
+• Preço do Frete: ${formattedPrice}
+• Prazo de Entrega: ${bidDays} Dia(s)
+• Veículo Alocado: ${bidVehicle}
+• Seguro de Carga: ${bidInsurance}
+• Observações: ${bidRemarks || 'Nenhuma'}`;
+
+    const newReply = {
+      id: `rep-bid-${Date.now()}`,
+      sender: 'logistics',
+      senderName: carrierName,
+      text: formattedText,
+      timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}),
+      logisticsUserId: user?.uid || 'ops_logistica_default',
+      logisticsUserName: carrierName
+    };
+
     const updated = requests.map(r => {
       if (r.id === loadId) {
+        const existingReplies = r.logisticsReplies || [];
         return {
           ...r,
           status: 'Em concurso', // Move request automatically to bidding phase
           proposalsCount: (r.proposalsCount || 0) + 1,
           hasUserBid: true,
-          userBidPrice: `MT ${numPriceInput.toLocaleString('pt-BR')} MZN`
+          userBidPrice: `MT ${numPriceInput.toLocaleString('pt-BR')} MZN`,
+          logisticsReplies: [...existingReplies, newReply]
         };
       }
       return r;

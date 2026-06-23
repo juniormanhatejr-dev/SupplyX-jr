@@ -160,8 +160,13 @@ export default function DetailedRequestView({
 
   // Parse products from custom field or dynamic tipoCarga
   const requestProducts = useMemo(() => {
-    if ((requestObj as any).items && Array.isArray((requestObj as any).items)) {
-      return (requestObj as any).items as { name: string; quantity: string; weight: string; volume: string; }[];
+    if ((requestObj as any).items && Array.isArray((requestObj as any).items) && (requestObj as any).items.length > 0) {
+      return ((requestObj as any).items as any[]).map(it => ({
+        name: it.name || it.nome || 'Produto',
+        quantity: String(it.quantity !== undefined ? it.quantity : (it.quantidade !== undefined ? it.quantidade : '1')),
+        weight: String(it.weight !== undefined ? it.weight : (it.peso !== undefined ? it.peso : '')),
+        volume: String(it.volume !== undefined ? it.volume : (it.cubagem !== undefined ? it.cubagem : ''))
+      }));
     }
     
     const list: { name: string; quantity: string; weight: string; volume: string; }[] = [];
@@ -596,10 +601,11 @@ export default function DetailedRequestView({
   const submitCarrierBid = (e: React.FormEvent) => {
     e.preventDefault();
     const parsedPrice = parseInt(newCarrierBid.price) || 80000;
+    const carrierName = userType === 'logistics' ? (profile?.companyName || user?.displayName || newCarrierBid.name) : newCarrierBid.name;
     const bidObj: CarrierProposal = {
       id: `BP-0${bids.length + 1}`,
       cargoId: selectedRequestId,
-      name: userType === 'logistics' ? (profile?.companyName || user?.displayName || newCarrierBid.name) : newCarrierBid.name,
+      name: carrierName,
       rating: 4.9,
       deliverTime: newCarrierBid.deliverTime,
       price: parsedPrice,
@@ -608,6 +614,29 @@ export default function DetailedRequestView({
       conditions: newCarrierBid.conditions,
       userId: user?.uid || 'anonymous'
     };
+
+    const formattedPrice = `MT ${parsedPrice.toLocaleString('pt-BR')} MZN`;
+    const formattedText = `🚚 PROPOSTA DE FRETE ENVIADA POR ${carrierName}
+• Preço do Frete: ${formattedPrice}
+• Prazo de Entrega: ${newCarrierBid.deliverTime}
+• Seguro de Carga: ${newCarrierBid.insurance}
+• Observações/Condições: ${newCarrierBid.conditions || 'Nenhuma'}`;
+
+    const newReply = {
+      id: `rep-bid-${Date.now()}`,
+      sender: 'logistics',
+      senderName: carrierName,
+      text: formattedText,
+      timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}),
+      logisticsUserId: user?.uid || 'ops_logistica_default',
+      logisticsUserName: carrierName
+    };
+
+    const updatedReplies = [...(requestObj.logisticsReplies || []), newReply];
+    onUpdateCargoRequest?.(requestObj.id, {
+      logisticsReplies: updatedReplies,
+      status: 'Em concurso'
+    });
 
     const updated = [...bids, bidObj];
     syncBids(updated);
@@ -1809,11 +1838,11 @@ export default function DetailedRequestView({
                           <div 
                             key={(prod as any).id || `${prod.name}_${prod.quantity}_${prod.weight || ''}_${prod.volume || ''}_${index}`}
                             className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
-                              isDarkMode ? 'bg-zinc-950/40 border-white/5 hover:border-white/10' : 'bg-zinc-50 border-zinc-150'
+                              isDarkMode ? 'bg-zinc-950/40 border-white/5 hover:border-white/10' : 'bg-white border-zinc-150 hover:border-zinc-200 shadow-sm'
                             }`}
                           >
                             <div className="space-y-1 max-w-[70%] text-left">
-                              <h4 className="text-[11px] font-black text-white uppercase italic leading-none">{prod.name}</h4>
+                              <h4 className={`text-[11px] font-black uppercase italic leading-none ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{prod.name}</h4>
                               <div className="flex flex-wrap gap-1.5 pt-1">
                                 <span className="bg-supplyx-blue/10 border border-supplyx-blue/20 text-[7.5px] font-bold uppercase rounded-md px-1.5 py-0.5 text-[#3b82f6]">
                                   {prod.quantity}
@@ -1836,7 +1865,11 @@ export default function DetailedRequestView({
                                 <button
                                   type="button"
                                   onClick={() => handleEditProductClick(index)}
-                                  className="p-1 px-1.5 bg-white/5 border border-white/5 text-zinc-400 hover:text-white hover:bg-white/10 rounded-lg text-xs"
+                                  className={`p-1 px-1.5 border rounded-lg text-xs transition-colors ${
+                                    isDarkMode 
+                                      ? 'bg-white/5 border-white/5 text-zinc-400 hover:text-white hover:bg-white/10' 
+                                      : 'bg-zinc-100 border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200'
+                                  }`}
                                   title={language === 'PT' ? 'Editar' : 'Edit'}
                                 >
                                   ✏️
@@ -1875,7 +1908,7 @@ export default function DetailedRequestView({
                           <button 
                             type="button" 
                             onClick={() => setShowProductForm(false)} 
-                            className="text-zinc-500 hover:text-white text-xs font-black"
+                            className={`text-xs font-black transition-colors ${isDarkMode ? 'text-zinc-500 hover:text-white' : 'text-zinc-400 hover:text-zinc-900'}`}
                           >
                             ✕
                           </button>
@@ -1883,7 +1916,7 @@ export default function DetailedRequestView({
 
                         <div className="space-y-3">
                           <div className="text-left">
-                            <label className="text-[7.5px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                            <label className={`text-[7.5px] font-bold uppercase tracking-wider block mb-1 ${isDarkMode ? 'text-zinc-500' : 'text-zinc-500'}`}>
                               {language === 'PT' ? 'Nome do Produto' : 'Product Name'}
                             </label>
                             <input
@@ -1891,7 +1924,9 @@ export default function DetailedRequestView({
                               type="text"
                               value={productForm.name}
                               onChange={e => setProductForm({ ...productForm, name: e.target.value })}
-                              className="w-full p-2 bg-zinc-900 border border-white/5 rounded-xl text-xs text-white"
+                              className={`w-full p-2 border rounded-xl text-xs transition-all ${
+                                isDarkMode ? 'bg-zinc-900 border-white/5 text-white' : 'bg-white border-zinc-200 text-zinc-900 focus:border-supplyx-blue'
+                              }`}
                               placeholder="Ex: Cimento CP-IV, Tubos PVC"
                             />
                           </div>
@@ -1906,7 +1941,9 @@ export default function DetailedRequestView({
                                 type="text"
                                 value={productForm.quantity}
                                 onChange={e => setProductForm({ ...productForm, quantity: e.target.value })}
-                                className="w-full p-2 bg-zinc-900 border border-white/5 rounded-xl text-xs text-white"
+                                className={`w-full p-2 border rounded-xl text-xs transition-all ${
+                                  isDarkMode ? 'bg-zinc-900 border-white/5 text-white' : 'bg-white border-zinc-200 text-zinc-900 focus:border-supplyx-blue'
+                                }`}
                                 placeholder="10"
                               />
                             </div>
@@ -1919,7 +1956,9 @@ export default function DetailedRequestView({
                                 type="text"
                                 value={productForm.weight}
                                 onChange={e => setProductForm({ ...productForm, weight: e.target.value })}
-                                className="w-full p-2 bg-zinc-900 border border-white/5 rounded-xl text-xs text-white"
+                                className={`w-full p-2 border rounded-xl text-xs transition-all ${
+                                  isDarkMode ? 'bg-zinc-900 border-white/5 text-white' : 'bg-white border-zinc-200 text-zinc-900 focus:border-supplyx-blue'
+                                }`}
                                 placeholder="2T"
                               />
                             </div>
@@ -1932,7 +1971,9 @@ export default function DetailedRequestView({
                                 type="text"
                                 value={productForm.volume}
                                 onChange={e => setProductForm({ ...productForm, volume: e.target.value })}
-                                className="w-full p-2 bg-zinc-900 border border-white/5 rounded-xl text-xs text-white"
+                                className={`w-full p-2 border rounded-xl text-xs transition-all ${
+                                  isDarkMode ? 'bg-zinc-900 border-white/5 text-white' : 'bg-white border-zinc-200 text-zinc-900 focus:border-supplyx-blue'
+                                }`}
                                 placeholder="5m³"
                               />
                             </div>
@@ -1949,7 +1990,11 @@ export default function DetailedRequestView({
                             <button
                               type="button"
                               onClick={() => setShowProductForm(false)}
-                              className="flex-1 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 text-[9px] uppercase font-black tracking-wider rounded-lg transition-all"
+                              className={`flex-1 py-1.5 text-[9px] uppercase font-black tracking-wider rounded-lg transition-all ${
+                                isDarkMode 
+                                  ? 'bg-zinc-800 hover:bg-zinc-750 text-zinc-300' 
+                                  : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-700'
+                              }`}
                             >
                               {language === 'PT' ? 'Cancelar' : 'Cancel'}
                             </button>

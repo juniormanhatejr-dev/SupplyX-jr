@@ -33,6 +33,7 @@ import InventoryFulfillment from './logistics/InventoryFulfillment';
 import LogisticsFinancial from './logistics/LogisticsFinancial';
 import CarrierCentral from './logistics/CarrierCentral';
 import TransportAssignmentPage from './logistics/TransportAssignmentPage';
+import { CargoDocumentsPage } from './CargoDocumentsPage';
 
 interface LogisticsViewProps {
   isDarkMode: boolean;
@@ -841,11 +842,13 @@ export default function LogisticsView({
                 { id: 'dashboard', pt: '📊 Cockpit Analítico', en: '📊 Control Dashboard' },
                 { id: 'requests_list', pt: '📋 Monitor de Cargas', en: '📋 Cargo Monitor' },
                 { id: 'drivers', pt: '👤 Frotas & Motoristas', en: '👤 Fleets & Drivers' },
+                { id: 'cargo_documents', pt: '📂 Centro de Documentos', en: '📂 Cargo Documents' },
                 { id: 'financial', pt: '💳 B2B Financeiro Split', en: '💳 B2B Split Fees' }
               ]
             : [
                 { id: 'requests_list', pt: '📋 Minhas Cargas (Rastreio)', en: '📋 My Cargoes (Tracking)' },
                 { id: 'transport_assignment', pt: '📦 Atribuir Carga de Transporte', en: '📦 Assign Cargo Transport' },
+                { id: 'cargo_documents', pt: '📂 Centro de Documentos', en: '📂 Cargo Documents' },
                 { id: 'dashboard', pt: '📊 Painel de Rastreio', en: '📊 Tracking Dashboard' }
               ]
           ).map((tab) => {
@@ -1000,6 +1003,13 @@ export default function LogisticsView({
                 language={language}
                 ledgers={financialLedgers}
                 onConfirmClearance={handleClearFinancial}
+              />
+            )}
+
+            {activeSubTab === 'cargo_documents' && (
+              <CargoDocumentsPage 
+                isDarkMode={isDarkMode}
+                language={language}
               />
             )}
           </motion.div>

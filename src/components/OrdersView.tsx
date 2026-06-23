@@ -1057,6 +1057,23 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
 
     const clientPhone = profile?.phone || '+258 84 123 4567';
 
+    const orderMessageText = `📦 NOVO PEDIDO DE DESPACHO LOGÍSTICO PUBLICADO (VIA PLANILHA)
+• Origem: ${spreadsheetOrigem || 'Moçambique'}
+• Destino: ${spreadsheetDestino || 'Moçambique'}
+• Carga: ${materialsList}
+• Peso Total: ${estimatedWeight > 0 ? `${estimatedWeight} Toneladas` : 'Estimado pelo transportador'}
+• Observações do Cliente: Despacho logístico solicitado utilizando planilha de produtos customizados pelo cliente.`;
+
+    const initialReply = {
+      id: `rep-initial-${Date.now()}`,
+      sender: 'requester',
+      senderName: profile?.companyName || auth.currentUser?.displayName || 'Cliente Remetente',
+      text: orderMessageText,
+      timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}),
+      logisticsUserId: 'ops_logistica_default',
+      logisticsUserName: 'Sistema SupplyX'
+    };
+
     const newLogisticsOrder = {
       id: logisticsId,
       tipoCarga: materialsList,
@@ -1088,7 +1105,8 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       pickupAddress: spreadsheetOrigem,
       deliveryAddress: spreadsheetDestino,
       distance: `${calculateMozambiqueDistance(spreadsheetOrigem, spreadsheetDestino)} KM`,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      logisticsReplies: [initialReply]
     };
 
     existing = [newLogisticsOrder, ...existing];
@@ -1154,6 +1172,24 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       const targetWeight = `${computedWeight} Toneladas`;
       const targetVolume = `${logisticsFormFields.volume} m³`;
 
+      const orderMessageText = `📦 NOVO PEDIDO DE DESPACHO LOGÍSTICO PUBLICADO
+• Origem: ${logisticsFormFields.origem}
+• Destino: ${logisticsFormFields.destino}
+• Carga: ${compiledItemsList}
+• Peso Total: ${targetWeight}
+• Prazo Desejado: ${logisticsFormFields.dataDesejada ? new Date(logisticsFormFields.dataDesejada).toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', year: 'numeric'}) : 'Conforme cronograma'}
+• Observações do Cliente: ${logisticsFormFields.observacoes || 'Nenhuma'}`;
+
+      const initialReply = {
+        id: `rep-initial-${Date.now()}`,
+        sender: 'requester',
+        senderName: profile?.companyName || auth.currentUser?.displayName || 'Cliente Remetente',
+        text: orderMessageText,
+        timestamp: new Date().toLocaleDateString('pt-PT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}),
+        logisticsUserId: 'ops_logistica_default',
+        logisticsUserName: 'Sistema SupplyX'
+      };
+
       const newLogisticsOrder = {
         id: logisticsId,
         tipoCarga: compiledItemsList,
@@ -1190,7 +1226,8 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           name: it.name,
           quantity: it.quantity,
           weight: it.weight
-        }))
+        })),
+        logisticsReplies: [initialReply]
       };
 
       existing = [newLogisticsOrder, ...existing];

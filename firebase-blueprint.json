@@ -196,6 +196,31 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["assignmentId", "origin", "destination", "products", "totalWeight", "totalVolume", "status", "createdAt"]
+    },
+    "File": {
+      "title": "Corporate File",
+      "description": "Represents metadata of a corporate file attachment or uploaded document.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "file_name": { "type": "string" },
+        "original_name": { "type": "string" },
+        "file_type": { "type": "string" },
+        "file_size": { "type": "number" },
+        "storage_path": { "type": "string" },
+        "blob_url": { "type": "string" },
+        "uploaded_by": { "type": "string" },
+        "company_id": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "message_id": { "type": "string" },
+        "shipment_id": { "type": "string" },
+        "product_id": { "type": "string" },
+        "order_id": { "type": "string" },
+        "transport_assignment_id": { "type": "string" },
+        "category": { "type": "string" }
+      },
+      "required": ["id", "file_name", "original_name", "file_type", "file_size", "storage_path", "blob_url", "uploaded_by"]
     }
   },
   "firestore": {
@@ -246,6 +271,10 @@
     "transportAssignments/{assignmentId}": {
       "schema": "TransportAssignment",
       "description": "Registered custom transport assignments calculated through interactive cubic weight layout."
+    },
+    "files/{fileId}": {
+      "schema": "File",
+      "description": "Metadata of corporate uploaded files."
     }
   }
 }

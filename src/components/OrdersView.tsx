@@ -394,44 +394,26 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     const quoteSupplierId = targetQuote.supplierId;
     const dbSupplier = mergedSuppliers.find(s => s.id === quoteSupplierId);
 
-    const sInfo = isSupplierUser ? {
-      name: profile?.name || targetQuote.supplierName || 'FORNECEDOR',
+    const sInfo = {
+      name: targetQuote.supplierName || (isSupplierUser ? (profile?.name || 'FORNECEDOR') : (dbSupplier?.name || 'FORNECEDOR')),
       isVerified: true,
-      address: profile?.address || 'Maputo, Moçambique',
-      email: profile?.email || user?.email || '',
-      phone: profile?.phone || '',
-      nuit: profile?.nuit || '400' + Math.floor(Math.random() * 1000000),
-      logoURL: profile?.photoURL || '',
-      bankAccounts: profile?.bankAccounts || [],
-      mobileWallets: profile?.mobileWallets || [],
-      signatureURL: profile?.signatureURL,
-      stampURL: profile?.stampURL
-    } : {
-      name: dbSupplier?.name || targetQuote.supplierName || 'FORNECEDOR',
-      isVerified: true,
-      address: dbSupplier?.address || 'Maputo, Moçambique',
-      email: dbSupplier?.email || 'sales@supplier.com',
-      phone: dbSupplier?.phone || '',
-      nuit: dbSupplier?.nuit || '400' + Math.floor(Math.random() * 1000000),
-      logoURL: dbSupplier?.photoURL || '',
-      bankAccounts: dbSupplier?.bankAccounts || [],
-      mobileWallets: dbSupplier?.mobileWallets || [],
-      signatureURL: dbSupplier?.signatureURL,
-      stampURL: dbSupplier?.stampURL
+      address: targetQuote.supplierAddress || (isSupplierUser ? (profile?.address || 'Maputo, Moçambique') : (dbSupplier?.address || 'Maputo, Moçambique')),
+      email: targetQuote.supplierEmail || (isSupplierUser ? (profile?.email || user?.email || '') : (dbSupplier?.email || 'sales@supplier.com')),
+      phone: targetQuote.supplierPhone || (isSupplierUser ? (profile?.phone || '') : (dbSupplier?.phone || '')),
+      nuit: targetQuote.supplierNuit || (isSupplierUser ? (profile?.nuit || '400377081') : (dbSupplier?.nuit || '400377081')),
+      logoURL: targetQuote.supplierLogoURL || (isSupplierUser ? (profile?.photoURL || '') : (dbSupplier?.photoURL || '')),
+      bankAccounts: targetQuote.supplierBankAccounts || (isSupplierUser ? (profile?.bankAccounts || []) : (dbSupplier?.bankAccounts || [])),
+      mobileWallets: targetQuote.supplierMobileWallets || (isSupplierUser ? (profile?.mobileWallets || []) : (dbSupplier?.mobileWallets || [])),
+      signatureURL: targetQuote.supplierSignatureURL || (isSupplierUser ? (profile?.signatureURL || '') : (dbSupplier?.signatureURL || '')),
+      stampURL: targetQuote.supplierStampURL || (isSupplierUser ? (profile?.stampURL || '') : (dbSupplier?.stampURL || ''))
     };
 
-    const cInfo = isSupplierUser ? {
-      name: targetQuote.buyerName || 'Cliente SupplyX',
-      nuit: '400377081',
-      address: 'NACALA - PORTO',
-      email: targetQuote.buyerEmail || 'cliente@supplyx.com',
-      phone: '+258 84 ...'
-    } : {
-      name: profile?.name || targetQuote.buyerName || 'Cliente SupplyX',
-      nuit: profile?.nuit || '400377081',
-      address: profile?.address || 'NACALA - PORTO',
-      email: profile?.email || user?.email || 'cliente@supplyx.com',
-      phone: profile?.phone || '+258 84 ...'
+    const cInfo = {
+      name: targetQuote.buyerName || (isSupplierUser ? 'Cliente SupplyX' : (profile?.name || 'Cliente SupplyX')),
+      nuit: targetQuote.buyerNuit || (isSupplierUser ? '400377081' : (profile?.nuit || '400377081')),
+      address: targetQuote.buyerAddress || (isSupplierUser ? 'NACALA - PORTO' : (profile?.address || 'NACALA - PORTO')),
+      email: targetQuote.buyerEmail || (isSupplierUser ? 'cliente@supplyx.com' : (profile?.email || user?.email || 'cliente@supplyx.com')),
+      phone: targetQuote.buyerPhone || (isSupplierUser ? '+258 84 ...' : (profile?.phone || '+258 84 ...'))
     };
 
     return {
@@ -1560,8 +1542,21 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             requestId,
             buyerId: user?.uid,
             buyerName: profile?.name || 'Cliente SupplyX',
+            buyerNuit: profile?.nuit || '400377081',
+            buyerAddress: profile?.address || 'NACALA - PORTO',
+            buyerEmail: profile?.email || user?.email || 'cliente@supplyx.com',
+            buyerPhone: profile?.phone || '+258 84 ...',
             supplierId: sid,
             supplierName: s?.name || 'Fornecedor',
+            supplierAddress: s?.address || 'Maputo, Moçambique',
+            supplierEmail: s?.email || 'sales@supplier.com',
+            supplierPhone: s?.phone || '',
+            supplierNuit: s?.nuit || '400' + Math.floor(Math.random() * 1000000),
+            supplierLogoURL: s?.photoURL || '',
+            supplierBankAccounts: s?.bankAccounts || [],
+            supplierMobileWallets: s?.mobileWallets || [],
+            supplierSignatureURL: s?.signatureURL || '',
+            supplierStampURL: s?.stampURL || '',
             items: rows.map(r => {
               const match = allProducts.find(p => 
                 p.supplierId === sid && 
@@ -2278,44 +2273,26 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       const dbSupplier = mergedSuppliers.find(s => s.id === quoteSupplierId);
       const isSupplierUser = userType === 'supplier';
 
-      const sInfo = isSupplierUser ? {
-        name: profile?.name || targetQuote.supplierName || 'FORNECEDOR',
+      const sInfo = {
+        name: targetQuote.supplierName || (isSupplierUser ? (profile?.name || 'FORNECEDOR') : (dbSupplier?.name || 'FORNECEDOR')),
         isVerified: true,
-        address: profile?.address || 'Maputo, Moçambique',
-        email: profile?.email || user?.email || '',
-        phone: profile?.phone || '',
-        nuit: profile?.nuit || '400' + Math.floor(Math.random() * 1000000),
-        logoURL: profile?.photoURL || '',
-        bankAccounts: profile?.bankAccounts || [],
-        mobileWallets: profile?.mobileWallets || [],
-        signatureURL: profile?.signatureURL,
-        stampURL: profile?.stampURL
-      } : {
-        name: dbSupplier?.name || targetQuote.supplierName || 'FORNECEDOR',
-        isVerified: true,
-        address: dbSupplier?.address || 'Maputo, Moçambique',
-        email: dbSupplier?.email || 'sales@supplier.com',
-        phone: dbSupplier?.phone || '',
-        nuit: dbSupplier?.nuit || '400' + Math.floor(Math.random() * 1000000),
-        logoURL: dbSupplier?.photoURL || '',
-        bankAccounts: dbSupplier?.bankAccounts || [],
-        mobileWallets: dbSupplier?.mobileWallets || [],
-        signatureURL: dbSupplier?.signatureURL,
-        stampURL: dbSupplier?.stampURL
+        address: targetQuote.supplierAddress || (isSupplierUser ? (profile?.address || 'Maputo, Moçambique') : (dbSupplier?.address || 'Maputo, Moçambique')),
+        email: targetQuote.supplierEmail || (isSupplierUser ? (profile?.email || user?.email || '') : (dbSupplier?.email || 'sales@supplier.com')),
+        phone: targetQuote.supplierPhone || (isSupplierUser ? (profile?.phone || '') : (dbSupplier?.phone || '')),
+        nuit: targetQuote.supplierNuit || (isSupplierUser ? (profile?.nuit || '400377081') : (dbSupplier?.nuit || '400377081')),
+        logoURL: targetQuote.supplierLogoURL || (isSupplierUser ? (profile?.photoURL || '') : (dbSupplier?.photoURL || '')),
+        bankAccounts: targetQuote.supplierBankAccounts || (isSupplierUser ? (profile?.bankAccounts || []) : (dbSupplier?.bankAccounts || [])),
+        mobileWallets: targetQuote.supplierMobileWallets || (isSupplierUser ? (profile?.mobileWallets || []) : (dbSupplier?.mobileWallets || [])),
+        signatureURL: targetQuote.supplierSignatureURL || (isSupplierUser ? (profile?.signatureURL || '') : (dbSupplier?.signatureURL || '')),
+        stampURL: targetQuote.supplierStampURL || (isSupplierUser ? (profile?.stampURL || '') : (dbSupplier?.stampURL || ''))
       };
 
-      const cInfo = isSupplierUser ? {
-        name: targetQuote.buyerName || 'Cliente SupplyX',
-        nuit: '400377081',
-        address: 'NACALA - PORTO',
-        email: targetQuote.buyerEmail || 'cliente@supplyx.com',
-        phone: '+258 84 ...'
-      } : {
-        name: profile?.name || targetQuote.buyerName || 'Cliente SupplyX',
-        nuit: profile?.nuit || '400377081',
-        address: profile?.address || 'NACALA - PORTO',
-        email: profile?.email || user?.email || 'cliente@supplyx.com',
-        phone: profile?.phone || '+258 84 ...'
+      const cInfo = {
+        name: targetQuote.buyerName || (isSupplierUser ? 'Cliente SupplyX' : (profile?.name || 'Cliente SupplyX')),
+        nuit: targetQuote.buyerNuit || (isSupplierUser ? '400377081' : (profile?.nuit || '400377081')),
+        address: targetQuote.buyerAddress || (isSupplierUser ? 'NACALA - PORTO' : (profile?.address || 'NACALA - PORTO')),
+        email: targetQuote.buyerEmail || (isSupplierUser ? 'cliente@supplyx.com' : (profile?.email || user?.email || 'cliente@supplyx.com')),
+        phone: targetQuote.buyerPhone || (isSupplierUser ? '+258 84 ...' : (profile?.phone || '+258 84 ...'))
       };
 
       return {

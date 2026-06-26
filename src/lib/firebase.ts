@@ -500,4 +500,10 @@ export async function clientDirectUpload(
   return { success: true, id: fileId, file: fileMetadata };
 }
 
+export const isVercel = typeof window !== 'undefined' && (
+  window.location.hostname.includes('vercel.app') || 
+  window.location.hostname.includes('localhost') === false && window.location.hostname.includes('run.app') === false
+);
+
+
 

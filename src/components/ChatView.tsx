@@ -24,7 +24,7 @@ import ProfileModal from './ProfileModal';
 import { FileViewerModal } from './FileViewerModal';
 import { OptimizedImage } from './ui/OptimizedImage';
 import UserPresenceIndicator from './UserPresenceIndicator';
-import { db, auth, handleFirestoreError, OperationType, clientDirectUpload } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType, clientDirectUpload, isVercel } from '../lib/firebase';
 import { 
   collection, 
   query, 
@@ -539,36 +539,45 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     try {
       let fileData;
       
-      try {
-        const idToken = await auth.currentUser.getIdToken();
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('message_id', activeRoom.id);
-        formData.append('category', file.type.startsWith('image/') ? 'photo' : 'others');
-
-        const response = await fetch('/api/files/upload', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${idToken}`,
-            'x-user-id': auth.currentUser.uid,
-            'x-user-email': auth.currentUser.email || ''
-          },
-          body: formData,
-        });
-
-        if (!response.ok) {
-          throw new Error('Server upload returned non-OK status');
-        }
-
-        const uploadResult = await response.json();
-        fileData = uploadResult.file;
-      } catch (uploadError) {
-        console.warn('[CHAT] Server upload failed/unavailable, falling back to direct client storage upload:', uploadError);
+      if (isVercel) {
+        console.log('[CHAT] isVercel is true. Bypassing server upload and using clientDirectUpload immediately.');
         const uploadResult = await clientDirectUpload(file, {
           message_id: activeRoom.id,
           category: file.type.startsWith('image/') ? 'photo' : 'others'
         });
         fileData = uploadResult.file;
+      } else {
+        try {
+          const idToken = await auth.currentUser.getIdToken();
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('message_id', activeRoom.id);
+          formData.append('category', file.type.startsWith('image/') ? 'photo' : 'others');
+
+          const response = await fetch('/api/files/upload', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${idToken}`,
+              'x-user-id': auth.currentUser.uid,
+              'x-user-email': auth.currentUser.email || ''
+            },
+            body: formData,
+          });
+
+          if (!response.ok) {
+            throw new Error('Server upload returned non-OK status');
+          }
+
+          const uploadResult = await response.json();
+          fileData = uploadResult.file;
+        } catch (uploadError) {
+          console.warn('[CHAT] Server upload failed/unavailable, falling back to direct client storage upload:', uploadError);
+          const uploadResult = await clientDirectUpload(file, {
+            message_id: activeRoom.id,
+            category: file.type.startsWith('image/') ? 'photo' : 'others'
+          });
+          fileData = uploadResult.file;
+        }
       }
 
       const isImage = fileData.file_type.startsWith('image/');

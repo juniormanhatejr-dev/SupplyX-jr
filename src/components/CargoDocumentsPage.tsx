@@ -18,7 +18,7 @@ import {
   User,
   ExternalLink
 } from 'lucide-react';
-import { auth, clientDirectUpload, db, storage, getFileFromIndexedDB } from '../lib/firebase';
+import { auth, clientDirectUpload, db, storage, getFileFromIndexedDB, isVercel } from '../lib/firebase';
 import { collection, getDocs, query as firestoreQuery, where, deleteDoc, doc as firestoreDoc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { FileViewerModal } from './FileViewerModal';
@@ -81,20 +81,7 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
       if (typeFilter) queryParams.append('type', typeFilter);
 
       let fetchedFiles: any[] = [];
-      try {
-        const res = await fetch(`/api/files?${queryParams.toString()}`, {
-          headers: {
-            'Authorization': idToken ? `Bearer ${idToken}` : '',
-            'x-user-id': auth.currentUser?.uid || ''
-          }
-        });
-        if (res.ok) {
-          fetchedFiles = await res.json();
-        } else {
-          throw new Error('Server returned non-OK status');
-        }
-      } catch (apiError) {
-        console.warn('[DOCS] Server list API failed/unavailable, falling back to direct Firestore query:', apiError);
+      const runDirectFirestoreQuery = async () => {
         try {
           const filesRef = collection(db, 'files');
           let q = firestoreQuery(filesRef);
@@ -137,6 +124,28 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
           fetchedFiles = filtered;
         } catch (fsError) {
           console.error('[DOCS] Direct Firestore query failed:', fsError);
+        }
+      };
+
+      if (isVercel) {
+        console.log('[DOCS] isVercel is true. Querying Firestore directly for files list.');
+        await runDirectFirestoreQuery();
+      } else {
+        try {
+          const res = await fetch(`/api/files?${queryParams.toString()}`, {
+            headers: {
+              'Authorization': idToken ? `Bearer ${idToken}` : '',
+              'x-user-id': auth.currentUser?.uid || ''
+            }
+          });
+          if (res.ok) {
+            fetchedFiles = await res.json();
+          } else {
+            throw new Error('Server returned non-OK status');
+          }
+        } catch (apiError) {
+          console.warn('[DOCS] Server list API failed/unavailable, falling back to direct Firestore query:', apiError);
+          await runDirectFirestoreQuery();
         }
       }
 
@@ -199,35 +208,46 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
       let uploadSuccess = false;
       let errorMsg = 'Upload failed';
 
-      try {
-        const idToken = await auth.currentUser?.getIdToken();
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('category', uploadCategory);
-
-        const res = await fetch('/api/files/upload', {
-          method: 'POST',
-          headers: {
-            'Authorization': idToken ? `Bearer ${idToken}` : '',
-            'x-user-id': auth.currentUser?.uid || ''
-          },
-          body: formData
-        });
-
-        if (res.ok) {
-          uploadSuccess = true;
-        } else {
-          const errorData = await res.json().catch(() => ({ error: 'Upload failed' }));
-          errorMsg = errorData.error || 'Upload error';
-        }
-      } catch (endpointError) {
-        console.warn('[DOCS] Server upload endpoint unavailable, falling back to direct client storage upload:', endpointError);
+      if (isVercel) {
+        console.log('[DOCS] isVercel is true. Bypassing server upload and using clientDirectUpload immediately.');
         try {
           await clientDirectUpload(file, { category: uploadCategory });
           uploadSuccess = true;
         } catch (fallbackError: any) {
           console.error('[DOCS] Direct client storage upload failed:', fallbackError);
           errorMsg = fallbackError?.message || 'Direct upload failed';
+        }
+      } else {
+        try {
+          const idToken = await auth.currentUser?.getIdToken();
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('category', uploadCategory);
+
+          const res = await fetch('/api/files/upload', {
+            method: 'POST',
+            headers: {
+              'Authorization': idToken ? `Bearer ${idToken}` : '',
+              'x-user-id': auth.currentUser?.uid || ''
+            },
+            body: formData
+          });
+
+          if (res.ok) {
+            uploadSuccess = true;
+          } else {
+            const errorData = await res.json().catch(() => ({ error: 'Upload failed' }));
+            errorMsg = errorData.error || 'Upload error';
+          }
+        } catch (endpointError) {
+          console.warn('[DOCS] Server upload endpoint unavailable, falling back to direct client storage upload:', endpointError);
+          try {
+            await clientDirectUpload(file, { category: uploadCategory });
+            uploadSuccess = true;
+          } catch (fallbackError: any) {
+            console.error('[DOCS] Direct client storage upload failed:', fallbackError);
+            errorMsg = fallbackError?.message || 'Direct upload failed';
+          }
         }
       }
 
@@ -291,28 +311,32 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
       }
     }
 
-    try {
-      const idToken = await auth.currentUser?.getIdToken();
-      const res = await fetch(`/api/files/${fileId}/download`, {
-        headers: {
-          'Authorization': idToken ? `Bearer ${idToken}` : '',
-          'x-user-id': auth.currentUser?.uid || ''
+    if (isVercel) {
+      console.log('[DOCS] isVercel is true. Bypassing secure download API.');
+    } else {
+      try {
+        const idToken = await auth.currentUser?.getIdToken();
+        const res = await fetch(`/api/files/${fileId}/download`, {
+          headers: {
+            'Authorization': idToken ? `Bearer ${idToken}` : '',
+            'x-user-id': auth.currentUser?.uid || ''
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.downloadUrl) {
+            const a = document.createElement('a');
+            a.href = data.downloadUrl;
+            a.download = originalName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            return;
+          }
         }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.downloadUrl) {
-          const a = document.createElement('a');
-          a.href = data.downloadUrl;
-          a.download = originalName;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          return;
-        }
+      } catch (err) {
+        console.error('Secure download fail:', err);
       }
-    } catch (err) {
-      console.error('Secure download fail:', err);
     }
 
     // Direct fallback
@@ -338,23 +362,7 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
       let deleteSuccess = false;
       let errorMsg = 'Delete failure';
 
-      try {
-        const idToken = await auth.currentUser?.getIdToken();
-        const res = await fetch(`/api/files/${id}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': idToken ? `Bearer ${idToken}` : '',
-            'x-user-id': auth.currentUser?.uid || ''
-          }
-        });
-        if (res.ok) {
-          deleteSuccess = true;
-        } else {
-          const errData = await res.json().catch(() => ({ error: 'Delete failure' }));
-          errorMsg = errData.error || 'Delete failure';
-        }
-      } catch (endpointError) {
-        console.warn('[DOCS] Server delete endpoint failed/unavailable, falling back to direct client deletion:', endpointError);
+      const runDirectClientDeletion = async () => {
         try {
           // Delete from Firestore
           await deleteDoc(firestoreDoc(db, 'files', id));
@@ -373,6 +381,31 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
         } catch (fallbackError: any) {
           console.error('[DOCS] Direct client deletion failed:', fallbackError);
           errorMsg = fallbackError?.message || 'Direct deletion failed';
+        }
+      };
+
+      if (isVercel) {
+        console.log('[DOCS] isVercel is true. Bypassing server delete and using direct client deletion immediately.');
+        await runDirectClientDeletion();
+      } else {
+        try {
+          const idToken = await auth.currentUser?.getIdToken();
+          const res = await fetch(`/api/files/${id}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': idToken ? `Bearer ${idToken}` : '',
+              'x-user-id': auth.currentUser?.uid || ''
+            }
+          });
+          if (res.ok) {
+            deleteSuccess = true;
+          } else {
+            const errData = await res.json().catch(() => ({ error: 'Delete failure' }));
+            errorMsg = errData.error || 'Delete failure';
+          }
+        } catch (endpointError) {
+          console.warn('[DOCS] Server delete endpoint failed/unavailable, falling back to direct client deletion:', endpointError);
+          await runDirectClientDeletion();
         }
       }
 
@@ -680,6 +713,8 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
                                   console.error('Failed reading preview from IndexedDB fallback:', err);
                                   setPreviewUrl(file.blob_url);
                                 }
+                              } else if (isVercel) {
+                                setPreviewUrl(file.blob_url);
                               } else {
                                 try {
                                   const idToken = await auth.currentUser?.getIdToken();

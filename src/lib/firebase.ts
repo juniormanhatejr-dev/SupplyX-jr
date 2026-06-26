@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer, enableIndexedDbPersistence } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer, enableIndexedDbPersistence, setDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
@@ -409,4 +409,69 @@ export async function getFileFromIndexedDB(refUrl: string): Promise<{ name: stri
     };
   });
 }
+
+export async function clientDirectUpload(
+  file: File, 
+  extraData: {
+    category?: string;
+    message_id?: string | null;
+    shipment_id?: string | null;
+    product_id?: string | null;
+    order_id?: string | null;
+    transport_assignment_id?: string | null;
+    company_id?: string | null;
+  } = {}
+) {
+  if (!auth.currentUser) {
+    throw new Error('User not authenticated');
+  }
+
+  const fileId = 'file_' + Math.random().toString(36).substring(2, 15);
+  const originalName = file.name;
+  const sanitizedOriginalName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const fileName = `${Date.now()}_${sanitizedOriginalName}`;
+  const storagePath = `uploads/${fileName}`;
+
+  // Upload to Firebase Storage
+  const fileRef = ref(storage, storagePath);
+  await uploadBytes(fileRef, file);
+  const blobUrl = await getDownloadURL(fileRef);
+
+  // Get user profile/company details if available
+  let companyId = extraData.company_id || 'default-company';
+  try {
+    const userDoc = await getDocFromServer(doc(db, 'users', auth.currentUser.uid));
+    if (userDoc.exists()) {
+      companyId = userDoc.data().companyId || companyId;
+    }
+  } catch (err) {
+    console.warn('Could not fetch user company for upload metadata, using default:', err);
+  }
+
+  const fileMetadata = {
+    id: fileId,
+    file_name: fileName,
+    original_name: originalName,
+    file_type: file.type || 'application/octet-stream',
+    file_size: file.size,
+    storage_path: storagePath,
+    blob_url: blobUrl,
+    uploaded_by: auth.currentUser.uid,
+    company_id: companyId,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    message_id: extraData.message_id || null,
+    shipment_id: extraData.shipment_id || null,
+    product_id: extraData.product_id || null,
+    order_id: extraData.order_id || null,
+    transport_assignment_id: extraData.transport_assignment_id || null,
+    category: extraData.category || 'others'
+  };
+
+  // Write to Firestore /files
+  await setDoc(doc(db, 'files', fileId), fileMetadata);
+
+  return { success: true, id: fileId, file: fileMetadata };
+}
+
 

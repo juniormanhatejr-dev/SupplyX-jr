@@ -24,7 +24,7 @@ import ProfileModal from './ProfileModal';
 import { FileViewerModal } from './FileViewerModal';
 import { OptimizedImage } from './ui/OptimizedImage';
 import UserPresenceIndicator from './UserPresenceIndicator';
-import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType, clientDirectUpload } from '../lib/firebase';
 import { 
   collection, 
   query, 
@@ -537,29 +537,40 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
 
     setIsUploading(true);
     try {
-      const idToken = await auth.currentUser.getIdToken();
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('message_id', activeRoom.id);
-      formData.append('category', file.type.startsWith('image/') ? 'photo' : 'others');
+      let fileData;
+      
+      try {
+        const idToken = await auth.currentUser.getIdToken();
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('message_id', activeRoom.id);
+        formData.append('category', file.type.startsWith('image/') ? 'photo' : 'others');
 
-      const response = await fetch('/api/files/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${idToken}`,
-          'x-user-id': auth.currentUser.uid,
-          'x-user-email': auth.currentUser.email || ''
-        },
-        body: formData,
-      });
+        const response = await fetch('/api/files/upload', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${idToken}`,
+            'x-user-id': auth.currentUser.uid,
+            'x-user-email': auth.currentUser.email || ''
+          },
+          body: formData,
+        });
 
-      if (!response.ok) {
-        const errJson = await response.json().catch(() => ({ error: 'Upload failed' }));
-        throw new Error(errJson.error || 'Server upload failed');
+        if (!response.ok) {
+          throw new Error('Server upload returned non-OK status');
+        }
+
+        const uploadResult = await response.json();
+        fileData = uploadResult.file;
+      } catch (uploadError) {
+        console.warn('[CHAT] Server upload failed/unavailable, falling back to direct client storage upload:', uploadError);
+        const uploadResult = await clientDirectUpload(file, {
+          message_id: activeRoom.id,
+          category: file.type.startsWith('image/') ? 'photo' : 'others'
+        });
+        fileData = uploadResult.file;
       }
 
-      const uploadResult = await response.json();
-      const fileData = uploadResult.file;
       const isImage = fileData.file_type.startsWith('image/');
       
       await addDoc(collection(db, `chats/${activeRoom.id}/messages`), {

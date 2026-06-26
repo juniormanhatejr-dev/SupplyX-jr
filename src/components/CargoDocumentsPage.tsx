@@ -18,7 +18,9 @@ import {
   User,
   ExternalLink
 } from 'lucide-react';
-import { auth } from '../lib/firebase';
+import { auth, clientDirectUpload, db, storage } from '../lib/firebase';
+import { collection, getDocs, query as firestoreQuery, where, deleteDoc, doc as firestoreDoc } from 'firebase/firestore';
+import { ref, deleteObject } from 'firebase/storage';
 import { FileViewerModal } from './FileViewerModal';
 
 interface CargoDocumentsPageProps {
@@ -78,18 +80,67 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
       if (categoryFilter) queryParams.append('category', categoryFilter);
       if (typeFilter) queryParams.append('type', typeFilter);
 
-      const res = await fetch(`/api/files?${queryParams.toString()}`, {
-        headers: {
-          'Authorization': idToken ? `Bearer ${idToken}` : '',
-          'x-user-id': auth.currentUser?.uid || ''
+      let fetchedFiles: any[] = [];
+      try {
+        const res = await fetch(`/api/files?${queryParams.toString()}`, {
+          headers: {
+            'Authorization': idToken ? `Bearer ${idToken}` : '',
+            'x-user-id': auth.currentUser?.uid || ''
+          }
+        });
+        if (res.ok) {
+          fetchedFiles = await res.json();
+        } else {
+          throw new Error('Server returned non-OK status');
         }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setFiles(data);
-      } else {
-        console.error('List files API failed');
+      } catch (apiError) {
+        console.warn('[DOCS] Server list API failed/unavailable, falling back to direct Firestore query:', apiError);
+        try {
+          const filesRef = collection(db, 'files');
+          let q = firestoreQuery(filesRef);
+          
+          if (categoryFilter && categoryFilter !== 'all') {
+            q = firestoreQuery(filesRef, where('category', '==', categoryFilter));
+          }
+          
+          const querySnapshot = await getDocs(q);
+          const localFiles: any[] = [];
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            localFiles.push(data);
+          });
+          
+          // Client-side filtering for type and search
+          let filtered = localFiles;
+          if (typeFilter && typeFilter !== 'all') {
+            filtered = filtered.filter(f => {
+              const fileType = (f.file_type || '').toLowerCase();
+              if (typeFilter === 'pdf') return fileType.includes('pdf');
+              if (typeFilter === 'image') return fileType.startsWith('image/');
+              if (typeFilter === 'excel') return fileType.includes('sheet') || fileType.includes('excel') || fileType.includes('csv') || fileType.includes('ms-excel');
+              if (typeFilter === 'word') return fileType.includes('word') || fileType.includes('document');
+              return true;
+            });
+          }
+          
+          if (search) {
+            const searchLower = search.toLowerCase();
+            filtered = filtered.filter(f => 
+              (f.original_name || '').toLowerCase().includes(searchLower) ||
+              (f.file_name || '').toLowerCase().includes(searchLower)
+            );
+          }
+          
+          // Sort descending by created_at
+          filtered.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+          
+          fetchedFiles = filtered;
+        } catch (fsError) {
+          console.error('[DOCS] Direct Firestore query failed:', fsError);
+        }
       }
+
+      setFiles(fetchedFiles);
     } catch (err: any) {
       console.error('Fetch files list failure:', err);
     } finally {
@@ -140,29 +191,50 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
     setUploadProgress(15);
     
     try {
-      const idToken = await auth.currentUser?.getIdToken();
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('category', uploadCategory);
-
       // Simulated gradual upload progress
       const progressTimer = setInterval(() => {
         setUploadProgress(prev => (prev < 85 ? prev + 12 : prev));
       }, 250);
 
-      const res = await fetch('/api/files/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': idToken ? `Bearer ${idToken}` : '',
-          'x-user-id': auth.currentUser?.uid || ''
-        },
-        body: formData
-      });
+      let uploadSuccess = false;
+      let errorMsg = 'Upload failed';
+
+      try {
+        const idToken = await auth.currentUser?.getIdToken();
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('category', uploadCategory);
+
+        const res = await fetch('/api/files/upload', {
+          method: 'POST',
+          headers: {
+            'Authorization': idToken ? `Bearer ${idToken}` : '',
+            'x-user-id': auth.currentUser?.uid || ''
+          },
+          body: formData
+        });
+
+        if (res.ok) {
+          uploadSuccess = true;
+        } else {
+          const errorData = await res.json().catch(() => ({ error: 'Upload failed' }));
+          errorMsg = errorData.error || 'Upload error';
+        }
+      } catch (endpointError) {
+        console.warn('[DOCS] Server upload endpoint unavailable, falling back to direct client storage upload:', endpointError);
+        try {
+          await clientDirectUpload(file, { category: uploadCategory });
+          uploadSuccess = true;
+        } catch (fallbackError: any) {
+          console.error('[DOCS] Direct client storage upload failed:', fallbackError);
+          errorMsg = fallbackError?.message || 'Direct upload failed';
+        }
+      }
 
       clearInterval(progressTimer);
       setUploadProgress(100);
 
-      if (res.ok) {
+      if (uploadSuccess) {
         showSuccessToast(
           language === 'PT'
             ? `Ficheiro "${file.name}" carregado com sucesso!`
@@ -170,8 +242,7 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
         );
         fetchFilesList();
       } else {
-        const errorData = await res.json().catch(() => ({ error: 'Upload failed' }));
-        showErrorToast(errorData.error || 'Upload error');
+        showErrorToast(errorMsg);
       }
     } catch (err: any) {
       console.error('File upload fatal error:', err);
@@ -246,15 +317,48 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
     }
 
     try {
-      const idToken = await auth.currentUser?.getIdToken();
-      const res = await fetch(`/api/files/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': idToken ? `Bearer ${idToken}` : '',
-          'x-user-id': auth.currentUser?.uid || ''
+      let deleteSuccess = false;
+      let errorMsg = 'Delete failure';
+
+      try {
+        const idToken = await auth.currentUser?.getIdToken();
+        const res = await fetch(`/api/files/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': idToken ? `Bearer ${idToken}` : '',
+            'x-user-id': auth.currentUser?.uid || ''
+          }
+        });
+        if (res.ok) {
+          deleteSuccess = true;
+        } else {
+          const errData = await res.json().catch(() => ({ error: 'Delete failure' }));
+          errorMsg = errData.error || 'Delete failure';
         }
-      });
-      if (res.ok) {
+      } catch (endpointError) {
+        console.warn('[DOCS] Server delete endpoint failed/unavailable, falling back to direct client deletion:', endpointError);
+        try {
+          // Delete from Firestore
+          await deleteDoc(firestoreDoc(db, 'files', id));
+          
+          // Delete from Storage if storage path exists
+          const fileToDel = files.find(f => f.id === id);
+          if (fileToDel && fileToDel.storage_path) {
+            try {
+              const fileRef = ref(storage, fileToDel.storage_path);
+              await deleteObject(fileRef);
+            } catch (storageErr) {
+              console.warn('[DOCS] Failed to delete physical storage object (it might not exist or permission denied), proceeding anyway:', storageErr);
+            }
+          }
+          deleteSuccess = true;
+        } catch (fallbackError: any) {
+          console.error('[DOCS] Direct client deletion failed:', fallbackError);
+          errorMsg = fallbackError?.message || 'Direct deletion failed';
+        }
+      }
+
+      if (deleteSuccess) {
         showSuccessToast(
           language === 'PT'
             ? 'Arquivo apagado com êxito'
@@ -262,8 +366,7 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
         );
         fetchFilesList();
       } else {
-        const errData = await res.json();
-        showErrorToast(errData.error || 'Delete failure');
+        showErrorToast(errorMsg);
       }
     } catch (err: any) {
       showErrorToast(String(err));

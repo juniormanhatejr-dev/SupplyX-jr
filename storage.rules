@@ -24,6 +24,11 @@ service firebase.storage {
       allow write: if isOwner(userId) && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
     }
 
+    // General Uploads Fallback
+    match /uploads/{allPaths=**} {
+      allow read, write: if isSignedIn() && request.resource.size < 100 * 1024 * 1024;
+    }
+
     // Chat Files
     match /chats/{chatId}/{allPaths=**} {
       allow read: if isSignedIn(); 

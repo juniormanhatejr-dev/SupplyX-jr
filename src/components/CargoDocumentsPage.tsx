@@ -18,7 +18,7 @@ import {
   User,
   ExternalLink
 } from 'lucide-react';
-import { auth, clientDirectUpload, db, storage } from '../lib/firebase';
+import { auth, clientDirectUpload, db, storage, getFileFromIndexedDB } from '../lib/firebase';
 import { collection, getDocs, query as firestoreQuery, where, deleteDoc, doc as firestoreDoc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { FileViewerModal } from './FileViewerModal';
@@ -273,6 +273,24 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
 
   // Secure temporary download flow using GET /api/files/:id/download
   const handleSecureDownload = async (fileId: string, alternateUrl: string, originalName: string) => {
+    // If it's a local IndexedDB reference, fetch and download the real file data
+    if (alternateUrl && alternateUrl.startsWith('local-file://')) {
+      try {
+        const fileData = await getFileFromIndexedDB(alternateUrl);
+        if (fileData) {
+          const a = document.createElement('a');
+          a.href = fileData.dataUrl;
+          a.download = originalName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed downloading from local IndexedDB fallback:', err);
+      }
+    }
+
     try {
       const idToken = await auth.currentUser?.getIdToken();
       const res = await fetch(`/api/files/${fileId}/download`, {
@@ -650,27 +668,41 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
                           {/* Viewer */}
                           <button
                             onClick={async () => {
-                              try {
-                                const idToken = await auth.currentUser?.getIdToken();
-                                const res = await fetch(`/api/files/${file.id}/download`, {
-                                  headers: {
-                                    'Authorization': idToken ? `Bearer ${idToken}` : '',
-                                    'x-user-id': auth.currentUser?.uid || ''
-                                  }
-                                });
-                                if (res.ok) {
-                                  const data = await res.json();
-                                  if (data.downloadUrl) {
-                                    setPreviewUrl(`${data.downloadUrl}&inline=true`);
+                              if (file.blob_url && file.blob_url.startsWith('local-file://')) {
+                                try {
+                                  const fileData = await getFileFromIndexedDB(file.blob_url);
+                                  if (fileData) {
+                                    setPreviewUrl(fileData.dataUrl);
                                   } else {
                                     setPreviewUrl(file.blob_url);
                                   }
-                                } else {
+                                } catch (err) {
+                                  console.error('Failed reading preview from IndexedDB fallback:', err);
                                   setPreviewUrl(file.blob_url);
                                 }
-                              } catch (err) {
-                                console.error('Failed secure preview generation:', err);
-                                setPreviewUrl(file.blob_url);
+                              } else {
+                                try {
+                                  const idToken = await auth.currentUser?.getIdToken();
+                                  const res = await fetch(`/api/files/${file.id}/download`, {
+                                    headers: {
+                                      'Authorization': idToken ? `Bearer ${idToken}` : '',
+                                      'x-user-id': auth.currentUser?.uid || ''
+                                    }
+                                  });
+                                  if (res.ok) {
+                                    const data = await res.json();
+                                    if (data.downloadUrl) {
+                                      setPreviewUrl(`${data.downloadUrl}&inline=true`);
+                                    } else {
+                                      setPreviewUrl(file.blob_url);
+                                    }
+                                  } else {
+                                    setPreviewUrl(file.blob_url);
+                                  }
+                                } catch (err) {
+                                  console.error('Failed secure preview generation:', err);
+                                  setPreviewUrl(file.blob_url);
+                                }
                               }
                               setPreviewName(file.original_name);
                               setPreviewType(file.file_type);

@@ -432,10 +432,36 @@ export async function clientDirectUpload(
   const fileName = `${Date.now()}_${sanitizedOriginalName}`;
   const storagePath = `uploads/${fileName}`;
 
-  // Upload to Firebase Storage
-  const fileRef = ref(storage, storagePath);
-  await uploadBytes(fileRef, file);
-  const blobUrl = await getDownloadURL(fileRef);
+  let blobUrl = '';
+  let finalStoragePath = storagePath;
+
+  try {
+    // Attempt normal upload to Firebase Storage
+    console.log('[CLIENT UPLOAD] Attempting direct storage upload for:', file.name);
+    const fileRef = ref(storage, storagePath);
+    await uploadBytes(fileRef, file);
+    blobUrl = await getDownloadURL(fileRef);
+    console.log('[CLIENT UPLOAD] Storage upload succeeded, URL obtained.');
+  } catch (storageErr) {
+    console.warn('[CLIENT UPLOAD] Firebase Storage failed/disabled, falling back to Base64/IndexedDB:', storageErr);
+    
+    // Fallback 1: Base64 direct embedding (for files <= 800 KB, perfect for Firestore)
+    if (file.size <= 800 * 1024) {
+      console.log('[CLIENT UPLOAD] Converting file to Base64 data URL...');
+      blobUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to read file as base64'));
+        reader.readAsDataURL(file);
+      });
+      finalStoragePath = 'inline-base64';
+    } else {
+      // Fallback 2: IndexedDB for larger files (local machine only)
+      console.log('[CLIENT UPLOAD] File too large for Firestore document (>800KB), using IndexedDB...');
+      blobUrl = await saveFileToIndexedDB(file);
+      finalStoragePath = 'local-indexeddb';
+    }
+  }
 
   // Get user profile/company details if available
   let companyId = extraData.company_id || 'default-company';
@@ -454,7 +480,7 @@ export async function clientDirectUpload(
     original_name: originalName,
     file_type: file.type || 'application/octet-stream',
     file_size: file.size,
-    storage_path: storagePath,
+    storage_path: finalStoragePath,
     blob_url: blobUrl,
     uploaded_by: auth.currentUser.uid,
     company_id: companyId,
@@ -468,7 +494,7 @@ export async function clientDirectUpload(
     category: extraData.category || 'others'
   };
 
-  // Write to Firestore /files
+  // Write to Firestore /files (will sync everywhere!)
   await setDoc(doc(db, 'files', fileId), fileMetadata);
 
   return { success: true, id: fileId, file: fileMetadata };

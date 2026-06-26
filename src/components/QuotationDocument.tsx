@@ -422,14 +422,20 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef, l
                       borderRadius: '12px', 
                       overflow: 'hidden',
                       border: `1px solid ${COLORS.borderGray}`,
-                      backgroundColor: COLORS.lightGray,
+                      backgroundColor: COLORS.white,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       flexShrink: 0,
                       marginBottom: '4px'
                     }}>
-                      <SupplyXLogo size="md" showText={false} />
+                      <img 
+                        src={logoImg} 
+                        alt="SupplyX Logo" 
+                        crossOrigin="anonymous"
+                        referrerPolicy="no-referrer"
+                        style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '6px' }} 
+                      />
                     </div>
                     <div style={{ 
                       fontSize: '8px', 
@@ -581,7 +587,32 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef, l
               /* Custom Mini Header for pages > 1 */
               <div style={{ position: 'relative', zIndex: 10, display: 'flex', justifyContent: 'space-between', borderBottom: `2px solid ${COLORS.darkBlue}`, paddingBottom: '8px', marginBottom: '15px', alignItems: 'flex-end' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <SupplyXLogo size="sm" showText={true} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '6px',
+                      overflow: 'hidden',
+                      border: '1px solid #e4e4e7',
+                      backgroundColor: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <img 
+                        src={logoImg} 
+                        alt="SupplyX" 
+                        crossOrigin="anonymous"
+                        referrerPolicy="no-referrer"
+                        style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '2px' }}
+                      />
+                    </div>
+                    <span style={{ fontSize: '14px', fontWeight: 900, fontFamily: 'sans-serif', letterSpacing: '-0.5px' }}>
+                      <span style={{ color: '#06213a' }}>Supply</span>
+                      <span style={{ color: '#0f9fa8' }}>X</span>
+                    </span>
+                  </div>
                   <span style={{ fontSize: '10px', fontWeight: 900, color: COLORS.teal, letterSpacing: '0.5px', fontStyle: 'italic', textTransform: 'uppercase' }}>| {text.continuation.replace('{pageNumber}', pageNumber.toString())}</span>
                 </div>
                 <div style={{ textAlign: 'right', fontSize: '9px', fontWeight: 700, color: COLORS.textMuted }}>
@@ -795,7 +826,26 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef, l
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                   <span style={{ fontSize: '7.5px', fontWeight: 900, fontStyle: 'italic' }}>Powered by</span>
-                  <SupplyXLogo size="sm" showText={false} />
+                  <div style={{
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '4px',
+                    overflow: 'hidden',
+                    border: '1px solid #e4e4e7',
+                    backgroundColor: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    <img 
+                      src={logoImg} 
+                      alt="SupplyX" 
+                      crossOrigin="anonymous"
+                      referrerPolicy="no-referrer"
+                      style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '1.5px' }}
+                    />
+                  </div>
                 </div>
                 <div style={{ fontSize: '8px', fontWeight: 900, color: COLORS.teal }}>{text.pageOf.replace('{pageNumber}', pageNumber.toString()).replace('{totalPages}', totalPages.toString())}</div>
               </div>

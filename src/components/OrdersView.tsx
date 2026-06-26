@@ -422,14 +422,30 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       validityDays: 15,
       supplier: sInfo,
       client: cInfo,
-      items: (targetQuote.items || []).map((row: any) => ({
-        material: row.material || row.description || '',
-        quantity: row.quantity || '1',
-        unit: row.unit || '',
-        needDate: row.needDate || '',
-        unitPrice: row.unitPrice || 0,
-        vatUnitRate: row.vatUnitRate !== undefined ? row.vatUnitRate : 16
-      }))
+      items: (targetQuote.items || []).map((row: any) => {
+        let finalUnitPrice = row.unitPrice;
+        if (row.unitPrice === 0) {
+          finalUnitPrice = 0;
+        } else if (row.unitPrice === undefined || row.unitPrice === null) {
+          const count = targetQuote.items.length || 1;
+          const vat = row.vatUnitRate !== undefined ? row.vatUnitRate : 16;
+          const currentTotal = targetQuote.responseValue || targetQuote.totalAmount || 0;
+          finalUnitPrice = (currentTotal / (1 + vat / 100)) / count;
+        }
+
+        const vatPerItem = row.vatUnitRate !== undefined 
+          ? row.vatUnitRate 
+          : (row.vatRate !== undefined ? row.vatRate : 16);
+
+        return {
+          description: row.material || row.description || '',
+          quantity: parseFloat(row.quantity || '1') || 1,
+          unit: row.unit || 'un',
+          unitPrice: finalUnitPrice,
+          discount: parseFloat(row.discount || targetQuote.discountPercent || '0') || 0,
+          vatPer: vatPerItem
+        };
+      })
     };
   };
 
@@ -1764,6 +1780,12 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           logging: false,
           imageTimeout: 30000,
           onclone: (clonedDoc) => {
+            // Prevent dark mode background from inheriting to the html2canvas export
+            clonedDoc.documentElement.style.backgroundColor = '#ffffff';
+            clonedDoc.documentElement.style.color = '#111827';
+            clonedDoc.body.style.backgroundColor = '#ffffff';
+            clonedDoc.body.style.color = '#111827';
+
             const container = clonedDoc.getElementById('pdf-template-container');
             if (container) {
               container.style.position = 'relative';
@@ -2312,29 +2334,35 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             ? (targetQuote.discountPercent || 0) 
             : (parseFloat(responseDiscount) || 0);
 
-          let finalUnitPrice = row.unitPrice || 0;
-          
-          if (!isViewOnly) {
-            // Live-scaling in the modal
-            const originalTotalWithVat = (targetQuote.items || []).reduce((acc: number, it: any) => {
-              const qty = parseFloat(it.quantity || '0') || 0;
-              const unitPriceVal = parseFloat(it.unitPrice || '0') || 0;
-              const vat = it.vatUnitRate !== undefined ? it.vatUnitRate : 16;
-              return acc + (qty * unitPriceVal * (1 + vat / 100));
-            }, 0);
-            
-            if (originalTotalWithVat > 0) {
-              finalUnitPrice = (row.unitPrice || 0) * (currentTotal / originalTotalWithVat);
-            } else {
-              const count = targetQuote.items.length || 1;
-              const vat = row.vatUnitRate !== undefined ? row.vatUnitRate : 16;
-              finalUnitPrice = (currentTotal / (1 + vat / 100)) / count;
-            }
-          } else if (!finalUnitPrice) {
-            // Read-only but no unitPrice saved (older records)
+          let finalUnitPrice = row.unitPrice;
+          if (row.unitPrice === 0) {
+            finalUnitPrice = 0;
+          } else if (row.unitPrice === undefined || row.unitPrice === null) {
+            // Read-only or live but no unitPrice saved/present (older records)
             const count = targetQuote.items.length || 1;
             const vat = row.vatUnitRate !== undefined ? row.vatUnitRate : 16;
             finalUnitPrice = (currentTotal / (1 + vat / 100)) / count;
+          } else {
+            // It is a valid non-zero price
+            if (!isViewOnly) {
+              // Live-scaling in the modal
+              const originalTotalWithVat = (targetQuote.items || []).reduce((acc: number, it: any) => {
+                const qty = parseFloat(it.quantity || '0') || 0;
+                const unitPriceVal = parseFloat(it.unitPrice || '0') || 0;
+                const vat = it.vatUnitRate !== undefined ? it.vatUnitRate : 16;
+                return acc + (qty * unitPriceVal * (1 + vat / 100));
+              }, 0);
+              
+              if (originalTotalWithVat > 0) {
+                finalUnitPrice = (row.unitPrice || 0) * (currentTotal / originalTotalWithVat);
+              } else {
+                const count = targetQuote.items.length || 1;
+                const vat = row.vatUnitRate !== undefined ? row.vatUnitRate : 16;
+                finalUnitPrice = (currentTotal / (1 + vat / 100)) / count;
+              }
+            } else {
+              finalUnitPrice = row.unitPrice;
+            }
           }
 
           const vatPerItem = row.vatUnitRate !== undefined 

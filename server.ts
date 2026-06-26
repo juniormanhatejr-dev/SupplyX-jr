@@ -1391,8 +1391,8 @@ async function startServer() {
         return res.status(403).send('Link de download expirado ou acesso não autorizado.');
       }
 
-      // Consume one-time token
-      tempTokens.delete(token);
+      // Do not consume token immediately so that browser PDF viewers can make range/sub-requests
+      // tempTokens.delete(token);
 
       let fileData: any = null;
 
@@ -1421,7 +1421,11 @@ async function startServer() {
         return res.status(404).send('O ficheiro físico não se encontra disponível no armazenamento local.');
       }
 
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileData.original_name)}"`);
+      const isInline = req.query.inline === 'true';
+      res.setHeader(
+        'Content-Disposition',
+        `${isInline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(fileData.original_name)}"`
+      );
       res.setHeader('Content-Type', fileData.file_type);
       res.setHeader('Content-Length', fileData.file_size);
 
@@ -1506,6 +1510,9 @@ async function startServer() {
     }));
 
     app.get('*', (req, res) => {
+      if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ error: 'Endpoint não encontrado ou ficheiro indisponível.' });
+      }
       res.set('Cache-Control', 'no-store'); // Index.html should never be cached
       res.sendFile(path.join(distPath, 'index.html'));
     });

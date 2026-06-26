@@ -546,8 +546,29 @@ export const CargoDocumentsPage: React.FC<CargoDocumentsPageProps> = ({
                         <div className="flex items-center gap-1.5 justify-end shrink-0">
                           {/* Viewer */}
                           <button
-                            onClick={() => {
-                              setPreviewUrl(file.blob_url);
+                            onClick={async () => {
+                              try {
+                                const idToken = await auth.currentUser?.getIdToken();
+                                const res = await fetch(`/api/files/${file.id}/download`, {
+                                  headers: {
+                                    'Authorization': idToken ? `Bearer ${idToken}` : '',
+                                    'x-user-id': auth.currentUser?.uid || ''
+                                  }
+                                });
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  if (data.downloadUrl) {
+                                    setPreviewUrl(`${data.downloadUrl}&inline=true`);
+                                  } else {
+                                    setPreviewUrl(file.blob_url);
+                                  }
+                                } else {
+                                  setPreviewUrl(file.blob_url);
+                                }
+                              } catch (err) {
+                                console.error('Failed secure preview generation:', err);
+                                setPreviewUrl(file.blob_url);
+                              }
                               setPreviewName(file.original_name);
                               setPreviewType(file.file_type);
                               setPreviewId(file.id);

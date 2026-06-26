@@ -17,7 +17,8 @@ import {
   ArrowLeft,
   Video,
   FileText,
-  Download
+  Download,
+  Eye
 } from 'lucide-react';
 import ProfileModal from './ProfileModal';
 import { FileViewerModal } from './FileViewerModal';
@@ -56,6 +57,7 @@ interface Message {
   id: string;
   senderId: string;
   text: string;
+  fileId?: string;
   fileUrl?: string;
   fileType?: string;
   fileName?: string;
@@ -227,6 +229,43 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
   const [previewFileType, setPreviewFileType] = useState('');
   const [previewFileId, setPreviewFileId] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const downloadFileDirectly = async (fileId: string | undefined, fileUrl: string, fileName: string) => {
+    if (fileId) {
+      try {
+        const idToken = await auth.currentUser?.getIdToken();
+        const res = await fetch(`/api/files/${fileId}/download`, {
+          headers: {
+            'Authorization': idToken ? `Bearer ${idToken}` : '',
+            'x-user-id': auth.currentUser?.uid || '',
+            'x-user-email': auth.currentUser?.email || ''
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.downloadUrl) {
+            const a = document.createElement('a');
+            a.href = data.downloadUrl;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Failed secure download:', err);
+      }
+    }
+    // Fallback
+    const a = document.createElement('a');
+    a.href = fileUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
@@ -850,10 +889,36 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                                       setIsPreviewOpen(true);
                                     }
                                   } else {
+                                    const fileId = msg.fileId;
+                                    if (fileId) {
+                                      try {
+                                        const idToken = await auth.currentUser?.getIdToken();
+                                        const res = await fetch(`/api/files/${fileId}/download`, {
+                                          headers: {
+                                            'Authorization': idToken ? `Bearer ${idToken}` : '',
+                                            'x-user-id': auth.currentUser?.uid || '',
+                                            'x-user-email': auth.currentUser?.email || ''
+                                          }
+                                        });
+                                        if (res.ok) {
+                                          const data = await res.json();
+                                          if (data.downloadUrl) {
+                                            setPreviewFileUrl(`${data.downloadUrl}&inline=true`);
+                                            setPreviewFileName(msg.fileName || 'image');
+                                            setPreviewFileType(msg.fileType || 'image/png');
+                                            setPreviewFileId(fileId);
+                                            setIsPreviewOpen(true);
+                                            return;
+                                          }
+                                        }
+                                      } catch (err) {
+                                        console.error('Failed to get secure preview image:', err);
+                                      }
+                                    }
                                     setPreviewFileUrl(msg.fileUrl || '');
                                     setPreviewFileName(msg.fileName || 'image');
                                     setPreviewFileType(msg.fileType || 'image/png');
-                                    setPreviewFileId((msg as any).fileId);
+                                    setPreviewFileId(msg.fileId);
                                     setIsPreviewOpen(true);
                                   }
                                 }}
@@ -879,42 +944,97 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                                   </div>
                                 </div>
                                 
-                                <button
-                                  onClick={async (e) => {
-                                    e.preventDefault();
-                                    if (msg.fileUrl?.startsWith('local-file://')) {
-                                      try {
-                                        const { getFileFromIndexedDB } = await import('../lib/firebase');
-                                        const fileData = await getFileFromIndexedDB(msg.fileUrl);
-                                        if (fileData) {
-                                          const link = document.createElement('a');
-                                          link.href = fileData.dataUrl;
-                                          link.download = fileData.name || msg.fileName || 'arquivo';
-                                          document.body.appendChild(link);
-                                          link.click();
-                                          document.body.removeChild(link);
-                                        } else {
-                                          const errorMsg = language === 'PT'
-                                            ? "Este arquivo foi guardado temporariamente no dispositivo local do remetente e não pôde ser sincronizado com o servidor. Por favor, peça ao remetente para reenviar o arquivo."
-                                            : "This file was temporarily stored on the sender's local device and could not be synchronized with the server. Please ask the sender to resend the file.";
-                                          alert(errorMsg);
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <button
+                                    onClick={async (e) => {
+                                      e.preventDefault();
+                                      if (msg.fileUrl?.startsWith('local-file://')) {
+                                        try {
+                                          const { getFileFromIndexedDB } = await import('../lib/firebase');
+                                          const fileData = await getFileFromIndexedDB(msg.fileUrl);
+                                          if (fileData) {
+                                            const link = document.createElement('a');
+                                            link.href = fileData.dataUrl;
+                                            link.download = fileData.name || msg.fileName || 'arquivo';
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                          } else {
+                                            const errorMsg = language === 'PT'
+                                              ? "Este arquivo foi guardado temporariamente no dispositivo local do remetente e não pôde ser sincronizado com o servidor. Por favor, peça ao remetente para reenviar o arquivo."
+                                              : "This file was temporarily stored on the sender's local device and could not be synchronized with the server. Please ask the sender to resend the file.";
+                                            alert(errorMsg);
+                                          }
+                                        } catch (err) {
+                                          console.error('Error downloading local file:', err);
                                         }
-                                      } catch (err) {
-                                        console.error('Error downloading local file:', err);
+                                      } else {
+                                        downloadFileDirectly(msg.fileId, msg.fileUrl || '', msg.fileName || 'Documento');
                                       }
-                                    } else {
-                                      setPreviewFileUrl(msg.fileUrl || '');
-                                      setPreviewFileName(msg.fileName || 'Documento');
-                                      setPreviewFileType(msg.fileType || 'application/pdf');
-                                      setPreviewFileId((msg as any).fileId);
-                                      setIsPreviewOpen(true);
-                                    }
-                                  }}
-                                  className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 transition-all text-white font-black text-[9.5px] uppercase tracking-wider cursor-pointer no-underline hover:no-underline"
-                                >
-                                  <Download className="w-3.5 h-3.5" />
-                                  {language === 'PT' ? 'Baixar / Visualizar' : 'Download / View'}
-                                </button>
+                                    }}
+                                    className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl bg-brand hover:brightness-110 active:scale-95 transition-all text-white font-bold text-[9px] uppercase tracking-wider cursor-pointer"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                    {language === 'PT' ? 'Baixar' : 'Download'}
+                                  </button>
+
+                                  <button
+                                    onClick={async (e) => {
+                                      e.preventDefault();
+                                      if (msg.fileUrl?.startsWith('local-file://')) {
+                                        try {
+                                          const { getFileFromIndexedDB } = await import('../lib/firebase');
+                                          const fileData = await getFileFromIndexedDB(msg.fileUrl);
+                                          if (fileData) {
+                                            setPreviewFileUrl(fileData.dataUrl);
+                                            setPreviewFileName(msg.fileName || 'local_image');
+                                            setPreviewFileType(msg.fileType || 'image/png');
+                                            setPreviewFileId(undefined);
+                                            setIsPreviewOpen(true);
+                                          }
+                                        } catch (err) {
+                                          console.error('Error reading local file:', err);
+                                        }
+                                      } else {
+                                        const fileId = msg.fileId;
+                                        if (fileId) {
+                                          try {
+                                            const idToken = await auth.currentUser?.getIdToken();
+                                            const res = await fetch(`/api/files/${fileId}/download`, {
+                                              headers: {
+                                                'Authorization': idToken ? `Bearer ${idToken}` : '',
+                                                'x-user-id': auth.currentUser?.uid || '',
+                                                'x-user-email': auth.currentUser?.email || ''
+                                              }
+                                            });
+                                            if (res.ok) {
+                                              const data = await res.json();
+                                              if (data.downloadUrl) {
+                                                setPreviewFileUrl(`${data.downloadUrl}&inline=true`);
+                                                setPreviewFileName(msg.fileName || 'Documento');
+                                                setPreviewFileType(msg.fileType || 'application/pdf');
+                                                setPreviewFileId(fileId);
+                                                setIsPreviewOpen(true);
+                                                return;
+                                              }
+                                            }
+                                          } catch (err) {
+                                            console.error('Failed to get secure preview url:', err);
+                                          }
+                                        }
+                                        setPreviewFileUrl(msg.fileUrl || '');
+                                        setPreviewFileName(msg.fileName || 'Documento');
+                                        setPreviewFileType(msg.fileType || 'application/pdf');
+                                        setPreviewFileId(msg.fileId);
+                                        setIsPreviewOpen(true);
+                                      }
+                                    }}
+                                    className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white font-bold text-[9px] uppercase tracking-wider cursor-pointer"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    {language === 'PT' ? 'Ver' : 'Preview'}
+                                  </button>
+                                </div>
                               </div>
                             )}
                             {msg.text && !msg.text.startsWith('[') && <p>{msg.text}</p>}

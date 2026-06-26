@@ -53,8 +53,14 @@ const SupplyXLogo: React.FC<SupplyXLogoProps> = ({
       <div className="flex items-center gap-3">
         {/* Glow-enhanced 3D app icon container */}
         <div 
-          className={`${sizes[size]} relative flex items-center justify-center overflow-hidden shadow-xl border border-cyan-500/20 bg-slate-950 transition-all duration-300 group-hover:scale-105`}
-          style={widthHeightStyle}
+          className={`${sizes[size]} relative flex items-center justify-center overflow-hidden shadow-xl transition-all duration-300 group-hover:scale-105`}
+          style={{
+            ...widthHeightStyle,
+            backgroundColor: isDark ? '#020617' : '#ffffff',
+            borderColor: isDark ? 'rgba(6, 182, 212, 0.2)' : '#e4e4e7',
+            borderWidth: '1px',
+            borderStyle: 'solid'
+          }}
         >
           <img 
             src={logoImg} 
@@ -69,7 +75,7 @@ const SupplyXLogo: React.FC<SupplyXLogoProps> = ({
         {showText && size !== 'lg' && size !== 'xl' && (
           <span className={`${textSizes[size]} font-black tracking-tight font-sans`}>
             <span className={isDark ? 'text-white' : 'text-slate-900'}>Supply</span>
-            <span className="bg-gradient-to-r from-teal-400 to-emerald-400 bg-clip-text text-transparent">X</span>
+            <span className="text-[#0f9fa8]">X</span>
           </span>
         )}
       </div>
@@ -80,7 +86,7 @@ const SupplyXLogo: React.FC<SupplyXLogoProps> = ({
           {/* Main Logo Text under the icon box */}
           <h1 className={`${textSizes[size]} font-black tracking-tight font-sans leading-none`}>
             <span className={isDark ? 'text-white' : 'text-slate-900'}>Supply</span>
-            <span className="bg-gradient-to-r from-teal-400 to-emerald-400 bg-clip-text text-transparent">X</span>
+            <span className="text-[#0f9fa8]">X</span>
           </h1>
 
           {/* Subtitle/Tagline as exact replica */}
@@ -95,7 +101,7 @@ const SupplyXLogo: React.FC<SupplyXLogoProps> = ({
 
       {/* Small Inline Tagline for headers & sidebars (when text size is sm/md) */}
       {showText && size !== 'xs' && size !== 'sm' && size !== 'lg' && size !== 'xl' && (
-        <span className="text-[7px] font-extrabold tracking-[0.18em] text-teal-400/90 uppercase mt-1 leading-none font-sans">
+        <span className="text-[7px] font-extrabold tracking-[0.18em] text-[#0f9fa8] uppercase mt-1 leading-none font-sans">
           Powered by Manhate Link África
         </span>
       )}

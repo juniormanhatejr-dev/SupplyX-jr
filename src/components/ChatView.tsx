@@ -1093,24 +1093,6 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
             {/* Input Area */}
             <div className={`p-4 md:px-8 border-t ${isDarkMode ? 'border-zinc-800' : 'border-zinc-100'}`}>
               <form onSubmit={handleSendMessage} className="flex items-center gap-2 md:gap-4">
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  className="hidden" 
-                  onChange={handleFileUpload}
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
-                />
-                <div className="flex items-center gap-2">
-                  <button 
-                    type="button" 
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    title={language === 'PT' ? 'Anexar arquivo (máx 100MB)' : 'Attach file (max 100MB)'}
-                    className="p-2.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors disabled:opacity-50"
-                  >
-                    {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
-                  </button>
-                </div>
                 <div className="flex-1 relative">
                   <input 
                     type="text"

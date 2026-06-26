@@ -221,6 +221,23 @@
         "category": { "type": "string" }
       },
       "required": ["id", "file_name", "original_name", "file_type", "file_size", "storage_path", "blob_url", "uploaded_by"]
+    },
+    "FileMetadata": {
+      "title": "Uploaded File Metadata",
+      "description": "Represents the metadata stored for uploaded chat attachments.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "extension": { "type": "string" },
+        "size": { "type": "number" },
+        "mimeType": { "type": "string" },
+        "blobUrl": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "userId": { "type": "string" },
+        "roomId": { "type": "string" }
+      },
+      "required": ["id", "name", "extension", "size", "mimeType", "blobUrl", "userId", "roomId"]
     }
   },
   "firestore": {
@@ -275,6 +292,10 @@
     "files/{fileId}": {
       "schema": "File",
       "description": "Metadata of corporate uploaded files."
+    },
+    "files_metadata/{fileId}": {
+      "schema": "FileMetadata",
+      "description": "Metadata of uploaded chat attachments."
     }
   }
 }

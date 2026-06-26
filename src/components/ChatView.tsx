@@ -6,8 +6,6 @@ import {
   MessageSquare, 
   Search, 
   MoreVertical, 
-  Paperclip,
-  Image as ImageIcon,
   Loader2,
   Check,
   CheckCheck,
@@ -24,6 +22,11 @@ import ProfileModal from './ProfileModal';
 import { FileViewerModal } from './FileViewerModal';
 import { OptimizedImage } from './ui/OptimizedImage';
 import UserPresenceIndicator from './UserPresenceIndicator';
+import { FileUploader } from './chat/FileUploader';
+import { AttachmentButton } from './chat/AttachmentButton';
+import { UploadProgress } from './chat/UploadProgress';
+import { DocumentCard } from './chat/DocumentCard';
+import { useUpload } from '../hooks/useUpload';
 import { db, auth, handleFirestoreError, OperationType, clientDirectUpload, isVercel } from '../lib/firebase';
 import { 
   collection, 
@@ -61,6 +64,7 @@ interface Message {
   fileUrl?: string;
   fileType?: string;
   fileName?: string;
+  fileSize?: number;
   createdAt: any;
   deletedBy?: string[];
 }
@@ -219,8 +223,18 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const { upload, pause, resume, cancel, reset, progress: uploadProgress, status: uploadStatus, error: uploadError, fileName: uploadFileName, isUploading } = useUpload();
+
+  const handleFileSelect = async (file: File) => {
+    if (!activeRoom) return;
+    try {
+      await upload(file, activeRoom.id);
+    } catch (err) {
+      console.error('File selection upload failed:', err);
+    }
+  };
 
   // File Preview States
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -228,7 +242,6 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
   const [previewFileName, setPreviewFileName] = useState('');
   const [previewFileType, setPreviewFileType] = useState('');
   const [previewFileId, setPreviewFileId] = useState<string | undefined>(undefined);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const downloadFileDirectly = async (fileId: string | undefined, fileUrl: string, fileName: string) => {
     if (fileId) {
@@ -519,97 +532,6 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !activeRoom || !auth.currentUser) return;
-
-    // 100MB is 100 * 1024 * 1024 bytes
-    const maxSizeBytes = 100 * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
-      const errorMsg = language === 'PT' 
-        ? `Erro: O arquivo é muito grande (${fileSizeMB} MB). O limite máximo de upload é de 100 MB.` 
-        : `Error: File is too large (${fileSizeMB} MB). The maximum upload limit is 100 MB.`;
-      alert(errorMsg);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    setIsUploading(true);
-    try {
-      let fileData;
-      
-      if (isVercel) {
-        console.log('[CHAT] isVercel is true. Bypassing server upload and using clientDirectUpload immediately.');
-        const uploadResult = await clientDirectUpload(file, {
-          message_id: activeRoom.id,
-          category: file.type.startsWith('image/') ? 'photo' : 'others'
-        });
-        fileData = uploadResult.file;
-      } else {
-        try {
-          const idToken = await auth.currentUser.getIdToken();
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('message_id', activeRoom.id);
-          formData.append('category', file.type.startsWith('image/') ? 'photo' : 'others');
-
-          const response = await fetch('/api/files/upload', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${idToken}`,
-              'x-user-id': auth.currentUser.uid,
-              'x-user-email': auth.currentUser.email || ''
-            },
-            body: formData,
-          });
-
-          if (!response.ok) {
-            throw new Error('Server upload returned non-OK status');
-          }
-
-          const uploadResult = await response.json();
-          fileData = uploadResult.file;
-        } catch (uploadError) {
-          console.warn('[CHAT] Server upload failed/unavailable, falling back to direct client storage upload:', uploadError);
-          const uploadResult = await clientDirectUpload(file, {
-            message_id: activeRoom.id,
-            category: file.type.startsWith('image/') ? 'photo' : 'others'
-          });
-          fileData = uploadResult.file;
-        }
-      }
-
-      const isImage = fileData.file_type.startsWith('image/');
-      
-      await addDoc(collection(db, `chats/${activeRoom.id}/messages`), {
-        senderId: auth.currentUser.uid,
-        participants: activeRoom.participants, // Added for Rule Pillar 8 compliance
-        text: isImage ? `[Imagem: ${fileData.original_name}]` : `[Arquivo: ${fileData.original_name}]`,
-        fileId: fileData.id,
-        fileUrl: fileData.blob_url,
-        fileType: fileData.file_type,
-        fileName: fileData.original_name,
-        createdAt: serverTimestamp()
-      });
-
-      const otherId = activeRoom.participants.find(id => id !== auth.currentUser?.uid);
-      await updateDoc(doc(db, 'chats', activeRoom.id), {
-        lastMessage: isImage ? '📷 Imagem' : '📎 Arquivo',
-        lastMessageSenderId: auth.currentUser.uid,
-        updatedAt: serverTimestamp(),
-        [`unreadCount.${otherId}`]: increment(1)
-      });
-    } catch (err: any) {
-      console.error('Error uploading file:', err);
-      const errMsg = err?.message || (language === 'PT' ? 'Erro ao carregar arquivo' : 'Error uploading file');
-      alert(language === 'PT' ? `Erro ao carregar arquivo: ${errMsg}` : `Error uploading file: ${errMsg}`);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
   const getOtherParticipantName = (room: ChatRoom) => {
     const otherId = room.participants.find(id => id !== auth.currentUser?.uid);
     if (!otherId) return t.user;
@@ -873,226 +795,78 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
               </div>
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 scrollbar-hide">
-              {messages.filter(msg => !msg.deletedBy?.includes(auth.currentUser?.uid)).map((msg, i) => {
-                const isMine = msg.senderId === auth.currentUser?.uid;
-                return (
-                  <motion.div 
-                    initial={{ opacity: 0, x: isMine ? 20 : -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    key={msg.id}
-                    className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div className={`max-w-[80%] md:max-w-[60%] space-y-1 group/msg relative`}>
-                      <div className={`p-4 rounded-3xl text-sm font-medium ${
-                        isMine 
-                          ? 'bg-brand text-white rounded-tr-none' 
-                          : (isDarkMode ? 'bg-zinc-900 text-white rounded-tl-none' : 'bg-zinc-100 text-zinc-900 rounded-tl-none')
-                      }`}>
+            {/* Messages with Drag & Drop uploader */}
+            <FileUploader onFileSelect={handleFileSelect} language={language}>
+              <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 scrollbar-hide">
+                {messages.filter(msg => !msg.deletedBy?.includes(auth.currentUser?.uid)).map((msg, i) => {
+                  const isMine = msg.senderId === auth.currentUser?.uid;
+                  return (
+                    <motion.div 
+                      initial={{ opacity: 0, x: isMine ? 20 : -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      key={msg.id}
+                      className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div className={`max-w-[80%] md:max-w-[60%] space-y-1 group/msg relative`}>
                         {msg.fileUrl ? (
-                          <div className="space-y-2">
-                            {msg.fileType?.startsWith('image/') ? (
-                              <OptimizedImage 
-                                src={msg.fileUrl} 
-                                alt={msg.fileName} 
-                                className="max-w-full rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
-                                onClick={async () => {
-                                  if (msg.fileUrl?.startsWith('local-file://')) {
-                                    const { getFileFromIndexedDB } = await import('../lib/firebase');
-                                    const fileData = await getFileFromIndexedDB(msg.fileUrl);
-                                    if (fileData) {
-                                      setPreviewFileUrl(fileData.dataUrl);
-                                      setPreviewFileName(msg.fileName || 'local_image');
-                                      setPreviewFileType(msg.fileType || 'image/png');
-                                      setPreviewFileId(undefined);
-                                      setIsPreviewOpen(true);
-                                    }
-                                  } else {
-                                    const fileId = msg.fileId;
-                                    if (fileId) {
-                                      try {
-                                        const idToken = await auth.currentUser?.getIdToken();
-                                        const res = await fetch(`/api/files/${fileId}/download`, {
-                                          headers: {
-                                            'Authorization': idToken ? `Bearer ${idToken}` : '',
-                                            'x-user-id': auth.currentUser?.uid || '',
-                                            'x-user-email': auth.currentUser?.email || ''
-                                          }
-                                        });
-                                        if (res.ok) {
-                                          const data = await res.json();
-                                          if (data.downloadUrl) {
-                                            setPreviewFileUrl(`${data.downloadUrl}&inline=true`);
-                                            setPreviewFileName(msg.fileName || 'image');
-                                            setPreviewFileType(msg.fileType || 'image/png');
-                                            setPreviewFileId(fileId);
-                                            setIsPreviewOpen(true);
-                                            return;
-                                          }
-                                        }
-                                      } catch (err) {
-                                        console.error('Failed to get secure preview image:', err);
-                                      }
-                                    }
-                                    setPreviewFileUrl(msg.fileUrl || '');
-                                    setPreviewFileName(msg.fileName || 'image');
-                                    setPreviewFileType(msg.fileType || 'image/png');
-                                    setPreviewFileId(msg.fileId);
-                                    setIsPreviewOpen(true);
-                                  }
-                                }}
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              <div className="flex flex-col gap-2 p-2.5 rounded-2xl bg-black/10 dark:bg-white/5 border border-white/5 w-[240px] max-w-full text-white">
-                                <div className="flex items-center gap-2.5">
-                                  {msg.fileType?.includes('video') ? (
-                                    <Video className="w-5 h-5 text-amber-500 shrink-0" />
-                                  ) : msg.fileType?.includes('pdf') ? (
-                                    <FileText className="w-5 h-5 text-red-500 shrink-0" />
-                                  ) : (
-                                    <FileText className="w-5 h-5 text-sky-400 shrink-0" />
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-[11px] font-bold truncate">
-                                      {msg.fileName || 'Arquivo'}
-                                    </p>
-                                    <p className="text-[8.5px] text-white/60 uppercase font-black tracking-wider">
-                                      {msg.fileType?.split('/')[1] || 'DOCUMENTO'}
-                                    </p>
-                                  </div>
-                                </div>
-                                
-                                <div className="grid grid-cols-2 gap-1.5">
-                                  <button
-                                    onClick={async (e) => {
-                                      e.preventDefault();
-                                      if (msg.fileUrl?.startsWith('local-file://')) {
-                                        try {
-                                          const { getFileFromIndexedDB } = await import('../lib/firebase');
-                                          const fileData = await getFileFromIndexedDB(msg.fileUrl);
-                                          if (fileData) {
-                                            const link = document.createElement('a');
-                                            link.href = fileData.dataUrl;
-                                            link.download = fileData.name || msg.fileName || 'arquivo';
-                                            document.body.appendChild(link);
-                                            link.click();
-                                            document.body.removeChild(link);
-                                          } else {
-                                            const errorMsg = language === 'PT'
-                                              ? "Este arquivo foi guardado temporariamente no dispositivo local do remetente e não pôde ser sincronizado com o servidor. Por favor, peça ao remetente para reenviar o arquivo."
-                                              : "This file was temporarily stored on the sender's local device and could not be synchronized with the server. Please ask the sender to resend the file.";
-                                            alert(errorMsg);
-                                          }
-                                        } catch (err) {
-                                          console.error('Error downloading local file:', err);
-                                        }
-                                      } else {
-                                        downloadFileDirectly(msg.fileId, msg.fileUrl || '', msg.fileName || 'Documento');
-                                      }
-                                    }}
-                                    className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl bg-brand hover:brightness-110 active:scale-95 transition-all text-white font-bold text-[9px] uppercase tracking-wider cursor-pointer"
-                                  >
-                                    <Download className="w-3 h-3" />
-                                    {language === 'PT' ? 'Baixar' : 'Download'}
-                                  </button>
-
-                                  <button
-                                    onClick={async (e) => {
-                                      e.preventDefault();
-                                      if (msg.fileUrl?.startsWith('local-file://')) {
-                                        try {
-                                          const { getFileFromIndexedDB } = await import('../lib/firebase');
-                                          const fileData = await getFileFromIndexedDB(msg.fileUrl);
-                                          if (fileData) {
-                                            setPreviewFileUrl(fileData.dataUrl);
-                                            setPreviewFileName(msg.fileName || 'local_image');
-                                            setPreviewFileType(msg.fileType || 'image/png');
-                                            setPreviewFileId(undefined);
-                                            setIsPreviewOpen(true);
-                                          }
-                                        } catch (err) {
-                                          console.error('Error reading local file:', err);
-                                        }
-                                      } else {
-                                        const fileId = msg.fileId;
-                                        if (fileId) {
-                                          try {
-                                            const idToken = await auth.currentUser?.getIdToken();
-                                            const res = await fetch(`/api/files/${fileId}/download`, {
-                                              headers: {
-                                                'Authorization': idToken ? `Bearer ${idToken}` : '',
-                                                'x-user-id': auth.currentUser?.uid || '',
-                                                'x-user-email': auth.currentUser?.email || ''
-                                              }
-                                            });
-                                            if (res.ok) {
-                                              const data = await res.json();
-                                              if (data.downloadUrl) {
-                                                setPreviewFileUrl(`${data.downloadUrl}&inline=true`);
-                                                setPreviewFileName(msg.fileName || 'Documento');
-                                                setPreviewFileType(msg.fileType || 'application/pdf');
-                                                setPreviewFileId(fileId);
-                                                setIsPreviewOpen(true);
-                                                return;
-                                              }
-                                            }
-                                          } catch (err) {
-                                            console.error('Failed to get secure preview url:', err);
-                                          }
-                                        }
-                                        setPreviewFileUrl(msg.fileUrl || '');
-                                        setPreviewFileName(msg.fileName || 'Documento');
-                                        setPreviewFileType(msg.fileType || 'application/pdf');
-                                        setPreviewFileId(msg.fileId);
-                                        setIsPreviewOpen(true);
-                                      }
-                                    }}
-                                    className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white font-bold text-[9px] uppercase tracking-wider cursor-pointer"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    {language === 'PT' ? 'Ver' : 'Preview'}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                            {msg.text && !msg.text.startsWith('[') && <p>{msg.text}</p>}
-                          </div>
+                          <DocumentCard
+                            fileId={msg.fileId || msg.id}
+                            fileName={msg.fileName || 'Arquivo'}
+                            fileSize={msg.fileSize || 1024 * 1024}
+                            mimeType={msg.fileType || 'application/octet-stream'}
+                            fileUrl={msg.fileUrl}
+                            senderName={isMine ? (language === 'PT' ? 'Você' : 'You') : (activeRoom?.participantNames?.[msg.senderId] || 'Usuário')}
+                            timeString={msg.createdAt?.toDate ? new Date(msg.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                            isMe={isMine}
+                            isDarkMode={isDarkMode}
+                            language={language}
+                          />
                         ) : (
-                          msg.text
+                          <div className={`p-4 rounded-3xl text-sm font-medium ${
+                            isMine 
+                              ? 'bg-brand text-white rounded-tr-none' 
+                              : (isDarkMode ? 'bg-zinc-900 text-white rounded-tl-none' : 'bg-zinc-100 text-zinc-900 rounded-tl-none')
+                          }`}>
+                            {msg.text}
+                          </div>
                         )}
+                        <div className={`flex items-center gap-1.5 px-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
+                            {msg.createdAt?.toDate ? new Date(msg.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                          </span>
+                          {isMine && (
+                            msg.createdAt ? (
+                              <CheckCheck className="w-3 h-3 text-brand" />
+                            ) : (
+                              <Clock className={`w-3 h-3 ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`} />
+                            )
+                          )}
+                          <button 
+                            onClick={() => handleDeleteMessage(msg.id)}
+                            className="flex items-center gap-1 text-red-500 hover:text-red-600 bg-red-500/10 hover:bg-red-500/20 px-2 py-0.5 rounded-lg transition-all ml-2.5 cursor-pointer border border-red-500/25 font-bold shadow-xs active:scale-95"
+                            title={language === 'PT' ? "Eliminar mensagem" : "Delete message"}
+                          >
+                            <Trash2 className="w-3 h-3 text-red-500" />
+                            <span className="text-[9.5px]/none font-black uppercase tracking-wider text-red-500">{language === 'PT' ? 'Eliminar' : 'Delete'}</span>
+                          </button>
+                        </div>
                       </div>
-                      <div className={`flex items-center gap-1.5 px-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
-                          {msg.createdAt?.toDate ? new Date(msg.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                        </span>
-                        {isMine && (
-                          msg.createdAt ? (
-                            <CheckCheck className="w-3 h-3 text-brand" />
-                          ) : (
-                            <Clock className={`w-3 h-3 ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`} />
-                          )
-                        )}
-                        <button 
-                          onClick={() => handleDeleteMessage(msg.id)}
-                          className="flex items-center gap-1 text-red-500 hover:text-red-600 bg-red-500/10 hover:bg-red-500/20 px-2 py-0.5 rounded-lg transition-all ml-2.5 cursor-pointer border border-red-500/25 font-bold shadow-xs active:scale-95"
-                          title={language === 'PT' ? "Eliminar mensagem" : "Delete message"}
-                        >
-                          <Trash2 className="w-3 h-3 text-red-500" />
-                          <span className="text-[9.5px]/none font-black uppercase tracking-wider text-red-500">{language === 'PT' ? 'Eliminar' : 'Delete'}</span>
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-              <div ref={messagesEndRef} />
-            </div>
+                    </motion.div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </div>
+            </FileUploader>
 
             {/* Input Area */}
             <div className={`p-4 md:px-8 border-t ${isDarkMode ? 'border-zinc-800' : 'border-zinc-100'}`}>
-              <form onSubmit={handleSendMessage} className="flex items-center gap-2 md:gap-4">
+              <form onSubmit={handleSendMessage} className="flex items-center gap-2 md:gap-3">
+                <AttachmentButton
+                  onFileSelect={handleFileSelect}
+                  isUploading={isUploading}
+                  language={language}
+                  isDarkMode={isDarkMode}
+                />
                 <div className="flex-1 relative">
                   <input 
                     type="text"
@@ -1111,6 +885,18 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                 </div>
               </form>
             </div>
+
+            {/* Floating Upload Progress Box */}
+            <UploadProgress
+              progress={uploadProgress}
+              status={uploadStatus}
+              fileName={uploadFileName || 'Arquivo'}
+              error={uploadError}
+              onPause={pause}
+              onResume={resume}
+              onCancel={cancel}
+              onReset={reset}
+            />
           </>
         ) : (
           <div className="flex flex-col items-center justify-center text-center p-8">

@@ -296,6 +296,33 @@
     "files_metadata/{fileId}": {
       "schema": "FileMetadata",
       "description": "Metadata of uploaded chat attachments."
+    },
+    "ProductSynonyms/{synonymId}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "canonicalName": { "type": "string" },
+          "synonyms": { "type": "array", "items": { "type": "string" } },
+          "createdAt": { "type": "string" }
+        },
+        "required": ["canonicalName", "synonyms"]
+      },
+      "description": "Catalog of canonical product names and their corresponding synonyms for search resolution."
+    },
+    "SynonymSuggestions/{suggestionId}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "suggestedWord": { "type": "string" },
+          "suggestedCanonical": { "type": "string" },
+          "sourceQuery": { "type": "string" },
+          "confidence": { "type": "number" },
+          "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] },
+          "createdAt": { "type": "string" }
+        },
+        "required": ["suggestedWord", "suggestedCanonical", "createdAt"]
+      },
+      "description": "Suggestions of synonyms created automatically or by users for moderating/approving."
     }
   }
 }

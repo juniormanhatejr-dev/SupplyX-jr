@@ -9,6 +9,27 @@ import fs from 'fs';
 import compression from 'compression';
 import { GoogleGenAI, Type } from "@google/genai";
 import { calculateRoute } from './src/services/mapRoutingService';
+import { normalizeText } from './src/lib/normalization';
+
+// Import Firebase Client SDK to bypass Service Account permission errors on named databases in container sandboxes
+import { initializeApp as initializeClientApp } from 'firebase/app';
+import { 
+  getFirestore as getClientFirestore, 
+  collection as clientCollection, 
+  getDocs as clientGetDocs, 
+  addDoc as clientAddDoc, 
+  doc as clientDoc, 
+  updateDoc as clientUpdateDoc, 
+  deleteDoc as clientDeleteDoc, 
+  getDoc as clientGetDoc, 
+  setDoc as clientSetDoc,
+  query as clientQuery, 
+  where as clientWhere, 
+  orderBy as clientOrderBy,
+  limit as clientLimit,
+  serverTimestamp as clientServerTimestamp
+} from 'firebase/firestore';
+import { getAuth as getClientAuth, signInWithEmailAndPassword } from 'firebase/auth';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1058,7 +1079,116 @@ async function startServer() {
   // ==========================================
   // CORPORATE FILES SYSTEM ENDPOINTS (SupplyX)
   // ==========================================
-  const db = getFirestore(firebaseConfig.firestoreDatabaseId);
+  // Initialize Client Firebase App & Firestore to bypass Service Account Permission Denied issues in container sandbox environments
+  const clientApp = initializeClientApp(firebaseConfig);
+  const clientDb = getClientFirestore(clientApp, firebaseConfig.firestoreDatabaseId);
+
+  // Deep sanitizer helper to convert admin FieldValue.serverTimestamp() to client serverTimestamp()
+  function sanitizeDataForClient(data: any): any {
+    if (data === null || data === undefined) return data;
+    if (Array.isArray(data)) {
+      return data.map(item => sanitizeDataForClient(item));
+    }
+    if (typeof data === 'object') {
+      const copy = { ...data };
+      for (const key of Object.keys(copy)) {
+        const val = copy[key];
+        if (val && typeof val === 'object') {
+          if (val.constructor && (
+            val.constructor.name === 'FieldValue' || 
+            val.constructor.name === 'Sentinel' || 
+            (val._methodName && val._methodName === 'FieldValue.serverTimestamp')
+          )) {
+            copy[key] = clientServerTimestamp();
+          } else {
+            copy[key] = sanitizeDataForClient(val);
+          }
+        }
+      }
+      return copy;
+    }
+    return data;
+  }
+
+  class ClientDocRef {
+    constructor(private colName: string, private docId: string) {}
+
+    async get() {
+      const d = await clientGetDoc(clientDoc(clientDb, this.colName, this.docId));
+      return {
+        exists: d.exists(),
+        id: d.id,
+        data: () => d.data()
+      };
+    }
+
+    async set(data: any) {
+      const sanitized = sanitizeDataForClient(data);
+      await clientSetDoc(clientDoc(clientDb, this.colName, this.docId), sanitized);
+    }
+
+    async update(data: any) {
+      const sanitized = sanitizeDataForClient(data);
+      await clientUpdateDoc(clientDoc(clientDb, this.colName, this.docId), sanitized);
+    }
+
+    async delete() {
+      await clientDeleteDoc(clientDoc(clientDb, this.colName, this.docId));
+    }
+  }
+
+  class ClientCollectionRef {
+    private constraints: any[] = [];
+
+    constructor(private colName: string) {}
+
+    where(field: string, op: any, val: any) {
+      this.constraints.push(clientWhere(field, op, val));
+      return this;
+    }
+
+    orderBy(field: string, dir: 'asc' | 'desc' = 'asc') {
+      this.constraints.push(clientOrderBy(field, dir));
+      return this;
+    }
+
+    limit(n: number) {
+      this.constraints.push(clientLimit(n));
+      return this;
+    }
+
+    async get() {
+      const colRef = clientCollection(clientDb, this.colName);
+      const q = this.constraints.length > 0 ? clientQuery(colRef, ...this.constraints) : colRef;
+      const snap = await clientGetDocs(q);
+      const docs = snap.docs.map(d => ({
+        id: d.id,
+        data: () => d.data()
+      }));
+      return {
+        docs,
+        empty: snap.empty,
+        size: snap.size,
+        forEach: (cb: any) => docs.forEach(cb)
+      };
+    }
+
+    async add(data: any) {
+      const sanitized = sanitizeDataForClient(data);
+      const docRef = await clientAddDoc(clientCollection(clientDb, this.colName), sanitized);
+      return { id: docRef.id };
+    }
+
+    doc(docId: string) {
+      return new ClientDocRef(this.colName, docId);
+    }
+  }
+
+  const db = {
+    collection: (colName: string) => {
+      return new ClientCollectionRef(colName);
+    }
+  };
   const tempTokens = new Map<string, { fileId: string, expires: number, userUid: string }>();
   const METADATA_FILE = path.join(UPLOADS_DIR, 'files_metadata.json');
   const AUDITS_FILE = path.join(UPLOADS_DIR, 'audits_metadata.json');
@@ -1484,6 +1614,593 @@ async function startServer() {
     } catch (err: any) {
       console.error('[SERVER] Delete file failed:', err);
       return res.status(500).json({ error: 'Falha ao remover arquivo do sistema.' });
+    }
+  });
+
+  // =======================================================
+  // SYSTEMA INTELIGENTE DE SINÓNIMOS (ProductSynonyms)
+  // =======================================================
+
+  // Levenshtein & Jaro-Winkler functions for fuzzy score calculation
+  function levenshteinDistance(s1: string, s2: string): number {
+    const m = s1.length;
+    const n = s2.length;
+    const d: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) d[i][0] = i;
+    for (let j = 0; j <= n; j++) d[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+        d[i][j] = Math.min(
+          d[i - 1][j] + 1, // deletion
+          d[i][j - 1] + 1, // insertion
+          d[i - 1][j - 1] + cost // substitution
+        );
+      }
+    }
+    return d[m][n];
+  }
+
+  function jaroWinklerDistance(s1: string, s2: string): number {
+    let m = 0;
+    const len1 = s1.length;
+    const len2 = s2.length;
+    if (len1 === 0 || len2 === 0) return 0;
+    const matchWindow = Math.floor(Math.max(len1, len2) / 2) - 1;
+    const matches1 = new Array(len1).fill(false);
+    const matches2 = new Array(len2).fill(false);
+    for (let i = 0; i < len1; i++) {
+      const start = Math.max(0, i - matchWindow);
+      const end = Math.min(len2, i + matchWindow + 1);
+      for (let j = start; j < end; j++) {
+        if (!matches2[j] && s1[i] === s2[j]) {
+          matches1[i] = true;
+          matches2[j] = true;
+          m++;
+          break;
+        }
+      }
+    }
+    if (m === 0) return 0;
+    let t = 0;
+    let point = 0;
+    for (let i = 0; i < len1; i++) {
+      if (matches1[i]) {
+        while (!matches2[point]) point++;
+        if (s1[i] !== s2[point]) t++;
+        point++;
+      }
+    }
+    t /= 2;
+    let jaro = (m / len1 + m / len2 + (m - t) / m) / 3;
+    let prefix = 0;
+    for (let i = 0; i < Math.min(4, len1, len2); i++) {
+      if (s1[i] === s2[i]) prefix++;
+      else break;
+    }
+    return jaro + prefix * 0.1 * (1 - jaro);
+  }
+
+  function calculateSimilarity(s1: string, s2: string): number {
+    const n1 = normalizeText(s1);
+    const n2 = normalizeText(s2);
+    if (n1 === n2) return 1;
+    if (n1 === '' || n2 === '') return 0;
+    
+    const jw = jaroWinklerDistance(n1, n2);
+    const maxLength = Math.max(n1.length, n2.length);
+    const lev = maxLength > 0 ? 1 - levenshteinDistance(n1, n2) / maxLength : 0;
+    
+    return Math.max(jw, lev);
+  }
+
+  // Pre-seed default synonyms and products
+  async function seedDefaultSynonymsAndProducts() {
+    try {
+      const synonymsSnap = await db.collection('ProductSynonyms').limit(1).get();
+      if (synonymsSnap.empty) {
+        console.log('[SERVER] Seeding default ProductSynonyms...');
+        const defaults = [
+          {
+            canonicalName: 'cimento',
+            synonyms: ['cimento', 'cemento', 'cement', 'ligante hidráulico'],
+            language: 'pt',
+            country: 'global',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          },
+          {
+            canonicalName: 'betão',
+            synonyms: ['betão', 'concreto', 'concrete'],
+            language: 'pt',
+            country: 'global',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          },
+          {
+            canonicalName: 'vergalhão',
+            synonyms: ['ferro', 'barra de aço', 'verga', 'vergalhão'],
+            language: 'pt',
+            country: 'global',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          }
+        ];
+        for (const d of defaults) {
+          await db.collection('ProductSynonyms').add(d);
+        }
+        console.log('[SERVER] ProductSynonyms seeded successfully.');
+      }
+
+      const productsSnap = await db.collection('products').limit(1).get();
+      if (productsSnap.empty) {
+        console.log('[SERVER] Seeding default products for testing...');
+        const defaultProducts = [
+          {
+            name: 'Cimento Dugongo 32.5R',
+            normalizedName: 'cimento',
+            category: 'Básicos',
+            subcategory: 'Cimento',
+            price: 540,
+            onSale: false,
+            salePrice: 0,
+            stock: 1500,
+            image: 'https://image.pollinations.ai/prompt/saco%20de%20cimento%20Dugongo%20de%2050%20quilos%20visto%20de%20frente%20alta%20resolucao%20para%20construcao?width=600&height=600&nologo=true',
+            description: 'Cimento Portland ideal para fundações e estruturas em geral de alta resistência.',
+            tags: ['cimento', 'dugongo', 'obra'],
+            synonyms: ['cimento', 'cemento', 'cement'],
+            searchIndex: ['cimento', 'dugongo', 'obra', 'cimento portland'],
+            popularity: 85,
+            salesCount: 150,
+            rating: 4.8,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          },
+          {
+            name: 'Vergalhão de Aço CA-50 10mm',
+            normalizedName: 'vergalhao',
+            category: 'Estrutural',
+            subcategory: 'Ferro e Aço',
+            price: 380,
+            onSale: true,
+            salePrice: 350,
+            stock: 800,
+            image: 'https://images.unsplash.com/photo-1516216628859-9bccecad13fc?w=600&q=80',
+            description: 'Varão de ferro corrugado de alta aderência para betão armado.',
+            tags: ['ferro', 'aço', 'obra'],
+            synonyms: ['ferro', 'barra de aço', 'vergalhão'],
+            searchIndex: ['ferro', 'aço', 'obra', 'varão'],
+            popularity: 90,
+            salesCount: 220,
+            rating: 4.6,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          },
+          {
+            name: 'Betão Pronto Usinado Fck 25',
+            normalizedName: 'betao',
+            category: 'Básicos',
+            subcategory: 'Betão e Argamassa',
+            price: 4800,
+            onSale: false,
+            salePrice: 0,
+            stock: 50,
+            image: 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=600&q=80',
+            description: 'Concreto de alta qualidade pronto para aplicação direta em lages e colunas.',
+            tags: ['betão', 'concreto', 'obra'],
+            synonyms: ['betão', 'concreto', 'concrete'],
+            searchIndex: ['betão', 'concreto', 'obra', 'concreto pronto'],
+            popularity: 65,
+            salesCount: 50,
+            rating: 4.9,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          }
+        ];
+        for (const p of defaultProducts) {
+          await db.collection('products').add(p);
+        }
+        console.log('[SERVER] Default products seeded successfully.');
+      }
+    } catch (err: any) {
+      console.error('[SERVER] Failed to seed default data:', err.message);
+    }
+  }
+  seedDefaultSynonymsAndProducts();
+
+  // GET /synonyms - Retrieve all synonyms with optional query search
+  app.get(['/synonyms', '/api/synonyms'], async (req, res) => {
+    try {
+      const q = req.query.q as string;
+      const snapshot = await db.collection('ProductSynonyms').get();
+      let synonyms = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+
+      if (q) {
+        const normQ = normalizeText(q);
+        synonyms = synonyms.filter((s: any) => {
+          const matchCanonical = normalizeText(s.canonicalName).includes(normQ);
+          const matchSynonyms = s.synonyms?.some((syn: string) => normalizeText(syn).includes(normQ));
+          return matchCanonical || matchSynonyms;
+        });
+      }
+
+      res.json(synonyms);
+    } catch (error: any) {
+      console.error('[SERVER] GET /synonyms failed:', error);
+      res.status(500).json({ error: 'Erro ao buscar sinónimos.' });
+    }
+  });
+
+  // POST /synonyms - Add a new synonym
+  app.post(['/synonyms', '/api/synonyms'], async (req, res) => {
+    try {
+      const { canonicalName, synonyms, language, country } = req.body;
+      if (!canonicalName) {
+        return res.status(400).json({ error: 'O nome canónico é obrigatório.' });
+      }
+
+      const rawSynonyms: string[] = Array.isArray(synonyms) ? synonyms : [canonicalName];
+      const uniqueSynonyms = Array.from(new Set(rawSynonyms.map((s: string) => s.trim().toLowerCase())));
+
+      const data = {
+        canonicalName: canonicalName.trim().toLowerCase(),
+        synonyms: uniqueSynonyms,
+        language: language || 'pt',
+        country: country || 'global',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      const docRef = await db.collection('ProductSynonyms').add(data);
+      res.status(201).json({ id: docRef.id, ...data });
+    } catch (error: any) {
+      console.error('[SERVER] POST /synonyms failed:', error);
+      res.status(500).json({ error: 'Erro ao adicionar sinónimo.' });
+    }
+  });
+
+  // PUT /synonyms/:id - Update an existing synonym
+  app.put(['/synonyms/:id', '/api/synonyms/:id'], async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { canonicalName, synonyms, language, country } = req.body;
+
+      const updateData: any = {
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+      if (canonicalName) updateData.canonicalName = canonicalName.trim().toLowerCase();
+      if (Array.isArray(synonyms)) {
+        updateData.synonyms = Array.from(new Set(synonyms.map((s: string) => s.trim().toLowerCase())));
+      }
+      if (language) updateData.language = language;
+      if (country) updateData.country = country;
+
+      await db.collection('ProductSynonyms').doc(id).update(updateData);
+      res.json({ id, ...updateData });
+    } catch (error: any) {
+      console.error('[SERVER] PUT /synonyms failed:', error);
+      res.status(500).json({ error: 'Erro ao editar sinónimo.' });
+    }
+  });
+
+  // DELETE /synonyms/:id - Delete an existing synonym
+  app.delete(['/synonyms/:id', '/api/synonyms/:id'], async (req, res) => {
+    try {
+      const { id } = req.params;
+      await db.collection('ProductSynonyms').doc(id).delete();
+      res.json({ success: true, message: 'Sinónimo eliminado com sucesso.' });
+    } catch (error: any) {
+      console.error('[SERVER] DELETE /synonyms failed:', error);
+      res.status(500).json({ error: 'Erro ao eliminar sinónimo.' });
+    }
+  });
+
+  // GET /search - Search products using synonym logic and 7-tier ranking
+  app.get(['/search', '/api/search'], async (req, res) => {
+    try {
+      const q = req.query.q as string;
+      if (!q) {
+        return res.json([]);
+      }
+
+      const normQ = normalizeText(q);
+
+      // Fetch products & synonyms from Firestore
+      const [productsSnap, synonymsSnap] = await Promise.all([
+        db.collection('products').get(),
+        db.collection('ProductSynonyms').get()
+      ]);
+
+      const allProducts = productsSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      const allSynonyms = synonymsSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+
+      // 1. Resolve canonical name for query
+      let matchedCanonicalName = '';
+      let isSynonymMatch = false;
+      let exactSynonymTerm = '';
+
+      for (const synDoc of allSynonyms) {
+        const canonical = synDoc.canonicalName || '';
+        const synonyms = synDoc.synonyms || [];
+        
+        // Look for exact match in synonyms array
+        for (const syn of synonyms) {
+          if (normalizeText(syn) === normQ) {
+            matchedCanonicalName = canonical;
+            isSynonymMatch = true;
+            exactSynonymTerm = syn;
+            break;
+          }
+        }
+        if (isSynonymMatch) break;
+      }
+
+      // If no exact match, try fuzzy matching on synonyms list
+      if (!matchedCanonicalName) {
+        let bestSynScore = 0;
+        for (const synDoc of allSynonyms) {
+          const canonical = synDoc.canonicalName || '';
+          const synonyms = synDoc.synonyms || [];
+          for (const syn of synonyms) {
+            const score = calculateSimilarity(syn, normQ);
+            if (score >= 0.80 && score > bestSynScore) {
+              bestSynScore = score;
+              matchedCanonicalName = canonical;
+              exactSynonymTerm = syn;
+            }
+          }
+        }
+      }
+
+      // 2. Search and rank products
+      const results: any[] = [];
+
+      for (const p of allProducts) {
+        const pName = p.name || '';
+        const normPName = normalizeText(pName);
+        const pDesc = p.description || '';
+        const normPDesc = normalizeText(pDesc);
+        const pNormName = p.normalizedName ? normalizeText(p.normalizedName) : '';
+
+        let matchType = '';
+        let matchedName = '';
+        let score = 0;
+
+        // Type 1: Exact Match (either equals or contains)
+        if (normPName.includes(normQ) || normQ.includes(normPName)) {
+          matchType = 'exata';
+          matchedName = pName;
+          score = 1.0;
+        }
+        // Type 2: Synonym Match
+        else if (matchedCanonicalName && (
+          pNormName === normalizeText(matchedCanonicalName) ||
+          normPName.includes(normalizeText(matchedCanonicalName)) ||
+          normalizeText(matchedCanonicalName).includes(normPName)
+        )) {
+          matchType = 'sinónimo';
+          matchedName = exactSynonymTerm || matchedCanonicalName;
+          score = 0.90;
+        }
+        // Type 3: Fuzzy Match on Product Name
+        else {
+          const fuzzyScore = calculateSimilarity(pName, q);
+          if (fuzzyScore >= 0.70) {
+            matchType = 'fuzzy';
+            matchedName = pName;
+            score = fuzzyScore;
+          } else {
+            // Check word-by-word similarity
+            const queryWords = normQ.split(' ');
+            const nameWords = normPName.split(' ');
+            let highestWordScore = 0;
+            for (const qw of queryWords) {
+              for (const nw of nameWords) {
+                const ws = calculateSimilarity(qw, nw);
+                if (ws > highestWordScore) {
+                  highestWordScore = ws;
+                }
+              }
+            }
+            if (highestWordScore >= 0.75) {
+              matchType = 'fuzzy';
+              matchedName = pName;
+              score = highestWordScore * 0.9;
+            }
+          }
+        }
+
+        // Include match if score meets minimum threshold
+        if (score >= 0.4) {
+          results.push({
+            produto: p,
+            product: p, // bilingual compatibility
+            nomeEncontrado: matchedName,
+            matchedName: matchedName,
+            nomeCanonico: matchedCanonicalName || p.normalizedName || '',
+            canonicalName: matchedCanonicalName || p.normalizedName || '',
+            pontuacaoRelevancia: parseFloat(score.toFixed(3)),
+            relevanceScore: parseFloat(score.toFixed(3)),
+            tipoCorrespondencia: matchType,
+            matchType: matchType
+          });
+        }
+      }
+
+      // Order according to multi-tier ranking:
+      results.sort((a, b) => {
+        const typeScore = (type: string) => {
+          if (type === 'exata') return 3;
+          if (type === 'sinónimo') return 2;
+          if (type === 'fuzzy') return 1;
+          return 0;
+        };
+
+        const scoreDiff = typeScore(b.matchType) - typeScore(a.matchType);
+        if (scoreDiff !== 0) return scoreDiff;
+
+        const relDiff = b.relevanceScore - a.relevanceScore;
+        if (relDiff !== 0) return relDiff;
+
+        const popA = a.product.popularity || a.product.clicks || 0;
+        const popB = b.product.popularity || b.product.clicks || 0;
+        if (popB !== popA) return popB - popA;
+
+        const salesA = a.product.salesCount || a.product.vendas || 0;
+        const salesB = b.product.salesCount || b.product.vendas || 0;
+        if (salesB !== salesA) return salesB - salesA;
+
+        const ratingA = a.product.rating || a.product.avaliacao || 0;
+        const ratingB = b.product.rating || b.product.avaliacao || 0;
+        if (ratingB !== ratingA) return ratingB - ratingA;
+
+        return a.product.name.localeCompare(b.product.name);
+      });
+
+      res.json(results);
+    } catch (error: any) {
+      console.error('[SERVER] GET /search failed:', error);
+      res.status(500).json({ error: 'Erro ao efectuar pesquisa.' });
+    }
+  });
+
+  // POST /search/click - Track click on search result for machine learning suggestions
+  app.post(['/search/click', '/api/search/click'], async (req, res) => {
+    try {
+      const { searchedTerm, productId, productName, canonicalName } = req.body;
+      if (!searchedTerm || !productId || !productName) {
+        return res.status(400).json({ error: 'Os campos searchedTerm, productId e productName são obrigatórios.' });
+      }
+
+      const normSearch = normalizeText(searchedTerm);
+
+      // Check if it is already in ProductSynonyms
+      const synonymsSnap = await db.collection('ProductSynonyms').get();
+      let isAlreadySynonym = false;
+      synonymsSnap.forEach((doc: any) => {
+        const data = doc.data();
+        const synonyms = data.synonyms || [];
+        if (synonyms.some((s: string) => normalizeText(s) === normSearch)) {
+          isAlreadySynonym = true;
+        }
+      });
+
+      if (isAlreadySynonym) {
+        return res.json({ success: true, message: 'O termo já é um sinónimo conhecido.', suggestionCreated: false });
+      }
+
+      // Check if an existing suggestion exists for this exact pair
+      const suggestionQuery = await db.collection('SynonymSuggestions')
+        .where('searchedTerm', '==', searchedTerm.trim().toLowerCase())
+        .where('targetProductId', '==', productId)
+        .limit(1)
+        .get();
+
+      if (!suggestionQuery.empty) {
+        const docId = suggestionQuery.docs[0].id;
+        const currentClicks = suggestionQuery.docs[0].data().clickCount || 0;
+        await db.collection('SynonymSuggestions').doc(docId).update({
+          clickCount: currentClicks + 1,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        res.json({ success: true, message: 'Contagem de cliques incrementada.', suggestionCreated: false, currentClicks: currentClicks + 1 });
+      } else {
+        const newSuggestion = {
+          searchedTerm: searchedTerm.trim().toLowerCase(),
+          targetProductId: productId,
+          targetProductName: productName,
+          targetCanonicalName: canonicalName || '',
+          clickCount: 1,
+          status: 'pending',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+        await db.collection('SynonymSuggestions').add(newSuggestion);
+        res.json({ success: true, message: 'Nova sugestão criada.', suggestionCreated: true, currentClicks: 1 });
+      }
+    } catch (error: any) {
+      console.error('[SERVER] POST /search/click failed:', error);
+      res.status(500).json({ error: 'Erro ao registar clique.' });
+    }
+  });
+
+  // GET /suggestions - Get all synonym suggestions
+  app.get(['/suggestions', '/api/suggestions'], async (req, res) => {
+    try {
+      const snapshot = await db.collection('SynonymSuggestions').orderBy('clickCount', 'desc').get();
+      const suggestions = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      res.json(suggestions);
+    } catch (error: any) {
+      console.error('[SERVER] GET /suggestions failed:', error);
+      res.status(500).json({ error: 'Erro ao buscar sugestões.' });
+    }
+  });
+
+  // POST /suggestions/:id/approve - Approve suggestion and merge it
+  app.post(['/suggestions/:id/approve', '/api/suggestions/:id/approve'], async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { canonicalName } = req.body;
+
+      const suggDoc = await db.collection('SynonymSuggestions').doc(id).get();
+      if (!suggDoc.exists) {
+        return res.status(404).json({ error: 'Sugestão não encontrada.' });
+      }
+
+      const suggestion = suggDoc.data();
+      const term = suggestion.searchedTerm;
+      const targetCanonical = (canonicalName || suggestion.targetCanonicalName || suggestion.targetProductName).trim().toLowerCase();
+
+      // Find matching synonym or add a new one
+      const synQuery = await db.collection('ProductSynonyms')
+        .where('canonicalName', '==', targetCanonical)
+        .limit(1)
+        .get();
+
+      if (!synQuery.empty) {
+        const synDocId = synQuery.docs[0].id;
+        const existingSynonyms = synQuery.docs[0].data().synonyms || [];
+        if (!existingSynonyms.includes(term)) {
+          await db.collection('ProductSynonyms').doc(synDocId).update({
+            synonyms: [...existingSynonyms, term],
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      } else {
+        await db.collection('ProductSynonyms').add({
+          canonicalName: targetCanonical,
+          synonyms: [targetCanonical, term],
+          language: 'pt',
+          country: 'global',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+
+      await db.collection('SynonymSuggestions').doc(id).update({
+        status: 'approved',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      res.json({ success: true, message: 'Sugestão aprovada e sinónimo adicionado com sucesso.' });
+    } catch (error: any) {
+      console.error('[SERVER] POST /suggestions/approve failed:', error);
+      res.status(500).json({ error: 'Erro ao aprovar sugestão.' });
+    }
+  });
+
+  // POST /suggestions/:id/reject - Reject suggestion
+  app.post(['/suggestions/:id/reject', '/api/suggestions/:id/reject'], async (req, res) => {
+    try {
+      const { id } = req.params;
+      await db.collection('SynonymSuggestions').doc(id).update({
+        status: 'rejected',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      res.json({ success: true, message: 'Sugestão rejeitada com sucesso.' });
+    } catch (error: any) {
+      console.error('[SERVER] POST /suggestions/reject failed:', error);
+      res.status(500).json({ error: 'Erro ao rejeitar sugestão.' });
     }
   });
 

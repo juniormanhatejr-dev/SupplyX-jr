@@ -20,6 +20,7 @@ import {
   Trash2,
   Edit3,
   Tag,
+  Tags,
   Loader2,
   AlertCircle,
   MessageSquare,
@@ -294,6 +295,79 @@ export default function ProductsView({
   }, [suppliersLoaded, rawProducts, activeSuppliers]);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [searchApiProducts, setSearchApiProducts] = useState<any[] | null>(null);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+
+  function localLevenshtein(s1: string, s2: string): number {
+    const m = s1.length;
+    const n = s2.length;
+    const d: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) d[i][0] = i;
+    for (let j = 0; j <= n; j++) d[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+        d[i][j] = Math.min(
+          d[i - 1][j] + 1,
+          d[i][j - 1] + 1,
+          d[i - 1][j - 1] + cost
+        );
+      }
+    }
+    return d[m][n];
+  }
+
+  function localJaroWinkler(s1: string, s2: string): number {
+    let m = 0;
+    const len1 = s1.length;
+    const len2 = s2.length;
+    if (len1 === 0 || len2 === 0) return 0;
+    const matchWindow = Math.floor(Math.max(len1, len2) / 2) - 1;
+    const matches1 = new Array(len1).fill(false);
+    const matches2 = new Array(len2).fill(false);
+    for (let i = 0; i < len1; i++) {
+      const start = Math.max(0, i - matchWindow);
+      const end = Math.min(len2, i + matchWindow + 1);
+      for (let j = start; j < end; j++) {
+        if (!matches2[j] && s1[i] === s2[j]) {
+          matches1[i] = true;
+          matches2[j] = true;
+          m++;
+          break;
+        }
+      }
+    }
+    if (m === 0) return 0;
+    let t = 0;
+    let point = 0;
+    for (let i = 0; i < len1; i++) {
+      if (matches1[i]) {
+        while (!matches2[point]) point++;
+        if (s1[i] !== s2[point]) t++;
+        point++;
+      }
+    }
+    t /= 2;
+    let jaro = (m / len1 + m / len2 + (m - t) / m) / 3;
+    let prefix = 0;
+    for (let i = 0; i < Math.min(4, len1, len2); i++) {
+      if (s1[i] === s2[i]) prefix++;
+      else break;
+    }
+    return jaro + prefix * 0.1 * (1 - jaro);
+  }
+
+  function localSimilarity(s1: string, s2: string): number {
+    const n1 = normalizeText(s1);
+    const n2 = normalizeText(s2);
+    if (n1 === n2) return 1;
+    if (n1 === '' || n2 === '') return 0;
+    const jw = localJaroWinkler(n1, n2);
+    const maxLength = Math.max(n1.length, n2.length);
+    const lev = maxLength > 0 ? 1 - localLevenshtein(n1, n2) / maxLength : 0;
+    return Math.max(jw, lev);
+  }
+
   const [isUploading, setIsUploading] = useState(false);
   const [isSearchingImages, setIsSearchingImages] = useState(false);
   const [googleImageResults, setGoogleImageResults] = useState<string[]>([]);
@@ -309,6 +383,41 @@ export default function ProductsView({
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  useEffect(() => {
+    if (!deferredSearchQuery.trim()) {
+      setSearchApiProducts(null);
+      return;
+    }
+
+    let active = true;
+    setIsSearchLoading(true);
+
+    fetch(`/api/search?q=${encodeURIComponent(deferredSearchQuery)}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Search failed');
+        return res.json();
+      })
+      .then(data => {
+        if (!active) return;
+        const found = data.map((item: any) => ({
+          ...item.product,
+          matchedName: item.matchedName,
+          matchType: item.matchType
+        }));
+        setSearchApiProducts(found);
+      })
+      .catch(err => {
+        console.error('Error in backend synonyms search:', err);
+      })
+      .finally(() => {
+        if (active) setIsSearchLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [deferredSearchQuery]);
 
   const suggestions = searchQuery.length > 2 
     ? MASTER_CATALOG.filter(item => {
@@ -663,32 +772,21 @@ export default function ProductsView({
   }, [userType, supplierId]); // Added supplierId to dependencies
 
   const displayProducts = useMemo(() => {
+    if (deferredSearchQuery.trim() && searchApiProducts !== null) {
+      const filtered = activeCategory === 'All' || activeCategory === 'Tudo'
+        ? searchApiProducts
+        : searchApiProducts.filter(item => item.category === activeCategory);
+      
+      const liveProductIds = new Set(products.map(p => p.id));
+      return filtered.filter(p => liveProductIds.has(p.id));
+    }
+
     const baseProducts = activeCategory === 'All' || activeCategory === 'Tudo'
       ? products
       : products.filter(item => item.category === activeCategory);
 
-    if (!deferredSearchQuery) return baseProducts;
-    
-    const q = normalizeText(deferredSearchQuery);
-    const searchTerms = q.split(' ');
-    
-    return baseProducts.filter(item => {
-      const nameNorm = normalizeText(item.name);
-      const descNorm = item.description ? normalizeText(item.description) : '';
-      
-      if (nameNorm.includes(q) || descNorm.includes(q)) return true;
-      
-      const additionalTerms = [
-        ...(item.tags || []),
-        ...(item.synonyms || []),
-        ...(item.searchIndex || []),
-        item.category,
-        item.subcategory || ''
-      ].map(t => normalizeText(t));
-      
-      return additionalTerms.some(term => term.includes(q) || searchTerms.some(st => term.includes(st)));
-    });
-  }, [activeCategory, products, deferredSearchQuery, language, userType]);
+    return baseProducts;
+  }, [activeCategory, products, deferredSearchQuery, searchApiProducts]);
 
   const handleServiceRequest = () => {
     setIsSuccess(true);
@@ -795,17 +893,19 @@ export default function ProductsView({
           </p>
         </div>
         
-        {supplierId && onClearSupplierFilter && (
-          <button 
-            onClick={onClearSupplierFilter}
-            className={`px-4 py-2 rounded-xl border flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${
-              isDarkMode ? 'bg-zinc-900 border-zinc-800 text-brand' : 'bg-white border-zinc-100 text-brand shadow-sm'
-            }`}
-          >
-            <X className="w-4 h-4" />
-            {t.viewAll}
-          </button>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {supplierId && onClearSupplierFilter && (
+            <button 
+              onClick={onClearSupplierFilter}
+              className={`px-4 py-2.5 rounded-xl border flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${
+                isDarkMode ? 'bg-zinc-900 border-zinc-800 text-brand' : 'bg-white border-zinc-100 text-brand shadow-sm'
+              }`}
+            >
+              <X className="w-4 h-4" />
+              {t.viewAll}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search Bar */}
@@ -1019,6 +1119,18 @@ export default function ProductsView({
                 if (userType === 'buyer') {
                   setSelectedProductDetail(product);
                   setIsDetailModalOpen(true);
+                  if (searchQuery.trim()) {
+                    fetch('/api/search/click', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        q: searchQuery,
+                        productId: product.id,
+                        productName: product.name,
+                        canonicalName: product.normalizedName || product.name
+                      })
+                    }).catch(err => console.error('Error tracking search click:', err));
+                  }
                 }
                 if (userType === 'supplier') {
                   setEditingProduct(product);

@@ -1530,11 +1530,18 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         const itemPrices: { material: string; price: number }[] = [];
 
         rows.forEach(row => {
-          const match = allProducts.find(p => 
+          let match = allProducts.find(p => 
             p.supplierId === sid && 
-            (p.name.toLowerCase().includes(row.material.toLowerCase()) || 
-             row.material.toLowerCase().includes(p.name.toLowerCase()))
+            p.name.trim().toLowerCase() === row.material.trim().toLowerCase()
           );
+
+          if (!match) {
+            match = allProducts.find(p => 
+              p.supplierId === sid && 
+              (p.name.toLowerCase().includes(row.material.toLowerCase()) || 
+               row.material.toLowerCase().includes(p.name.toLowerCase()))
+            );
+          }
 
           if (match) {
             const price = match.onSale ? (match.salePrice || 0) : (match.price || 0);
@@ -1574,11 +1581,19 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             supplierSignatureURL: s?.signatureURL || '',
             supplierStampURL: s?.stampURL || '',
             items: rows.map(r => {
-              const match = allProducts.find(p => 
+              let match = allProducts.find(p => 
                 p.supplierId === sid && 
-                (p.name.toLowerCase().includes(r.material.toLowerCase()) || 
-                 r.material.toLowerCase().includes(p.name.toLowerCase()))
+                p.name.trim().toLowerCase() === r.material.trim().toLowerCase()
               );
+
+              if (!match) {
+                match = allProducts.find(p => 
+                  p.supplierId === sid && 
+                  (p.name.toLowerCase().includes(r.material.toLowerCase()) || 
+                   r.material.toLowerCase().includes(p.name.toLowerCase()))
+                );
+              }
+
               const price = match ? (match.onSale ? (match.salePrice || 0) : (match.price || 0)) : 0;
               const vatRate = match ? (match.vatRate !== undefined ? match.vatRate : 16) : 16;
               const preTaxPrice = price / (1 + vatRate / 100);
@@ -2414,11 +2429,21 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         const itemPrice = currentResponse?.itemPrices.find(ip => ip.material === row.material)?.price || 0;
         
         // Find matching product from the selected supplier
-        const match = currentResponse ? allProducts.find(p => 
-          p.supplierId === currentResponse.supplierId && 
-          (p.name.toLowerCase().includes(row.material.toLowerCase()) || 
-           row.material.toLowerCase().includes(p.name.toLowerCase()))
-        ) : null;
+        let match = null;
+        if (currentResponse) {
+          match = allProducts.find(p => 
+            p.supplierId === currentResponse.supplierId && 
+            p.name.trim().toLowerCase() === row.material.trim().toLowerCase()
+          );
+
+          if (!match) {
+            match = allProducts.find(p => 
+              p.supplierId === currentResponse.supplierId && 
+              (p.name.toLowerCase().includes(row.material.toLowerCase()) || 
+               row.material.toLowerCase().includes(p.name.toLowerCase()))
+            );
+          }
+        }
         
         const itemVatRate = match ? (match.vatRate !== undefined ? match.vatRate : 16) : 16;
         

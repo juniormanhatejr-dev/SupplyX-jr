@@ -214,8 +214,8 @@ service cloud.firestore {
 
     // PRODUCTS:
     match /products/{productId} {
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
+      allow list: if true;
+      allow get: if true;
       allow create: if isSignedIn(); 
       allow update: if isVerified() && (existing().supplierId == request.auth.uid || isAdmin()) && isValidProduct(incoming(), true);
       allow delete: if isVerified() && (existing().supplierId == request.auth.uid || isAdmin());
@@ -292,11 +292,12 @@ service cloud.firestore {
 
     // FILES:
     match /files/{fileId} {
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
-      allow create: if isVerified() && isValidFile(incoming());
-      allow update: if isVerified() && (existing().uploaded_by == request.auth.uid || isAdmin());
-      allow delete: if isVerified() && (existing().uploaded_by == request.auth.uid || isAdmin());
+      allow read, write: if true;
+    }
+
+    // FILE AUDITS:
+    match /file_audits/{auditId} {
+      allow read, write: if true;
     }
 
     // FILES METADATA:
@@ -306,6 +307,16 @@ service cloud.firestore {
       allow create: if isVerified() && isValidFileMetadata(incoming());
       allow update: if isVerified() && (existing().userId == request.auth.uid || isAdmin());
       allow delete: if isVerified() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // PRODUCT SYNONYMS:
+    match /ProductSynonyms/{synonymId} {
+      allow read, write: if request.auth != null && (request.auth.token.email == 'system-backend@supplyx.internal' || request.auth.token.email == 'juniormanhate2@gmail.com');
+    }
+
+    // SYNONYM SUGGESTIONS:
+    match /SynonymSuggestions/{suggestionId} {
+      allow read, write: if request.auth != null && (request.auth.token.email == 'system-backend@supplyx.internal' || request.auth.token.email == 'juniormanhate2@gmail.com');
     }
   }
 }

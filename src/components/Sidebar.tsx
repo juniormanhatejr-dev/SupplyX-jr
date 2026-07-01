@@ -11,7 +11,8 @@ import {
   Truck,
   MessageSquare,
   User,
-  Info
+  Info,
+  Tags
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNotifications } from '../contexts/NotificationContext';

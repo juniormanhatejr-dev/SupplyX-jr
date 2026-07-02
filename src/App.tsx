@@ -20,6 +20,7 @@ import ProfileModal from './components/ProfileModal';
 import SupplyXLogo from './components/SupplyXLogo';
 import DiagnosticOverlay from './components/DiagnosticOverlay';
 import AboutView from './components/AboutView';
+import OfflineView from './components/OfflineView';
 import { OptimizedImage } from './components/ui/OptimizedImage';
 import { useAuth } from './contexts/AuthContext';
 import { useCart } from './contexts/CartContext';
@@ -32,6 +33,14 @@ import { useNotifications } from './contexts/NotificationContext';
 
 export default function App() {
   const isOnline = useOnlineStatus();
+  const [dismissedOfflineScreen, setDismissedOfflineScreen] = useState(false);
+
+  useEffect(() => {
+    if (isOnline) {
+      setDismissedOfflineScreen(false);
+    }
+  }, [isOnline]);
+
   const { user, profile, loading, refreshProfile } = useAuth();
   const hasIncompleteProfile = !!user && (!profile || !profile.type);
   
@@ -342,6 +351,11 @@ export default function App() {
             <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
             {language === 'PT' ? 'MODO OFFLINE • Dados Limitados' : 'OFFLINE MODE • Limited Data'}
           </div>
+        )}
+
+        {/* Offline Overlay Screen */}
+        {!isOnline && !dismissedOfflineScreen && (
+          <OfflineView language={language} onDismiss={() => setDismissedOfflineScreen(true)} />
         )}
 
         <Sidebar 

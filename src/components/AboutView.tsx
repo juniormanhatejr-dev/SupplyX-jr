@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   ShieldCheck, 
@@ -10,7 +11,9 @@ import {
   Truck, 
   Briefcase,
   ArrowRight,
-  Info
+  Info,
+  Scale,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface AboutViewProps {
@@ -21,6 +24,8 @@ interface AboutViewProps {
 }
 
 export default function AboutView({ isDarkMode, language, userType, onNavigate }: AboutViewProps) {
+  const [activeTab, setActiveTab] = useState<'about' | 'privacy' | 'terms'>('about');
+
   const t = {
     PT: {
       title: 'Sobre a Plataforma',
@@ -59,7 +64,10 @@ export default function AboutView({ isDarkMode, language, userType, onNavigate }
       g3Title: 'Integração de Rede B2B Mozambique',
       g3Desc: 'Totalmente sintonizado com os NUITs das empresas nacionais, com suporte nativo à legislação, guias aduaneiras e especificidades geográficas regionais de cada província.',
       
-      footerBadge: 'Sobre a Plataforma'
+      footerBadge: 'Sobre a Plataforma',
+      aboutTab: 'Apresentação',
+      privacyTab: 'Política de Privacidade',
+      termsTab: 'Termos de Uso'
     },
     EN: {
       title: 'About the Platform',
@@ -98,7 +106,10 @@ export default function AboutView({ isDarkMode, language, userType, onNavigate }
       g3Title: 'Mozambican Fiscal Alignment',
       g3Desc: 'Engineered from scratch to interface cleanly with local corporate entities and regulatory structures from Cabo Delgado to Maputo.',
       
-      footerBadge: 'About Platform'
+      footerBadge: 'About Platform',
+      aboutTab: 'Overview',
+      privacyTab: 'Privacy Policy',
+      termsTab: 'Terms of Use'
     }
   };
 
@@ -111,200 +122,419 @@ export default function AboutView({ isDarkMode, language, userType, onNavigate }
   ];
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto min-h-screen space-y-12 pb-20">
+    <div className="w-full max-w-[1400px] mx-auto min-h-screen space-y-8 pb-20 px-4 md:px-0">
       
-      {/* Banner / Hero Area with radial glow */}
-      <div className="relative rounded-[40px] overflow-hidden border border-white/5 bg-gradient-to-br from-zinc-950 via-supplyx-surface to-supplyx-deep p-8 md:p-14 shadow-3xl">
-        <div className="absolute top-0 right-0 w-[50%] h-[100%] bg-radial-gradient from-supplyx-blue/10 to-transparent opacity-60 pointer-events-none" />
-        <div className="relative z-10 max-w-4xl space-y-6">
-          <div className="flex items-center gap-3">
-            <span 
-              onClick={() => onNavigate?.('Dashboard')}
-              className="px-3.5 py-1 text-[9px] font-black tracking-[0.2em] uppercase rounded-full bg-supplyx-blue/20 text-supplyx-blue border border-supplyx-blue/30 inline-block cursor-pointer hover:bg-supplyx-blue/40 transition-colors duration-200"
-            >
-              PLATAFORMA SUPPLYX
-            </span>
-            <span 
-              onClick={() => onNavigate?.('Ajustes')}
-              className="px-3.5 py-1 text-[9px] font-black tracking-[0.2em] uppercase rounded-full bg-zinc-800 text-zinc-400 border border-white/5 inline-block cursor-pointer hover:bg-zinc-700 hover:text-white transition-colors duration-200"
-            >
-              {nav.footerBadge}
-            </span>
-          </div>
-
-          <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tight italic text-white leading-tight">
-            {nav.title}
-          </h1>
-          <p className="text-base sm:text-lg font-bold text-supplyx-blue uppercase tracking-wider">
-            {nav.subtitle}
-          </p>
-          <p className={`text-sm leading-relaxed max-w-3xl ${isDarkMode ? 'text-zinc-400' : 'text-zinc-650'}`}>
-            {nav.heroDesc}
-          </p>
-        </div>
+      {/* Segmented Controller / Tabs */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/5 pb-4">
+        <button
+          onClick={() => setActiveTab('about')}
+          className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 border ${
+            activeTab === 'about'
+              ? 'bg-supplyx-blue text-white border-supplyx-blue/50 shadow-lg shadow-supplyx-blue/20'
+              : 'text-zinc-400 border-transparent hover:bg-white/5 hover:text-zinc-200'
+          }`}
+        >
+          <Info className="w-4 h-4" />
+          {nav.aboutTab}
+        </button>
+        <button
+          onClick={() => setActiveTab('privacy')}
+          className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 border ${
+            activeTab === 'privacy'
+              ? 'bg-supplyx-blue text-white border-supplyx-blue/50 shadow-lg shadow-supplyx-blue/20'
+              : 'text-zinc-400 border-transparent hover:bg-white/5 hover:text-zinc-200'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          {nav.privacyTab}
+        </button>
+        <button
+          onClick={() => setActiveTab('terms')}
+          className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 border ${
+            activeTab === 'terms'
+              ? 'bg-supplyx-blue text-white border-supplyx-blue/50 shadow-lg shadow-supplyx-blue/20'
+              : 'text-zinc-400 border-transparent hover:bg-white/5 hover:text-zinc-200'
+          }`}
+        >
+          <Scale className="w-4 h-4" />
+          {nav.termsTab}
+        </button>
       </div>
 
-      {/* Concept statement box */}
-      <div className="p-8 rounded-[32px] border border-supplyx-blue/10 bg-supplyx-blue/5 relative overflow-hidden">
-        <div className="absolute -right-10 -bottom-10 opacity-5 pointer-events-none">
-          <Cpu className="w-72 h-72 text-supplyx-blue" />
-        </div>
-        <div className="relative z-10 grid grid-cols-1 md:grid-cols-4 gap-6 items-center">
-          <div className="md:col-span-1 flex justify-center">
-            <div className="w-16 h-16 rounded-full bg-supplyx-blue/10 border border-supplyx-blue/20 flex items-center justify-center text-supplyx-blue shadow-lg shadow-supplyx-blue/10">
-              <Info className="w-8 h-8" />
-            </div>
-          </div>
-          <div className="md:col-span-3 space-y-2 text-left">
-            <h3 className="text-md font-black uppercase tracking-wider text-supplyx-blue flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-supplyx-blue animate-pulse" />
-              {nav.conceptTitle}
-            </h3>
-            <p className="text-sm font-semibold text-white leading-relaxed">
-              {nav.conceptDesc}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Main capabilities area with interactive cards linking directly to their views */}
-      <div className="space-y-6">
-        <div className="space-y-1">
-          <h2 className="text-xl font-black uppercase tracking-widest text-white flex items-center gap-2.5">
-            <TrendingUp className="w-5 h-5 text-supplyx-blue" />
-            {nav.capabilitiesTitle}
-          </h2>
-          <p className={`text-xs ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>
-            {nav.capabilitiesDesc}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          
-          {/* Card 1 */}
-          <div 
-            onClick={() => onNavigate?.('Pedidos / Cotações')}
-            className="enterprise-card p-6 flex flex-col justify-between group h-full cursor-pointer select-none border border-white/5 bg-zinc-900/30 hover:bg-zinc-900/40 hover:border-supplyx-blue/40 hover:scale-[1.02] hover:-translate-y-1 active:scale-95 transition-all duration-300 rounded-[24px]"
-          >
-            <div>
-              <div className="w-12 h-12 rounded-xl bg-supplyx-blue/10 border border-supplyx-blue/20 flex items-center justify-center text-supplyx-blue mb-6 group-hover:scale-110 transition-transform">
-                <FileText className="w-5 h-5" />
+      {activeTab === 'about' && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className="space-y-12"
+        >
+          {/* Banner / Hero Area with radial glow */}
+          <div className="relative rounded-[40px] overflow-hidden border border-white/5 bg-gradient-to-br from-zinc-950 via-supplyx-surface to-supplyx-deep p-8 md:p-14 shadow-3xl">
+            <div className="absolute top-0 right-0 w-[50%] h-[100%] bg-radial-gradient from-supplyx-blue/10 to-transparent opacity-60 pointer-events-none" />
+            <div className="relative z-10 max-w-4xl space-y-6">
+              <div className="flex items-center gap-3">
+                <span 
+                  onClick={() => onNavigate?.('Dashboard')}
+                  className="px-3.5 py-1 text-[9px] font-black tracking-[0.2em] uppercase rounded-full bg-supplyx-blue/20 text-supplyx-blue border border-supplyx-blue/30 inline-block cursor-pointer hover:bg-supplyx-blue/40 transition-colors duration-200"
+                >
+                  PLATAFORMA SUPPLYX
+                </span>
+                <span 
+                  onClick={() => onNavigate?.('Ajustes')}
+                  className="px-3.5 py-1 text-[9px] font-black tracking-[0.2em] uppercase rounded-full bg-zinc-800 text-zinc-400 border border-white/5 inline-block cursor-pointer hover:bg-zinc-700 hover:text-white transition-colors duration-200"
+                >
+                  {nav.footerBadge}
+                </span>
               </div>
-              <h3 className="text-sm font-black uppercase tracking-wider text-white mb-2">{nav.cap1Title}</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed font-semibold">{nav.cap1Desc}</p>
-            </div>
-            <div className="mt-8 flex items-center gap-1.5 text-[9px] font-black text-supplyx-blue uppercase tracking-widest">
-              Módulo RFQ <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+
+              <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tight italic text-white leading-tight">
+                {nav.title}
+              </h1>
+              <p className="text-base sm:text-lg font-bold text-supplyx-blue uppercase tracking-wider">
+                {nav.subtitle}
+              </p>
+              <p className={`text-sm leading-relaxed max-w-3xl ${isDarkMode ? 'text-zinc-400' : 'text-zinc-650'}`}>
+                {nav.heroDesc}
+              </p>
             </div>
           </div>
 
-          {/* Card 2 */}
-          <div 
-            onClick={() => onNavigate?.(userType === 'supplier' ? 'Seller Central' : 'Produtos / Materiais')}
-            className="enterprise-card p-6 flex flex-col justify-between group h-full cursor-pointer select-none border border-white/5 bg-zinc-900/30 hover:bg-zinc-900/40 hover:border-amber-500/40 hover:scale-[1.02] hover:-translate-y-1 active:scale-95 transition-all duration-300 rounded-[24px]"
-          >
-            <div>
-              <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 mb-6 group-hover:scale-110 transition-transform">
-                <Warehouse className="w-5 h-5" />
+          {/* Concept statement box */}
+          <div className="p-8 rounded-[32px] border border-supplyx-blue/10 bg-supplyx-blue/5 relative overflow-hidden">
+            <div className="absolute -right-10 -bottom-10 opacity-5 pointer-events-none">
+              <Cpu className="w-72 h-72 text-supplyx-blue" />
+            </div>
+            <div className="relative z-10 grid grid-cols-1 md:grid-cols-4 gap-6 items-center">
+              <div className="md:col-span-1 flex justify-center">
+                <div className="w-16 h-16 rounded-full bg-supplyx-blue/10 border border-supplyx-blue/20 flex items-center justify-center text-supplyx-blue shadow-lg shadow-supplyx-blue/10">
+                  <Info className="w-8 h-8" />
+                </div>
               </div>
-              <h3 className="text-sm font-black uppercase tracking-wider text-white mb-2">{nav.cap2Title}</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed font-semibold">{nav.cap2Desc}</p>
-            </div>
-            <div className="mt-8 flex items-center gap-1.5 text-[9px] font-black text-amber-500 uppercase tracking-widest">
-              Catálogo & IVA <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
-
-          {/* Card 3 */}
-          <div 
-            onClick={() => onNavigate?.('Mensagens')}
-            className="enterprise-card p-6 flex flex-col justify-between group h-full cursor-pointer select-none border border-white/5 bg-zinc-900/30 hover:bg-zinc-900/40 hover:border-purple-500/40 hover:scale-[1.02] hover:-translate-y-1 active:scale-95 transition-all duration-300 rounded-[24px]"
-          >
-            <div>
-              <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-500 mb-6 group-hover:scale-110 transition-transform">
-                <Cpu className="w-5 h-5" />
+              <div className="md:col-span-3 space-y-2 text-left">
+                <h3 className="text-md font-black uppercase tracking-wider text-supplyx-blue flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-supplyx-blue animate-pulse" />
+                  {nav.conceptTitle}
+                </h3>
+                <p className="text-sm font-semibold text-white leading-relaxed">
+                  {nav.conceptDesc}
+                </p>
               </div>
-              <h3 className="text-sm font-black uppercase tracking-wider text-white mb-2">{nav.cap3Title}</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed font-semibold">{nav.cap3Desc}</p>
-            </div>
-            <div className="mt-8 flex items-center gap-1.5 text-[9px] font-black text-purple-500 uppercase tracking-widest">
-              Chat & Alertas <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
 
-          {/* Card 4 */}
-          <div 
-            onClick={() => onNavigate?.('Logística')}
-            className="enterprise-card p-6 flex flex-col justify-between group h-full cursor-pointer select-none border border-white/5 bg-zinc-900/30 hover:bg-zinc-900/40 hover:border-teal-500/40 hover:scale-[1.02] hover:-translate-y-1 active:scale-95 transition-all duration-300 rounded-[24px]"
-          >
-            <div>
-              <div className="w-12 h-12 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-500 mb-6 group-hover:scale-110 transition-transform">
-                <Truck className="w-5 h-5" />
-              </div>
-              <h3 className="text-sm font-black uppercase tracking-wider text-white mb-2">{nav.cap4Title}</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed font-semibold">{nav.cap4Desc}</p>
+          {/* Main capabilities area with interactive cards linking directly to their views */}
+          <div className="space-y-6">
+            <div className="space-y-1">
+              <h2 className="text-xl font-black uppercase tracking-widest text-white flex items-center gap-2.5">
+                <TrendingUp className="w-5 h-5 text-supplyx-blue" />
+                {nav.capabilitiesTitle}
+              </h2>
+              <p className={`text-xs ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                {nav.capabilitiesDesc}
+              </p>
             </div>
-            <div className="mt-8 flex items-center gap-1.5 text-[9px] font-black text-teal-500 uppercase tracking-widest">
-              Rotas & Despacho <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
 
-          {/* Card 5 */}
-          <div 
-            onClick={() => onNavigate?.(userType === 'supplier' ? 'Seller Central' : 'Relatórios')}
-            className="enterprise-card p-6 flex flex-col justify-between group h-full cursor-pointer select-none border border-white/5 bg-zinc-900/30 hover:bg-zinc-900/40 hover:border-emerald-500/40 hover:scale-[1.02] hover:-translate-y-1 active:scale-95 transition-all duration-300 rounded-[24px]"
-          >
-            <div>
-              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 mb-6 group-hover:scale-110 transition-transform">
-                <Briefcase className="w-5 h-5" />
-              </div>
-              <h3 className="text-sm font-black uppercase tracking-wider text-white mb-2">{nav.cap5Title}</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed font-semibold">{nav.cap5Desc}</p>
-            </div>
-            <div className="mt-8 flex items-center gap-1.5 text-[9px] font-black text-emerald-500 uppercase tracking-widest">
-              Gestão Financeira <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* Unyielding Guidelines & Guarantees section */}
-      <div className="p-8 md:p-12 rounded-[40px] bg-zinc-950 border border-white/5 space-y-10">
-        
-        <div className="text-left space-y-2">
-          <span className="px-3 py-1 text-[8px] font-black bg-supplyx-blue/10 text-supplyx-blue border border-supplyx-blue/20 rounded-full uppercase tracking-wider">
-            SISTEMA AUDITÁVEL GARANTIDO
-          </span>
-          <h2 className="text-xl font-black uppercase text-white tracking-wide m-0">
-            {nav.gTitle}
-          </h2>
-          <p className="text-xs text-zinc-500 leading-relaxed max-w-2xl font-semibold">
-            {nav.gDesc}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {guarantees.map((guar, index) => {
-            const Icon = guar.icon;
-            return (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              
+              {/* Card 1 */}
               <div 
-                key={index} 
-                className="p-6 rounded-[24px] bg-zinc-900/40 border border-white/5 flex flex-col items-start gap-4 text-left hover:border-white/10 transition-all duration-300"
+                onClick={() => onNavigate?.('Pedidos / Cotações')}
+                className="enterprise-card p-6 flex flex-col justify-between group h-full cursor-pointer select-none border border-white/5 bg-zinc-900/30 hover:bg-zinc-900/40 hover:border-supplyx-blue/40 hover:scale-[1.02] hover:-translate-y-1 active:scale-95 transition-all duration-300 rounded-[24px]"
               >
-                <div className={`p-3 rounded-xl border ${guar.color} flex items-center justify-center`}>
-                  <Icon className="w-5 h-5" />
+                <div>
+                  <div className="w-12 h-12 rounded-xl bg-supplyx-blue/10 border border-supplyx-blue/20 flex items-center justify-center text-supplyx-blue mb-6 group-hover:scale-110 transition-transform">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-white mb-2">{nav.cap1Title}</h3>
+                  <p className="text-xs text-zinc-400 leading-relaxed font-semibold">{nav.cap1Desc}</p>
                 </div>
-                <div className="space-y-1.5">
-                  <h4 className="text-xs font-black uppercase text-white tracking-wider">{guar.title}</h4>
-                  <p className="text-[11px] leading-relaxed text-zinc-400 font-semibold">{guar.desc}</p>
+                <div className="mt-8 flex items-center gap-1.5 text-[9px] font-black text-supplyx-blue uppercase tracking-widest">
+                  Módulo RFQ <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
                 </div>
               </div>
-            );
-          })}
-        </div>
 
-      </div>
+              {/* Card 2 */}
+              <div 
+                onClick={() => onNavigate?.(userType === 'supplier' ? 'Seller Central' : 'Produtos / Materiais')}
+                className="enterprise-card p-6 flex flex-col justify-between group h-full cursor-pointer select-none border border-white/5 bg-zinc-900/30 hover:bg-zinc-900/40 hover:border-amber-500/40 hover:scale-[1.02] hover:-translate-y-1 active:scale-95 transition-all duration-300 rounded-[24px]"
+              >
+                <div>
+                  <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 mb-6 group-hover:scale-110 transition-transform">
+                    <Warehouse className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-white mb-2">{nav.cap2Title}</h3>
+                  <p className="text-xs text-zinc-400 leading-relaxed font-semibold">{nav.cap2Desc}</p>
+                </div>
+                <div className="mt-8 flex items-center gap-1.5 text-[9px] font-black text-amber-500 uppercase tracking-widest">
+                  Catálogo & IVA <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+
+              {/* Card 3 */}
+              <div 
+                onClick={() => onNavigate?.('Mensagens')}
+                className="enterprise-card p-6 flex flex-col justify-between group h-full cursor-pointer select-none border border-white/5 bg-zinc-900/30 hover:bg-zinc-900/40 hover:border-purple-500/40 hover:scale-[1.02] hover:-translate-y-1 active:scale-95 transition-all duration-300 rounded-[24px]"
+              >
+                <div>
+                  <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-500 mb-6 group-hover:scale-110 transition-transform">
+                    <Cpu className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-white mb-2">{nav.cap3Title}</h3>
+                  <p className="text-xs text-zinc-400 leading-relaxed font-semibold">{nav.cap3Desc}</p>
+                </div>
+                <div className="mt-8 flex items-center gap-1.5 text-[9px] font-black text-purple-500 uppercase tracking-widest">
+                  Chat & Alertas <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+
+              {/* Card 4 */}
+              <div 
+                onClick={() => onNavigate?.('Logística')}
+                className="enterprise-card p-6 flex flex-col justify-between group h-full cursor-pointer select-none border border-white/5 bg-zinc-900/30 hover:bg-zinc-900/40 hover:border-teal-500/40 hover:scale-[1.02] hover:-translate-y-1 active:scale-95 transition-all duration-300 rounded-[24px]"
+              >
+                <div>
+                  <div className="w-12 h-12 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-500 mb-6 group-hover:scale-110 transition-transform">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-white mb-2">{nav.cap4Title}</h3>
+                  <p className="text-xs text-zinc-400 leading-relaxed font-semibold">{nav.cap4Desc}</p>
+                </div>
+                <div className="mt-8 flex items-center gap-1.5 text-[9px] font-black text-teal-500 uppercase tracking-widest">
+                  Rotas & Despacho <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+
+              {/* Card 5 */}
+              <div 
+                onClick={() => onNavigate?.(userType === 'supplier' ? 'Seller Central' : 'Relatórios')}
+                className="enterprise-card p-6 flex flex-col justify-between group h-full cursor-pointer select-none border border-white/5 bg-zinc-900/30 hover:bg-zinc-900/40 hover:border-emerald-500/40 hover:scale-[1.02] hover:-translate-y-1 active:scale-95 transition-all duration-300 rounded-[24px]"
+              >
+                <div>
+                  <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 mb-6 group-hover:scale-110 transition-transform">
+                    <Briefcase className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-white mb-2">{nav.cap5Title}</h3>
+                  <p className="text-xs text-zinc-400 leading-relaxed font-semibold">{nav.cap5Desc}</p>
+                </div>
+                <div className="mt-8 flex items-center gap-1.5 text-[9px] font-black text-emerald-500 uppercase tracking-widest">
+                  Gestão Financeira <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Unyielding Guidelines & Guarantees section */}
+          <div className="p-8 md:p-12 rounded-[40px] bg-zinc-950 border border-white/5 space-y-10">
+            <div className="text-left space-y-2">
+              <span className="px-3 py-1 text-[8px] font-black bg-supplyx-blue/10 text-supplyx-blue border border-supplyx-blue/20 rounded-full uppercase tracking-wider">
+                SISTEMA AUDITÁVEL GARANTIDO
+              </span>
+              <h2 className="text-xl font-black uppercase text-white tracking-wide m-0">
+                {nav.gTitle}
+              </h2>
+              <p className="text-xs text-zinc-500 leading-relaxed max-w-2xl font-semibold">
+                {nav.gDesc}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {guarantees.map((guar, index) => {
+                const Icon = guar.icon;
+                return (
+                  <div 
+                    key={index} 
+                    className="p-6 rounded-[24px] bg-zinc-900/40 border border-white/5 flex flex-col items-start gap-4 text-left hover:border-white/10 transition-all duration-300"
+                  >
+                    <div className={`p-3 rounded-xl border ${guar.color} flex items-center justify-center`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <h4 className="text-xs font-black uppercase text-white tracking-wider">{guar.title}</h4>
+                      <p className="text-[11px] leading-relaxed text-zinc-400 font-semibold">{guar.desc}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {activeTab === 'privacy' && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-8 bg-zinc-900/40 border border-white/5 p-6 md:p-10 rounded-[32px] text-left"
+        >
+          <div className="flex items-center gap-4 border-b border-white/5 pb-6">
+            <div className="w-12 h-12 rounded-xl bg-supplyx-blue/10 border border-supplyx-blue/20 flex items-center justify-center text-supplyx-blue">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">
+                {language === 'PT' ? 'Política de Privacidade & Proteção de Dados' : 'Privacy Policy & Data Protection'}
+              </h1>
+              <p className="text-xs text-zinc-400 font-semibold mt-1">
+                {language === 'PT' ? 'Última actualização: Julho de 2026' : 'Last updated: July 2026'}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-6 text-sm leading-relaxed text-zinc-300">
+            <p className="font-semibold text-white/90">
+              {language === 'PT'
+                ? 'A SupplyX Lda (registada em Moçambique sob o NUIT 100293849, doravante "SupplyX" ou "Plataforma") está empenhada em salvaguardar a confidencialidade, integridade e segurança de todas as informações comerciais, fiscais e operacionais que trafegam pelo nosso sistema.'
+                : 'SupplyX Lda (registered in Mozambique under NUIT 100293849, hereinafter "SupplyX" or "Platform") is committed to safeguarding the confidentiality, integrity, and security of all business, tax, and operational information flowing through our system.'}
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+              
+              <div className="p-5 rounded-2xl bg-zinc-950/50 border border-white/5 space-y-3">
+                <div className="flex items-center gap-2.5 text-xs font-black uppercase tracking-widest text-supplyx-blue">
+                  <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue" />
+                  {language === 'PT' ? '1. Recolha de Dados Corporativos' : '1. Corporate Data Collection'}
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  {language === 'PT'
+                    ? 'Recolhemos dados essenciais para o procurement empresarial: Razão Social, NUIT, Certidões Comerciais, lances de cotação (RFQ), dados logísticos (vistorias físicas de carga, vistorias em balanças) e histórico de comunicações seguras por chat.'
+                    : 'We collect essential high-scale procurement data: Corporate Name, NUIT tax ID, business registrations, RFQ bidding history, logistics details (loading docks inspection, weighbridge measures) and encrypted live chat histories.'}
+                </p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-zinc-950/50 border border-white/5 space-y-3">
+                <div className="flex items-center gap-2.5 text-xs font-black uppercase tracking-widest text-teal-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+                  {language === 'PT' ? '2. Uso e Transparência Fiscal' : '2. Data Usage & Fiscal Honesty'}
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  {language === 'PT'
+                    ? 'Os dados são utilizados exclusivamente para consolidar cotações bilaterais idênticas, aplicar o IVA correcto das províncias moçambicanas, enviar notificações operacionais, emitir relatórios de custos analíticos e cooperar com auditorias de integridade da empresa.'
+                    : 'Data is used strictly to resolve symmetric buyer-seller prices, implement accurate regional Mozambican VAT, trigger direct delivery messages, compile financial logs, and aid commercial audits.'}
+                </p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-zinc-950/50 border border-white/5 space-y-3">
+                <div className="flex items-center gap-2.5 text-xs font-black uppercase tracking-widest text-amber-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  {language === 'PT' ? '3. Armazenamento e Cibersegurança' : '3. Technical Security & Storage'}
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  {language === 'PT'
+                    ? 'Seus documentos e cotações são armazenados de forma estruturada na nuvem Firebase Firestore (protegida por regras de acesso granular) e ficheiros PDF no Azure Blob Storage com cache local blindada em IndexedDB.'
+                    : 'Your corporate files and bids are stored in structured form on Google Firebase Firestore (protected by strong server rules) and PDF assets in Azure Blob Storage with shielded local browser caching in IndexedDB.'}
+                </p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-zinc-950/50 border border-white/5 space-y-3">
+                <div className="flex items-center gap-2.5 text-xs font-black uppercase tracking-widest text-purple-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                  {language === 'PT' ? '4. Seus Direitos Legais' : '4. User Legal Rights'}
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  {language === 'PT'
+                    ? 'Em conformidade com a Lei de Proteção de Dados de Moçambique, os utilizadores detêm total controlo para requerer o acesso, actualização, rectificação ou eliminação permanente das credenciais da sua conta e registos históricos.'
+                    : 'In alignment with the personal and corporate data protection acts of the Republic of Mozambique, you hold absolute rights to inspect, update, rectify, or purge your structural account records.'}
+                </p>
+              </div>
+
+            </div>
+
+            <div className="p-6 rounded-2xl bg-supplyx-blue/5 border border-supplyx-blue/10 space-y-2 mt-4 text-xs">
+              <h4 className="font-black uppercase tracking-wider text-supplyx-blue">
+                {language === 'PT' ? 'Contacto e Encarregado de Protecção de Dados' : 'Privacy & Data Protection Officer Contact'}
+              </h4>
+              <p className="text-zinc-400">
+                {language === 'PT'
+                  ? 'Para exercer quaisquer direitos de acesso ou para esclarecer dúvidas sobre os nossos protocolos de cibersegurança B2B, contacte o nosso encarregado legal através do correio eletrónico: privacy@supplyx.app ou suporte pelo e-mail support@supplyx.app, ou visite a nossa sede física na Av. 25 de Setembro, Maputo, Moçambique.'
+                  : 'To exercise your rights or clarify B2B cryptographic security guidelines, please reach our DPO team directly at privacy@supplyx.app or general support at support@supplyx.app, or visit our corporate office at Av. 25 de Setembro, Maputo, Mozambique.'}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {activeTab === 'terms' && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-8 bg-zinc-900/40 border border-white/5 p-6 md:p-10 rounded-[32px] text-left"
+        >
+          <div className="flex items-center gap-4 border-b border-white/5 pb-6">
+            <div className="w-12 h-12 rounded-xl bg-supplyx-blue/10 border border-supplyx-blue/20 flex items-center justify-center text-supplyx-blue">
+              <Scale className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-white">
+                {language === 'PT' ? 'Termos e Condições de Serviço' : 'Terms & Conditions of Service'}
+              </h1>
+              <p className="text-xs text-zinc-400 font-semibold mt-1">
+                {language === 'PT' ? 'Última actualização: Julho de 2026' : 'Last updated: July 2026'}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-6 text-sm leading-relaxed text-zinc-300">
+            <p className="font-semibold text-white/90">
+              {language === 'PT'
+                ? 'Ao aceder, registar ou transaccionar na plataforma SupplyX, o utilizador concorda expressamente em vincular-se aos presentes Termos de Uso e a agir em conformidade com as leis comerciais e fiscais da República de Moçambique.'
+                : 'By registering, accessing, or transacting on SupplyX, your corporate entity agrees unconditionally to follow these Terms of Service and act in accordance with the commercial and tax regulations of the Republic of Mozambique.'}
+            </p>
+
+            <div className="space-y-4">
+              
+              <div className="p-6 rounded-2xl bg-zinc-950/40 border border-white/5 space-y-2">
+                <h3 className="text-xs font-black uppercase tracking-widest text-white flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue" />
+                  {language === 'PT' ? '1. Elegibilidade e Verificação de Contas' : '1. Account Verification & Eligibility'}
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  {language === 'PT'
+                    ? 'Apenas entidades corporativas activas e legalmente constituídas, detentoras de um NUIT verificado pela Autoridade Tributária moçambicana, estão elegíveis para operar como Comprador ou Fornecedor. A SupplyX reserva-se o direito de auditar os documentos antes da activação integral.'
+                    : 'Only legally recognized Mozambican and international companies with a valid registered NUIT are eligible to act as Buyer or Supplier. SupplyX reserves the right to suspend accounts failing document background checks.'}
+                </p>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-zinc-950/40 border border-white/5 space-y-2">
+                <h3 className="text-xs font-black uppercase tracking-widest text-white flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue" />
+                  {language === 'PT' ? '2. Integridade dos Preços e Cotações' : '2. Integrity of Prices & Quotations'}
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  {language === 'PT'
+                    ? 'Os preços, impostos de IVA indicados e as condições físicas de commodities ou materiais listadas são de inteira responsabilidade legal dos Fornecedores. Lances aceites na plataforma convertem-se em propostas comerciais vinculativas em conformidade com o Código Comercial moçambicano.'
+                    : 'Sellers carry absolute legal liability for physical properties, catalog prices, and specific VAT variables declared. Bids accepted in our RFQ module represent contractually binding commercial offers under Mozambican commercial law.'}
+                </p>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-zinc-950/40 border border-white/5 space-y-2">
+                <h3 className="text-xs font-black uppercase tracking-widest text-white flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue" />
+                  {language === 'PT' ? '3. Ausência de Taxas Ocultas e Isenção' : '3. Zero Commission Sincerity'}
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  {language === 'PT'
+                    ? 'Garantimos transparência absoluta. A SupplyX não cobra quaisquer percentagens ocultas adicionadas de forma arbitrária aos preços dos materiais ou sobre o valor tributável apurado. O valor exibido na cotação reflecte fielmente os valores bilaterais acordados.'
+                    : 'We guarantee strict transparency. SupplyX does not inject unstated markups or dynamic middle-man margins on B2B materials. The price generated in the quotation invoice is an exact reflection of the agreed baseline prices.'}
+                </p>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-zinc-950/40 border border-white/5 space-y-2">
+                <h3 className="text-xs font-black uppercase tracking-widest text-white flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue" />
+                  {language === 'PT' ? '4. Resolução de Litígios e Foro Competente' : '4. Dispute Resolution & Governing Law'}
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  {language === 'PT'
+                    ? 'Estes termos são regidos pelas leis de Moçambique. Qualquer diferendo relativo à execução de contratos de compra e venda iniciados na plataforma será submetido em primeira instância a arbitragem amigável sob a Lei de Arbitragem, Conciliação e Mediação (Lei nº 11/99).'
+                    : 'These Terms are governed by Mozambican commercial laws. Any B2B procurement disputes initiated through this digital portal will be resolved primarily under Mozambican Arbitration, Conciliation and Mediation Acts (Law 11/99).'}
+                </p>
+              </div>
+
+            </div>
+          </div>
+        </motion.div>
+      )}
 
     </div>
   );

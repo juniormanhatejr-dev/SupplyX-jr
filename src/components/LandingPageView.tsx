@@ -1,5 +1,5 @@
-import React from 'react';
-import { motion } from 'motion/react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   ArrowRight, 
   Play, 
@@ -18,7 +18,9 @@ import {
   Twitter,
   Instagram,
   Mail,
-  Smartphone
+  Smartphone,
+  X,
+  Scale
 } from 'lucide-react';
 import SupplyXLogo from './SupplyXLogo';
 
@@ -30,6 +32,8 @@ interface LandingPageViewProps {
 }
 
 export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, language }: LandingPageViewProps) {
+  const [activeModal, setActiveModal] = useState<'privacy' | 'terms' | null>(null);
+
   const t = {
     PT: {
       hero: {
@@ -742,9 +746,29 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
                <div className="space-y-8">
                   <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-supplyx-blue">{language === 'PT' ? 'Legal' : 'Legal'}</h4>
                   <ul className="space-y-4 text-xs font-black uppercase tracking-widest text-zinc-600">
-                    <li><a href="#" className="hover:text-white transition-colors">{language === 'PT' ? 'Privacidade' : 'Privacy'}</a></li>
-                    <li><a href="#" className="hover:text-white transition-colors">Security Audit</a></li>
-                    <li><a href="#" className="hover:text-white transition-colors">{language === 'PT' ? 'Conformidade' : 'Compliance'}</a></li>
+                    <li>
+                      <button 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setActiveModal('privacy');
+                        }}
+                        className="hover:text-white transition-colors cursor-pointer text-left font-black uppercase tracking-widest block"
+                      >
+                        {language === 'PT' ? 'Privacidade' : 'Privacy'}
+                      </button>
+                    </li>
+                    <li><span className="text-zinc-600 cursor-not-allowed">Security Audit</span></li>
+                    <li>
+                      <button 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setActiveModal('terms');
+                        }}
+                        className="hover:text-white transition-colors cursor-pointer text-left font-black uppercase tracking-widest block"
+                      >
+                        {language === 'PT' ? 'Conformidade' : 'Compliance'}
+                      </button>
+                    </li>
                   </ul>
                </div>
             </div>
@@ -764,6 +788,194 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
           </div>
         </div>
       </footer>
+
+      {/* Public Policy Modals */}
+      <AnimatePresence>
+        {activeModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-zinc-950/95 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.5 }}
+              className="relative w-full max-w-4xl max-h-[85vh] bg-zinc-900 border border-white/5 rounded-[32px] overflow-hidden flex flex-col shadow-2xl shadow-black/80 text-left"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 md:p-8 border-b border-white/5 bg-zinc-900/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-supplyx-blue/10 border border-supplyx-blue/20 flex items-center justify-center text-supplyx-blue">
+                    {activeModal === 'privacy' ? <ShieldCheck className="w-5 h-5" /> : <Scale className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <h3 className="text-md sm:text-lg font-black uppercase tracking-wider text-white">
+                      {activeModal === 'privacy' 
+                        ? (language === 'PT' ? 'Política de Privacidade & Proteção de Dados' : 'Privacy Policy & Data Protection')
+                        : (language === 'PT' ? 'Termos e Condições de Serviço' : 'Terms & Conditions of Service')
+                      }
+                    </h3>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mt-0.5">
+                      {language === 'PT' ? 'Acesso Público • Sem Necessidade de Login' : 'Public Access • No Login Required'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveModal(null)}
+                  className="w-10 h-10 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 text-sm leading-relaxed text-zinc-300">
+                {activeModal === 'privacy' ? (
+                  <>
+                    <p className="font-semibold text-white/90">
+                      {language === 'PT'
+                        ? 'A SupplyX Lda (registada em Moçambique sob o NUIT 100293849, doravante "SupplyX" ou "Plataforma") está empenhada em salvaguardar a confidencialidade, integridade e segurança de todas as informações comerciais, fiscais e operacionais que trafegam pelo nosso sistema.'
+                        : 'SupplyX Lda (registered in Mozambique under NUIT 100293849, hereinafter "SupplyX" or "Platform") is committed to safeguarding the confidentiality, integrity, and security of all business, tax, and operational information flowing through our system.'}
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-5 rounded-2xl bg-zinc-950/50 border border-white/5 space-y-2">
+                        <div className="text-xs font-black uppercase tracking-wider text-supplyx-blue flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue" />
+                          {language === 'PT' ? '1. Recolha de Dados Corporativos' : '1. Corporate Data Collection'}
+                        </div>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          {language === 'PT'
+                            ? 'Recolhemos dados essenciais para o procurement empresarial: Razão Social, NUIT, Certidões Comerciais, lances de cotação (RFQ), dados logísticos (vistorias físicas de carga, vistorias em balanças) e histórico de comunicações seguras por chat.'
+                            : 'We collect essential high-scale procurement data: Corporate Name, NUIT tax ID, business registrations, RFQ bidding history, logistics details (loading docks inspection, weighbridge measures) and encrypted live chat histories.'}
+                        </p>
+                      </div>
+
+                      <div className="p-5 rounded-2xl bg-zinc-950/50 border border-white/5 space-y-2">
+                        <div className="text-xs font-black uppercase tracking-wider text-teal-400 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+                          {language === 'PT' ? '2. Uso e Transparência Fiscal' : '2. Data Usage & Fiscal Honesty'}
+                        </div>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          {language === 'PT'
+                            ? 'Os dados são utilizados exclusivamente para consolidar cotações bilaterais idênticas, aplicar o IVA correcto das províncias moçambicanas, enviar notificações operacionais, emitir relatórios de custos analíticos e cooperar com auditorias de integridade da empresa.'
+                            : 'Data is used strictly to resolve symmetric buyer-seller prices, implement accurate regional Mozambican VAT, trigger direct delivery messages, compile financial logs, and aid commercial audits.'}
+                        </p>
+                      </div>
+
+                      <div className="p-5 rounded-2xl bg-zinc-950/50 border border-white/5 space-y-2">
+                        <div className="text-xs font-black uppercase tracking-wider text-amber-500 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          {language === 'PT' ? '3. Armazenamento e Cibersegurança' : '3. Technical Security & Storage'}
+                        </div>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          {language === 'PT'
+                            ? 'Seus documentos e cotações são armazenados de forma estruturada na nuvem Firebase Firestore (protegida por regras de acesso granular) e ficheiros PDF no Azure Blob Storage com cache local blindada em IndexedDB.'
+                            : 'Your corporate files and bids are stored in structured form on Google Firebase Firestore (protected by strong server rules) and PDF assets in Azure Blob Storage with shielded local browser caching in IndexedDB.'}
+                        </p>
+                      </div>
+
+                      <div className="p-5 rounded-2xl bg-zinc-950/50 border border-white/5 space-y-2">
+                        <div className="text-xs font-black uppercase tracking-wider text-purple-500 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                          {language === 'PT' ? '4. Seus Direitos Legais' : '4. User Legal Rights'}
+                        </div>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          {language === 'PT'
+                            ? 'Em conformidade com a Lei de Proteção de Dados de Moçambique, os utilizadores detêm total controlo para requerer o acesso, actualização, rectificação ou eliminação permanente das credenciais da sua conta e registos históricos.'
+                            : 'In alignment with the personal and corporate data protection acts of the Republic of Mozambique, you hold absolute rights to inspect, update, rectify, or purge your structural account records.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-supplyx-blue/5 border border-supplyx-blue/10 text-xs mt-4">
+                      <h4 className="font-black uppercase tracking-wider text-supplyx-blue mb-1">
+                        {language === 'PT' ? 'Contacto e Encarregado de Protecção de Dados' : 'Privacy & Data Protection Officer Contact'}
+                      </h4>
+                      <p className="text-zinc-400">
+                        {language === 'PT'
+                          ? 'Para exercer quaisquer direitos de acesso ou para esclarecer dúvidas sobre os nossos protocolos de cibersegurança B2B, contacte o nosso encarregado legal através do correio eletrónico: privacy@supplyx.app ou suporte pelo e-mail support@supplyx.app, ou visite a nossa sede física na Av. 25 de Setembro, Maputo, Moçambique.'
+                          : 'To exercise your rights or clarify B2B cryptographic security guidelines, please reach our DPO team directly at privacy@supplyx.app or general support at support@supplyx.app, or visit our corporate office at Av. 25 de Setembro, Maputo, Mozambique.'}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-semibold text-white/90">
+                      {language === 'PT'
+                        ? 'Ao aceder, registar ou transaccionar na plataforma SupplyX, o utilizador concorda expressamente em vincular-se aos presentes Termos de Uso e a agir em conformidade com as leis comerciais e fiscais da República de Moçambique.'
+                        : 'By registering, accessing, or transacting on SupplyX, your corporate entity agrees unconditionally to follow these Terms of Service and act in accordance with the commercial and tax regulations of the Republic of Mozambique.'}
+                    </p>
+
+                    <div className="space-y-4">
+                      <div className="p-5 rounded-2xl bg-zinc-950/40 border border-white/5 space-y-1.5">
+                        <h4 className="text-xs font-black uppercase text-white tracking-wider flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue" />
+                          {language === 'PT' ? '1. Elegibilidade e Verificação de Contas' : '1. Account Verification & Eligibility'}
+                        </h4>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          {language === 'PT'
+                            ? 'Apenas entidades corporativas activas e legalmente constituídas, detentoras de um NUIT verificado pela Autoridade Tributária moçambicana, estão elegíveis para operar como Comprador ou Fornecedor. A SupplyX reserva-se o direito de auditar os documentos antes da activação integral.'
+                            : 'Only legally recognized Mozambican and international companies with a valid registered NUIT are eligible to act as Buyer or Supplier. SupplyX reserves the right to suspend accounts failing document background checks.'}
+                        </p>
+                      </div>
+
+                      <div className="p-5 rounded-2xl bg-zinc-950/40 border border-white/5 space-y-1.5">
+                        <h4 className="text-xs font-black uppercase text-white tracking-wider flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue" />
+                          {language === 'PT' ? '2. Integridade dos Preços e Cotações' : '2. Integrity of Prices & Quotations'}
+                        </h4>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          {language === 'PT'
+                            ? 'Os preços, impostos de IVA indicados e as condições físicas de commodities ou materiais listadas são de inteira responsabilidade legal dos Fornecedores. Lances aceites na plataforma convertem-se em propostas comerciais vinculativas em conformidade com o Código Comercial moçambicano.'
+                            : 'Sellers carry absolute legal liability for physical properties, catalog prices, and specific VAT variables declared. Bids accepted in our RFQ module represent contractually binding commercial offers under Mozambican commercial law.'}
+                        </p>
+                      </div>
+
+                      <div className="p-5 rounded-2xl bg-zinc-950/40 border border-white/5 space-y-1.5">
+                        <h4 className="text-xs font-black uppercase text-white tracking-wider flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue" />
+                          {language === 'PT' ? '3. Ausência de Taxas Ocultas e Isenção' : '3. Zero Commission Sincerity'}
+                        </h4>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          {language === 'PT'
+                            ? 'Garantimos transparência absoluta. A SupplyX não cobra quaisquer percentagens ocultas adicionadas de forma arbitrária aos preços dos materiais ou sobre o valor tributável apurado. O valor exibido na cotação reflecte fielmente os valores bilaterais acordados.'
+                            : 'We guarantee strict transparency. SupplyX does not inject unstated markups or dynamic middle-man margins on B2B materials. The price generated in the quotation invoice is an exact reflection of the agreed baseline prices.'}
+                        </p>
+                      </div>
+
+                      <div className="p-5 rounded-2xl bg-zinc-950/40 border border-white/5 space-y-1.5">
+                        <h4 className="text-xs font-black uppercase text-white tracking-wider flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue" />
+                          {language === 'PT' ? '4. Resolução de Litígios e Foro Competente' : '4. Dispute Resolution & Governing Law'}
+                        </h4>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          {language === 'PT'
+                            ? 'Estes termos são regidos pelas leis de Moçambique. Qualquer diferendo relativo à execução de contratos de compra e venda iniciados na plataforma será submetido em primeira instância a arbitragem amigável sob a Lei de Arbitragem, Conciliação e Mediação (Lei nº 11/99).'
+                            : 'These Terms are governed by Mozambican commercial laws. Any B2B procurement disputes initiated through this digital portal will be resolved primarily under Mozambican Arbitration, Conciliation and Mediation Acts (Law 11/99).'}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-white/5 bg-zinc-950/40 flex justify-end">
+                <button
+                  onClick={() => setActiveModal(null)}
+                  className="px-6 py-3 bg-supplyx-blue hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-blue-500/10 cursor-pointer animate-none"
+                >
+                  {language === 'PT' ? 'Entendido / Fechar' : 'Understood / Close'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

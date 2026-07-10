@@ -837,8 +837,8 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
                   <>
                     <p className="font-semibold text-white/90">
                       {language === 'PT'
-                        ? 'A SupplyX Lda (registada em Moçambique sob o NUIT 100293849, doravante "SupplyX" ou "Plataforma") está empenhada em salvaguardar a confidencialidade, integridade e segurança de todas as informações comerciais, fiscais e operacionais que trafegam pelo nosso sistema.'
-                        : 'SupplyX Lda (registered in Mozambique under NUIT 100293849, hereinafter "SupplyX" or "Platform") is committed to safeguarding the confidentiality, integrity, and security of all business, tax, and operational information flowing through our system.'}
+                        ? 'A SupplyX Lda (doravante "SupplyX" ou "Plataforma") está empenhada em salvaguardar a confidencialidade, integridade e segurança de todas as informações comerciais, fiscais e operacionais que trafegam pelo nosso sistema.'
+                        : 'SupplyX Lda (hereinafter "SupplyX" or "Platform") is committed to safeguarding the confidentiality, integrity, and security of all business, tax, and operational information flowing through our system.'}
                     </p>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -897,8 +897,8 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
                       </h4>
                       <p className="text-zinc-400">
                         {language === 'PT'
-                          ? 'Para exercer quaisquer direitos de acesso ou para esclarecer dúvidas sobre os nossos protocolos de cibersegurança B2B, contacte o nosso encarregado legal através do correio eletrónico: privacy@supplyx.app ou suporte pelo e-mail support@supplyx.app, ou visite a nossa sede física na Av. 25 de Setembro, Maputo, Moçambique.'
-                          : 'To exercise your rights or clarify B2B cryptographic security guidelines, please reach our DPO team directly at privacy@supplyx.app or general support at support@supplyx.app, or visit our corporate office at Av. 25 de Setembro, Maputo, Mozambique.'}
+                          ? 'Para exercer quaisquer direitos de acesso ou para esclarecer dúvidas sobre os nossos protocolos de cibersegurança B2B, contacte o nosso encarregado legal através do correio eletrónico: privacy@supplyx.app ou suporte pelo e-mail support@supplyx.app.'
+                          : 'To exercise your rights or clarify B2B cryptographic security guidelines, please reach our DPO team directly at privacy@supplyx.app or general support at support@supplyx.app.'}
                       </p>
                     </div>
                   </>

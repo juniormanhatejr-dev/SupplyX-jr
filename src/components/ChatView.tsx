@@ -10,6 +10,7 @@ import {
   Check,
   CheckCheck,
   UserPlus,
+  ShieldCheck,
   Clock,
   Trash2,
   ArrowLeft,
@@ -110,6 +111,16 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     return () => unsubscribe();
   }, []);
 
+  const verifiedUsersSet = useMemo(() => {
+    const set = new Set<string>();
+    allUsers.forEach(u => {
+      if (u.verificationStatus === 'verified') {
+        set.add(u.uid);
+      }
+    });
+    return set;
+  }, [allUsers]);
+
   const recommendedContacts = useMemo(() => {
     if (!auth.currentUser) return [];
     
@@ -134,8 +145,13 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
   }, [allUsers, userType, language]);
 
    const displayedRooms = useMemo(() => {
-    return rooms;
-  }, [rooms]);
+    if (activeUserIds.length === 0) return rooms;
+    return rooms.filter(room => {
+      const otherParticipants = room.participants.filter(uid => uid !== auth.currentUser?.uid);
+      if (otherParticipants.length === 0) return true;
+      return otherParticipants.every(uid => activeUserIds.includes(uid));
+    });
+  }, [rooms, activeUserIds]);
 
   // Automatically select room if initialRecipientId is provided, or create one if it doesn't exist yet!
   const hasAttemptedAutoStart = useRef<string | null>(null);
@@ -607,7 +623,12 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                           {user.name?.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-bold truncate ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{user.name}</p>
+                          <div className="flex items-center gap-1">
+                            <p className={`text-xs font-bold truncate ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{user.name}</p>
+                            {verifiedUsersSet.has(user.uid) && (
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/10 shrink-0" />
+                            )}
+                          </div>
                           <p className="text-[9px] text-zinc-500 uppercase font-black tracking-tight">{user.type} • {user.city}</p>
                         </div>
                         <UserPlus className="w-3.5 h-3.5 text-zinc-400" />
@@ -655,8 +676,11 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                        (language === 'PT' ? 'COMP' : 'BUY')}
                     </span>
                   </div>
-                  <span className={`text-[10px] font-bold tracking-tight truncate w-full ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                    {u.name}
+                  <span className={`text-[10px] font-bold tracking-tight truncate w-full flex items-center justify-center gap-0.5 ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                    <span>{u.name}</span>
+                    {verifiedUsersSet.has(u.uid) && (
+                      <ShieldCheck className="w-3 h-3 text-emerald-500 fill-emerald-500/10 shrink-0" />
+                    )}
                   </span>
                 </button>
               ))}
@@ -676,7 +700,12 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
               </div>
               <div className="flex-1 text-left min-w-0">
                 <div className="flex justify-between items-center mb-0.5">
-                  <span className="text-sm font-black truncate">{getOtherParticipantName(room)}</span>
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <span className="text-sm font-black truncate">{getOtherParticipantName(room)}</span>
+                    {verifiedUsersSet.has(getOtherParticipantId(room)) && (
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/10 shrink-0" />
+                    )}
+                  </div>
                   <div className="flex flex-col items-end">
                     <span className="text-[10px] text-zinc-500">
                       {room.updatedAt?.toDate ? new Date(room.updatedAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
@@ -760,7 +789,12 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
                     {getOtherParticipantName(activeRoom).charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <h3 className="text-sm font-black group-hover:text-brand transition-colors">{getOtherParticipantName(activeRoom)}</h3>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="text-sm font-black group-hover:text-brand transition-colors">{getOtherParticipantName(activeRoom)}</h3>
+                      {activeRoom && verifiedUsersSet.has(getOtherParticipantId(activeRoom)) && (
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/10 shrink-0" />
+                      )}
+                    </div>
                     {activeRoom && (
                       <UserPresenceIndicator 
                         userId={getOtherParticipantId(activeRoom)} 

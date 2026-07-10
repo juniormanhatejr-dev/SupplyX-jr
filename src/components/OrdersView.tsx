@@ -675,6 +675,16 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   
+  const verifiedUsersMap = useMemo(() => {
+    const map = new Set<string>();
+    dbUsers.forEach(u => {
+      if (u.verificationStatus === 'verified') {
+        map.add(u.id);
+      }
+    });
+    return map;
+  }, [dbUsers]);
+  
   useEffect(() => {
     const q = query(collection(db, 'users'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -705,6 +715,31 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       return hasBuyer && hasSupplier;
     });
   }, [realQuotations, dbUsers]);
+
+  // Auto-clean orphaned quotations (whose buyer or supplier is no longer registered in the users collection)
+  useEffect(() => {
+    if (dbUsers.length > 0 && realQuotations.length > 0) {
+      const activeUserIds = new Set(dbUsers.map(u => u.id));
+      const currentUid = auth.currentUser?.uid;
+      const orphaned = realQuotations.filter(qObj => {
+        const buyerMissing = qObj.buyerId && !activeUserIds.has(qObj.buyerId) && qObj.buyerId !== currentUid;
+        const supplierMissing = qObj.supplierId && !activeUserIds.has(qObj.supplierId) && qObj.supplierId !== currentUid;
+        return buyerMissing || supplierMissing;
+      });
+
+      if (orphaned.length > 0) {
+        console.log(`Cleaning up ${orphaned.length} orphaned quotations...`);
+        orphaned.forEach(async (qObj) => {
+          try {
+            await deleteDoc(doc(db, 'quotations', qObj.id));
+            console.log(`Successfully deleted orphaned quotation: ${qObj.id}`);
+          } catch (e) {
+            console.error(`Failed to delete orphaned quotation ${qObj.id}:`, e);
+          }
+        });
+      }
+    }
+  }, [dbUsers, realQuotations]);
 
   const user = auth.currentUser;
 
@@ -4099,20 +4134,28 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                        <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue animate-pulse" />
                     )}
                   </div>
-                  <p 
-                    className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-supplyx-blue transition-colors flex items-center gap-2 truncate"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const profileId = userType === 'supplier' ? order.buyerId : order.supplierId;
-                      if (profileId) {
-                        setViewingProfileId(profileId);
-                        setIsProfileModalOpen(true);
-                      }
-                    }}
-                  >
-                    <User className="w-3 h-3" />
-                    {userType === 'supplier' ? `${t.client}: ${order.buyerName || 'Client'}` : `${t.supplier}: ${order.supplierName}`}
-                  </p>
+                  <div className="flex items-center gap-1.5 overflow-hidden">
+                    <p 
+                      className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-supplyx-blue transition-colors flex items-center gap-2 truncate"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const profileId = userType === 'supplier' ? order.buyerId : order.supplierId;
+                        if (profileId) {
+                          setViewingProfileId(profileId);
+                          setIsProfileModalOpen(true);
+                        }
+                      }}
+                    >
+                      <User className="w-3 h-3 shrink-0" />
+                      <span className="truncate">
+                        {userType === 'supplier' ? `${t.client}: ${order.buyerName || 'Client'}` : `${t.supplier}: ${order.supplierName}`}
+                      </span>
+                    </p>
+                    {((userType === 'supplier' && order.buyerId && verifiedUsersMap.has(order.buyerId)) || 
+                      (userType !== 'supplier' && order.supplierId && verifiedUsersMap.has(order.supplierId))) && (
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/10 shrink-0" />
+                    )}
+                  </div>
                 </div>
                 
                 {/* Mobile Status Badge */}
@@ -4269,20 +4312,28 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                        <span className="w-1.5 h-1.5 rounded-full bg-supplyx-blue animate-pulse" />
                     )}
                   </div>
-                  <p 
-                    className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-supplyx-blue transition-colors flex items-center gap-2 truncate"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const profileId = userType === 'supplier' ? 'buyer_demo_uid' : (order as any).supplierId;
-                      if (profileId) {
-                        setViewingProfileId(profileId);
-                        setIsProfileModalOpen(true);
-                      }
-                    }}
-                  >
-                    <User className="w-3 h-3" />
-                    {userType === 'supplier' ? `${t.client}: Manhate Jr` : `${t.supplier}: ${order.supplier}`}
-                  </p>
+                  <div className="flex items-center gap-1.5 overflow-hidden">
+                    <p 
+                      className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-supplyx-blue transition-colors flex items-center gap-2 truncate"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const profileId = userType === 'supplier' ? 'buyer_demo_uid' : (order as any).supplierId;
+                        if (profileId) {
+                          setViewingProfileId(profileId);
+                          setIsProfileModalOpen(true);
+                        }
+                      }}
+                    >
+                      <User className="w-3 h-3 shrink-0" />
+                      <span className="truncate">
+                        {userType === 'supplier' ? `${t.client}: Manhate Jr` : `${t.supplier}: ${order.supplier}`}
+                      </span>
+                    </p>
+                    {((userType === 'supplier' && verifiedUsersMap.has('buyer_demo_uid')) || 
+                      (userType !== 'supplier' && (order as any).supplierId && verifiedUsersMap.has((order as any).supplierId))) && (
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/10 shrink-0" />
+                    )}
+                  </div>
                 </div>
                 
                 {/* Mobile Status Badge */}

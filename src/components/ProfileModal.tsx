@@ -41,6 +41,8 @@ interface UserProfile {
   mobileWallets?: { provider: string; number: string; name: string }[];
   signatureURL?: string;
   stampURL?: string;
+  nuitStatus?: 'pending' | 'verified' | 'rejected';
+  verificationStatus?: 'pending' | 'verified' | 'rejected';
 }
 
 interface ProfileModalProps {
@@ -199,7 +201,9 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
                         <h3 className={`text-3xl font-black italic uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
                           {profile.name}
                         </h3>
-                        <ShieldCheck className="w-6 h-6 text-brand" />
+                        {profile.verificationStatus === 'verified' && (
+                          <ShieldCheck className="w-6 h-6 text-emerald-500 fill-emerald-500/10" />
+                        )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                          <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest ${

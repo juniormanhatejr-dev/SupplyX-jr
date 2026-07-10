@@ -143,9 +143,10 @@ interface ProductCardProps {
   onProductClick: (item: Product) => void;
   onChatClick: (item: Product) => void;
   onSupplierClick: (supplierId: string) => void;
+  isVerified?: boolean;
 }
 
-const ProductCard = memo(({ item, index, userType, isDarkMode, language, t, onProductClick, onChatClick, onSupplierClick }: ProductCardProps) => {
+const ProductCard = memo(({ item, index, userType, isDarkMode, language, t, onProductClick, onChatClick, onSupplierClick, isVerified }: ProductCardProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.98 }}
@@ -215,9 +216,14 @@ const ProductCard = memo(({ item, index, userType, isDarkMode, language, t, onPr
             <p className={`text-[11px] sm:text-xs truncate font-bold leading-tight ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}>{item.name}</p>
             <div className="flex items-center gap-1.5 overflow-hidden mt-0.5">
               {userType === 'buyer' && (
-                <p className="text-[8px] font-black uppercase text-zinc-500 group-hover/info:text-brand transition-colors truncate shrink-0 tracking-widest">
-                  {item.supplierName || t.supplier}
-                </p>
+                <div className="flex items-center gap-1 group-hover/info:text-brand transition-colors truncate shrink-0">
+                  <p className="text-[8px] font-black uppercase text-zinc-500 tracking-widest truncate">
+                    {item.supplierName || t.supplier}
+                  </p>
+                  {isVerified && (
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/10 shrink-0" />
+                  )}
+                </div>
               )}
               {item.subcategory && (
                 <span className="text-[7px] font-bold text-zinc-400 uppercase italic whitespace-nowrap opacity-60">
@@ -254,16 +260,30 @@ export default function ProductsView({
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [rawProducts, setProducts] = useState<Product[]>([]);
+  const [suppliersMap, setSuppliersMap] = useState<Record<string, { name: string; verificationStatus: string }>>({});
   const [activeSuppliers, setActiveSuppliers] = useState<string[]>([]);
   const [suppliersLoaded, setSuppliersLoaded] = useState(false);
   
   useEffect(() => {
-    const q = query(collection(db, 'users'), where('type', '==', 'supplier'));
+    const q = query(collection(db, 'users'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setActiveSuppliers(snapshot.docs.map(doc => doc.id));
+      const map: Record<string, { name: string; verificationStatus: string }> = {};
+      const ids: string[] = [];
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        map[doc.id] = {
+          name: data.name || '',
+          verificationStatus: data.verificationStatus || 'pending'
+        };
+        if (data.type === 'supplier') {
+          ids.push(doc.id);
+        }
+      });
+      setSuppliersMap(map);
+      setActiveSuppliers(ids);
       setSuppliersLoaded(true);
     }, (err) => {
-      console.error('Error listening to active suppliers:', err);
+      console.error('Error listening to users:', err);
       setSuppliersLoaded(true);
     });
     return () => unsubscribe();
@@ -1115,6 +1135,7 @@ export default function ProductsView({
               isDarkMode={isDarkMode || false}
               language={language}
               t={t}
+              isVerified={suppliersMap[item.supplierId]?.verificationStatus === 'verified'}
               onProductClick={(product) => {
                 if (userType === 'buyer') {
                   setSelectedProductDetail(product);

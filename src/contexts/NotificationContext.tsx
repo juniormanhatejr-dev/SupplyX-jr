@@ -244,8 +244,44 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
           const occurrence = oDoc.data();
           const occurrenceId = oDoc.id;
           const notifId = `notif_occurrence_${occurrenceId}_for_${currentUserId}`;
+
+          let belongsToUser = false;
+          if (occurrence.cargoId) {
+            // Check if user owns or is assigned to this cargo
+            const cargoDocRef = doc(db, 'freight_orders', occurrence.cargoId);
+            const cargoDocSnap = await getDoc(cargoDocRef);
+            if (cargoDocSnap.exists()) {
+              const cargo = cargoDocSnap.data();
+              belongsToUser = 
+                cargo.buyerId === currentUserId || 
+                cargo.supplierId === currentUserId || 
+                cargo.userId === currentUserId ||
+                cargo.assignedCarrier === currentUserId;
+            } else {
+              const qCargo = query(collection(db, 'freight_orders'), where('id', '==', occurrence.cargoId));
+              const cargoSnap = await getDocs(qCargo);
+              if (!cargoSnap.empty) {
+                const cargo = cargoSnap.docs[0].data();
+                belongsToUser = 
+                  cargo.buyerId === currentUserId || 
+                  cargo.supplierId === currentUserId || 
+                  cargo.userId === currentUserId ||
+                  cargo.assignedCarrier === currentUserId;
+              }
+            }
+          }
+
+          if (!belongsToUser) {
+            // Clean up or hide this notification for the user if it was incorrectly created before
+            const notifDocSnap = await getDoc(doc(db, 'notifications', notifId));
+            if (notifDocSnap.exists() && !notifDocSnap.data().deleted) {
+              await setDoc(doc(db, 'notifications', notifId), { deleted: true }, { merge: true });
+            }
+            continue;
+          }
+
           const notifDocSnap = await getDoc(doc(db, 'notifications', notifId));
-          if (!notifDocSnap.exists()) {
+          if (!notifDocSnap.exists() || notifDocSnap.data().deleted) {
             await setDoc(doc(db, 'notifications', notifId), {
               userId: currentUserId,
               title: language === 'PT' ? `⚠️ Ocorrência Registada: Cargo ${occurrence.cargoId || occurrence.cargoIdText || 'Geral'}` : `⚠️ Incident Logged: Cargo ${occurrence.cargoId || occurrence.cargoIdText || 'General'}`,
@@ -255,6 +291,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
               type: 'system',
               priority: 'high',
               read: false,
+              deleted: false,
               createdAt: serverTimestamp()
             });
           }

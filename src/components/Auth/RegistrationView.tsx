@@ -24,14 +24,14 @@ import {
   X,
   Scale
 } from 'lucide-react';
-import { auth, db, signInWithGoogle } from '../../lib/firebase';
+import { auth, db, signInWithGoogle, signInWithMicrosoft } from '../../lib/firebase';
 import { 
   createUserWithEmailAndPassword, 
   updateProfile, 
-  signInWithEmailAndPassword,
-  sendEmailVerification
+  signInWithEmailAndPassword
 } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { sendVerificationEmail } from '../../services/firebase/emailVerificationService';
+import { doc, setDoc, serverTimestamp, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../../lib/firebase';
 
 interface RegistrationViewProps {
@@ -78,6 +78,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       login: 'ENTRAR NA MINHA CONTA',
       orEnter: 'OU ENTRE COM',
       google: 'GOOGLE',
+      outlook: 'MICROSOFT / OUTLOOK',
       noAccount: 'NÃO TEM UMA CONTA? CADASTRE-SE',
       hasAccount: 'JÁ TEM UMA CONTA? ENTRE AQUI',
       features: {
@@ -130,6 +131,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       login: 'LOGIN TO MY ACCOUNT',
       orEnter: 'OR ENTER WITH',
       google: 'GOOGLE',
+      outlook: 'MICROSOFT / OUTLOOK',
       noAccount: "DON'T HAVE AN ACCOUNT? REGISTER",
       hasAccount: 'ALREADY HAVE AN ACCOUNT? LOGIN',
       features: {
@@ -219,6 +221,44 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
     return pass.length >= 6 && hasUpper && hasLower && hasDigit && hasSpecial;
   };
 
+
+
+  const handleMicrosoftSignIn = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const result = await signInWithMicrosoft();
+      const user = result.user;
+
+      const docRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(docRef);
+      const profileData = docSnap.exists() ? docSnap.data() : null;
+
+      if (!profileData || !profileData.type) {
+        setOnboardingUser(user);
+        setFormData({
+          ...formData,
+          name: user.displayName || '',
+          userName: user.displayName || '',
+          email: user.email || '',
+        });
+        setMode('onboarding');
+        setStep(0);
+        setIsRobotValid(false);
+        return;
+      }
+
+      onSuccess();
+    } catch (err: any) {
+      if (err.message?.includes('auth/popup-closed-by-user')) {
+        return;
+      }
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -277,15 +317,22 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
     setError(null);
 
     try {
+      if (mode === 'register' || mode === 'onboarding') {
+        // NUIT duplicate verification within SupplyX local database
+        const nuitQuery = query(collection(db, 'users'), where('nuit', '==', formData.nuit));
+        const nuitSnap = await getDocs(nuitQuery);
+        if (!nuitSnap.empty) {
+          setError(language === 'PT' ? 'Este NUIT já está associado a outro utilizador.' : 'This NUIT is already registered.');
+          setIsLoading(false);
+          return;
+        }
+      }
+
       if (mode === 'register') {
         const userCredential = await createUserWithEmailAndPassword(auth, formData.email.trim().toLowerCase(), formData.password);
         const user = userCredential.user;
 
         await updateProfile(user, { displayName: formData.name });
-        
-        // Pillar Check: Send verification email directly to ensure identity
-        await sendEmailVerification(user);
-        setVerificationSent(true);
 
         if (!user.uid) throw new Error("Firebase Auth UID not found after creation.");
 
@@ -307,7 +354,20 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
           fullName: type === 'logistics' ? formData.fullName : null,
           bankAccounts: [],
           mobileWallets: [],
+          emailVerified: false,
         });
+        
+        // Pillar Check: Send verification email directly to ensure identity
+        try {
+          const emailRes = await sendVerificationEmail(formData.email.trim().toLowerCase(), formData.name, language);
+          if (!emailRes.success) {
+            console.warn('[REGISTRATION] Verification email sending failed, but profile created:', emailRes.error);
+          }
+        } catch (emailErr) {
+          console.warn('[REGISTRATION] Failed to send verification email during signup:', emailErr);
+        }
+        
+        setVerificationSent(true);
       } else if (mode === 'onboarding' && onboardingUser) {
         await createProfileDoc(onboardingUser.uid, {
           name: type === 'logistics' ? formData.companyName : formData.name,
@@ -327,18 +387,11 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
           fullName: type === 'logistics' ? formData.fullName : null,
           bankAccounts: [],
           mobileWallets: [],
+          emailVerified: false,
         });
       } else {
         const userCredential = await signInWithEmailAndPassword(auth, formData.email.trim().toLowerCase(), formData.password);
         const user = userCredential.user;
-
-        if (!user.emailVerified) {
-          await sendEmailVerification(user);
-          setVerificationSent(true);
-          setIsPendingVerification(true);
-          setIsLoading(false);
-          return;
-        }
 
         const docRef = doc(db, 'users', user.uid);
         const docSnap = await getDoc(docRef);
@@ -357,12 +410,28 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
     } catch (err: any) {
       console.error(err);
       let message = err.message;
-      if (err.code === 'auth/invalid-credential') message = language === 'PT' ? 'E-mail ou senha incorretos.' : 'Invalid email or password.';
-      if (err.code === 'auth/user-not-found') message = language === 'PT' ? 'Usuário não encontrado.' : 'User not found.';
-      if (err.code === 'auth/wrong-password') message = language === 'PT' ? 'Senha incorreta.' : 'Wrong password.';
-      if (err.code === 'auth/email-already-in-use') message = language === 'PT' ? 'Este e-mail já está em uso.' : 'Email already in use.';
-      if (err.code === 'auth/invalid-email') message = t.invalidEmail;
-      if (err.code === 'auth/weak-password') message = language === 'PT' ? 'Senha muito fraca.' : 'Weak password.';
+      const code = err.code || '';
+      const msg = err.message || '';
+      const fullErrorStr = String(err.message || err.code || err || '').toLowerCase();
+
+      if (code === 'auth/invalid-credential' || msg.includes('auth/invalid-credential')) {
+        message = language === 'PT' ? 'E-mail ou senha incorretos.' : 'Invalid email or password.';
+      } else if (code === 'auth/user-not-found' || msg.includes('auth/user-not-found')) {
+        message = language === 'PT' ? 'Usuário não encontrado.' : 'User not found.';
+      } else if (code === 'auth/wrong-password' || msg.includes('auth/wrong-password')) {
+        message = language === 'PT' ? 'Senha incorreta.' : 'Wrong password.';
+      } else if (
+        code === 'auth/email-already-in-use' || 
+        msg.includes('auth/email-already-in-use') || 
+        fullErrorStr.includes('email-already-in-use') || 
+        fullErrorStr.includes('email_already_in_use')
+      ) {
+        message = language === 'PT' ? 'Este e-mail já está em uso.' : 'Email already in use.';
+      } else if (code === 'auth/invalid-email' || msg.includes('auth/invalid-email')) {
+        message = t.invalidEmail;
+      } else if (code === 'auth/weak-password' || msg.includes('auth/weak-password')) {
+        message = language === 'PT' ? 'Senha muito fraca.' : 'Weak password.';
+      }
       setError(message);
     } finally {
       setIsLoading(false);
@@ -385,6 +454,9 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
         phone: data.phone || existingData.phone || '',
         email: data.email || existingData.email || '',
         type: data.type || existingData.type || 'buyer',
+        userType: data.type || existingData.userType || existingData.type || 'buyer',
+        nuitStatus: existingData.nuitStatus || 'pending',
+        verificationStatus: existingData.verificationStatus || 'pending',
         sector: data.sector || existingData.sector || t.sectors[0],
         city: data.city || existingData.city || 'Maputo Cidade',
         updatedAt: serverTimestamp(),
@@ -437,7 +509,10 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
 
       // Force identity confirmation behavior if not verified (rare for Google, but possible)
       if (!user.emailVerified) {
-        await sendEmailVerification(user);
+        const emailRes = await sendVerificationEmail(user.email || '', user.displayName || '', language);
+        if (!emailRes.success) {
+          throw new Error(emailRes.error || (language === 'PT' ? 'Falha ao enviar e-mail de verificação.' : 'Failed to send verification email.'));
+        }
         setVerificationSent(true);
         setIsPendingVerification(true);
         return;
@@ -615,10 +690,15 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                     {language === 'PT' ? 'JÁ VERIFIQUEI MEU E-MAIL' : 'I ALREADY VERIFIED MY EMAIL'}
                   </button>
                   <button 
-                    onClick={() => {
+                    onClick={async () => {
                       if (auth.currentUser) {
-                        sendEmailVerification(auth.currentUser);
-                        setError(language === 'PT' ? 'Link de verificação reenviado!' : 'Verification link resent!');
+                        setError(null);
+                        const res = await sendVerificationEmail(auth.currentUser.email || '', auth.currentUser.displayName || '', language);
+                        if (res.success) {
+                          setError(language === 'PT' ? 'Link de verificação reenviado!' : 'Verification link resent!');
+                        } else {
+                          setError(res.error || (language === 'PT' ? 'Erro ao enviar e-mail de confirmação.' : 'Error sending confirmation email.'));
+                        }
                       }
                     }}
                     className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors"
@@ -1049,6 +1129,16 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
               <span className="text-[11px] font-black uppercase tracking-tighter">{t.google}</span>
             </button>
 
+            <button 
+              type="button"
+              onClick={handleMicrosoftSignIn}
+              disabled={isLoading}
+              className={`w-full py-4 rounded-2xl border-2 flex items-center justify-center gap-3 transition-all active:scale-95 ${isDarkMode ? 'bg-zinc-800 border-zinc-700 hover:border-zinc-500' : 'bg-zinc-50 border-zinc-200'}`}
+            >
+              <svg viewBox="0 0 23 23" className="w-4 h-4"><path fill="#F35325" d="M0 0h11v11H0z"/><path fill="#80BB00" d="M12 0h11v11H12z"/><path fill="#00A1F1" d="M0 12h11v11H0z"/><path fill="#FFB900" d="M12 12h11v11H12z"/></svg>
+              <span className="text-[11px] font-black uppercase tracking-tighter">{t.outlook}</span>
+            </button>
+
             <div className="text-center pt-2 px-2">
               <p className="text-[9px] text-zinc-500 font-bold leading-normal uppercase tracking-wider">
                 {language === 'PT' ? 'Ao prosseguir, você concorda com nossos ' : 'By continuing, you agree to our '}
@@ -1130,8 +1220,8 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                   <>
                     <p className="font-semibold text-white/90">
                       {language === 'PT'
-                        ? 'A SupplyX Lda (registada em Moçambique sob o NUIT 100293849, doravante "SupplyX" ou "Plataforma") está empenhada em salvaguardar a confidencialidade, integridade e segurança de todas as informações comerciais, fiscais e operacionais que trafegam pelo nosso sistema.'
-                        : 'SupplyX Lda (registered in Mozambique under NUIT 100293849, hereinafter "SupplyX" or "Platform") is committed to safeguarding the confidentiality, integrity, and security of all business, tax, and operational information flowing through our system.'}
+                        ? 'A SupplyX Lda (doravante "SupplyX" ou "Plataforma") está empenhada em salvaguardar a confidencialidade, integridade e segurança de todas as informações comerciais, fiscais e operacionais que trafegam pelo nosso sistema.'
+                        : 'SupplyX Lda (hereinafter "SupplyX" or "Platform") is committed to safeguarding the confidentiality, integrity, and security of all business, tax, and operational information flowing through our system.'}
                     </p>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1190,8 +1280,8 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                       </h4>
                       <p className="text-zinc-400">
                         {language === 'PT'
-                          ? 'Para exercer quaisquer direitos de acesso ou para esclarecer dúvidas sobre os nossos protocolos de cibersegurança B2B, contacte o nosso encarregado legal através do correio eletrónico: privacy@supplyx.app ou suporte pelo e-mail support@supplyx.app, ou visite a nossa sede física na Av. 25 de Setembro, Maputo, Moçambique.'
-                          : 'To exercise your rights or clarify B2B cryptographic security guidelines, please reach our DPO team directly at privacy@supplyx.app or general support at support@supplyx.app, or visit our corporate office at Av. 25 de Setembro, Maputo, Mozambique.'}
+                          ? 'Para exercer quaisquer direitos de acesso ou para esclarecer dúvidas sobre os nossos protocolos de cibersegurança B2B, contacte o nosso encarregado legal através do correio eletrónico: privacy@supplyx.app ou suporte pelo e-mail support@supplyx.app.'
+                          : 'To exercise your rights or clarify B2B cryptographic security guidelines, please reach our DPO team directly at privacy@supplyx.app or general support at support@supplyx.app.'}
                       </p>
                     </div>
                   </>
@@ -1322,3 +1412,5 @@ function FeatureItem({ icon: Icon, label, isDarkMode }: { icon: any, label: stri
     </div>
   );
 }
+
+

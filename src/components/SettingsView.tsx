@@ -119,6 +119,63 @@ export default function SettingsView({
     localStorage.setItem('supplyx_2fa_enabled', String(newValue));
   };
 
+  const handleDeleteOwnAccount = () => {
+    if (!auth.currentUser) return;
+    const userId = auth.currentUser.uid;
+    setConfirmModal({
+      isOpen: true,
+      title: language === 'PT' ? 'ELIMINAR MINHA CONTA' : 'DELETE MY ACCOUNT',
+      message: language === 'PT' 
+        ? 'ATENÇÃO: Você está prestes a remover PERMANENTEMENTE a sua conta corporativa. Todos os seus produtos, cotações, chats, faturas, veículos, rotas e dados de faturamento serão completamente eliminados das nossas bases de dados do Firebase. Esta ação NÃO pode ser desfeita. Tem certeza que deseja prosseguir?' 
+        : 'WARNING: You are about to PERMANENTELY delete your corporate account. All of your products, quotes, chats, invoices, vehicles, routes, and billing data will be completely wiped from our Firebase databases. This action CANNOT be undone. Are you sure you want to proceed?',
+      confirmText: language === 'PT' ? 'Eliminar Definitivamente' : 'Delete Permanently',
+      cancelText: language === 'PT' ? 'Cancelar' : 'Cancel',
+      onConfirm: async () => {
+        setIsCleaningAll(true);
+        try {
+          // 1. Run cascade delete to clean up ALL of current user's data
+          await cascadeDeleteUser(userId);
+          
+          // 2. Delete the user in Firebase Auth and/or Sign Out
+          const user = auth.currentUser;
+          if (user) {
+            try {
+              await user.delete();
+            } catch (authErr) {
+              console.warn('Auth user delete rejected (e.g. requires recent login). Signing out instead:', authErr);
+              await auth.signOut();
+            }
+          }
+          
+          setAlertModal({
+            isOpen: true,
+            title: language === 'PT' ? 'Conta Eliminada' : 'Account Deleted',
+            message: language === 'PT' 
+              ? 'A sua conta e todas as informações associadas foram completamente retiradas do app.' 
+              : 'Your account and all associated information have been completely removed from the app.',
+            type: 'success'
+          });
+          
+          setTimeout(() => {
+            window.location.reload();
+          }, 3000);
+        } catch (err: any) {
+          console.error('Error deleting account:', err);
+          setAlertModal({
+            isOpen: true,
+            title: 'Error',
+            message: language === 'PT' 
+              ? 'Erro ao eliminar a conta. Verifique a ligação.' 
+              : 'Error deleting account. Please verify connection.',
+            type: 'error'
+          });
+        } finally {
+          setIsCleaningAll(false);
+        }
+      }
+    });
+  };
+
   // Billing & Subscriptions Preferences
   const [subscriptionPlan, setSubscriptionPlan] = useState(() => {
     return localStorage.getItem('supplyx_subscription_plan') || 'standard';
@@ -488,7 +545,42 @@ export default function SettingsView({
       handleFirestoreError(e, OperationType.DELETE, 'chats');
     }
 
-    // 7. Delete professional user document itself
+    // 7. Delete user freight_orders
+    try {
+      const f1 = query(collection(db, 'freight_orders'), where('buyerId', '==', userId));
+      const f2 = query(collection(db, 'freight_orders'), where('assignedCarrier', '==', userId));
+      const [snapF1, snapF2] = await Promise.all([getDocs(f1), getDocs(f2)]);
+      const freightsToDelete = [...snapF1.docs, ...snapF2.docs];
+      await Promise.all(freightsToDelete.map(doc => {
+        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `freight_orders/${doc.id}`));
+      }));
+    } catch (e) {
+      console.error('Error cascading freight_orders:', e);
+    }
+
+    // 8. Delete user carrier_bids
+    try {
+      const bidsQ = query(collection(db, 'carrier_bids'), where('carrierId', '==', userId));
+      const bidsSnap = await getDocs(bidsQ);
+      await Promise.all(bidsSnap.docs.map(doc => {
+        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `carrier_bids/${doc.id}`));
+      }));
+    } catch (e) {
+      console.error('Error cascading carrier_bids:', e);
+    }
+
+    // 9. Delete user transportAssignments
+    try {
+      const assignQ = query(collection(db, 'transportAssignments'), where('carrierId', '==', userId));
+      const assignSnap = await getDocs(assignQ);
+      await Promise.all(assignSnap.docs.map(doc => {
+        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `transportAssignments/${doc.id}`));
+      }));
+    } catch (e) {
+      console.error('Error cascading transportAssignments:', e);
+    }
+
+    // 10. Delete professional user document itself
     try {
       await deleteDoc(doc(db, 'users', userId));
     } catch (e) { 
@@ -1579,6 +1671,28 @@ export default function SettingsView({
                   <p className={`text-xs font-bold leading-none ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>Maputo, MZ (Chrome)</p>
                 </div>
                 <p className="text-[9px] text-zinc-500">IP: 197.249.44.18 (Navegador Ativo)</p>
+              </div>
+
+              {/* Danger Zone: Delete Account */}
+              <div className={`p-5 rounded-2xl border border-red-500/20 bg-red-500/5 space-y-3 mt-4`}>
+                <p className="text-[8px] font-black text-red-500 uppercase tracking-widest">
+                  {language === 'PT' ? 'Zona de Perigo' : 'Danger Zone'}
+                </p>
+                <h5 className={`text-xs font-black uppercase italic ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                  {language === 'PT' ? 'Eliminar Conta Permanentemente' : 'Delete Account Permanently'}
+                </h5>
+                <p className="text-[10px] text-zinc-500 leading-normal">
+                  {language === 'PT' 
+                    ? 'Esta ação apagará de forma irreversível o seu perfil de usuário e todas as suas informações (produtos, cotações, chats, cargas e atribuições) de todas as pesquisas e bases de dados do app.' 
+                    : 'This action will irreversibly delete your user profile and all your information (products, quotations, chats, loads, and assignments) from all searches and app databases.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleDeleteOwnAccount}
+                  className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all shadow-lg shadow-red-600/10 cursor-pointer"
+                >
+                  {language === 'PT' ? 'Eliminar Minha Conta' : 'Delete My Account'}
+                </button>
               </div>
             </div>
           </div>

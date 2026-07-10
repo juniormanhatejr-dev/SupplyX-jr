@@ -84,6 +84,21 @@ export default function LogisticsView({
     return [];
   });
 
+  const [activeUserIds, setActiveUserIds] = useState<string[]>([]);
+  const [usersLoaded, setUsersLoaded] = useState(false);
+
+  useEffect(() => {
+    const q = query(collection(db, 'users'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setActiveUserIds(snapshot.docs.map(doc => doc.id));
+      setUsersLoaded(true);
+    }, (err) => {
+      console.error('Error listening to users in LogisticsView:', err);
+      setUsersLoaded(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const [selectedRequestId, setSelectedRequestId] = useState<string>(() => {
     return customRequests[0]?.id || '';
   });
@@ -386,51 +401,62 @@ export default function LogisticsView({
 
   // Map direct transport assignments to CargoRequest schema for consistent rendering and detailed interaction
   const mappedAssignmentsAsRequests = useMemo(() => {
-    return dbAssignments.map((item) => {
-      const mappedId = item.id || item.assignmentId;
-      const productsList = item.products || [];
-      const prodNames = productsList.map((p: any) => p.productName || p.name).join(', ') || 'Produtos';
-      const totalWeightVal = item.totalWeightKg || item.totalWeight || 0;
-      const totalVolVal = item.totalVolumeM3 || item.totalVolume || 0;
+    return dbAssignments
+      .filter((item) => {
+        if (!usersLoaded) return true;
+        if (item.userId && !activeUserIds.includes(item.userId) && item.userId !== auth.currentUser?.uid) {
+          return false;
+        }
+        if (item.carrierId && !activeUserIds.includes(item.carrierId) && item.carrierId !== auth.currentUser?.uid) {
+          return false;
+        }
+        return true;
+      })
+      .map((item) => {
+        const mappedId = item.id || item.assignmentId;
+        const productsList = item.products || [];
+        const prodNames = productsList.map((p: any) => p.productName || p.name).join(', ') || 'Produtos';
+        const totalWeightVal = item.totalWeightKg || item.totalWeight || 0;
+        const totalVolVal = item.totalVolumeM3 || item.totalVolume || 0;
 
-      // Translate database status to display Status (PT)
-      let displayStatus = 'Atribuído';
-      if (item.status === 'completed') displayStatus = 'Entregue';
-      else if (item.status === 'in_transit') displayStatus = 'Em trânsito';
-      else if (item.status === 'in_recolha') displayStatus = 'Em recolha';
+        // Translate database status to display Status (PT)
+        let displayStatus = 'Atribuído';
+        if (item.status === 'completed') displayStatus = 'Entregue';
+        else if (item.status === 'in_transit') displayStatus = 'Em trânsito';
+        else if (item.status === 'in_recolha') displayStatus = 'Em recolha';
 
-      return {
-        id: mappedId,
-        tipoCarga: prodNames,
-        quantidade: String(productsList.reduce((sum: number, p: any) => sum + (p.quantity || 1), 0)),
-        peso: `${totalWeightVal.toFixed(1)} kg`,
-        volume: `${totalVolVal.toFixed(2)} m³`,
-        origem: item.origin || 'Desconhecido',
-        destino: item.destination || 'Desconhecido',
-        dataColeta: item.pickupDate || item.createdAt?.substring(0, 10) || '',
-        prazoEntrega: item.deliveryDate || '',
-        observacoes: item.notes || '',
-        requester: item.userType === 'supplier' ? 'Supplier' : 'Client',
-        requesterName: item.userName || 'Remetente Direto',
-        freightResponsibility: 'Client',
-        deliveryMode: 'Expresso',
-        status: displayStatus,
-        proposalsCount: 0,
-        rating: 5,
-        assignedCarrier: item.transporterName || '',
-        buyerId: item.userType === 'buyer' ? item.userId : undefined,
-        supplierId: item.userType === 'supplier' ? item.userId : undefined,
-        userId: item.userId,
-        isDirectAssignment: true, // Custom flag to help us update in the DB!
-        items: productsList.map((p: any) => ({
-          name: p.productName || p.name,
-          quantity: String(p.quantity || 1),
-          weight: p.totalWeightKg ? `${p.totalWeightKg} kg` : undefined,
-          volume: p.totalVolumeM3 ? `${p.totalVolumeM3} m³` : undefined
-        }))
-      } as CargoRequest;
-    });
-  }, [dbAssignments]);
+        return {
+          id: mappedId,
+          tipoCarga: prodNames,
+          quantidade: String(productsList.reduce((sum: number, p: any) => sum + (p.quantity || 1), 0)),
+          peso: `${totalWeightVal.toFixed(1)} kg`,
+          volume: `${totalVolVal.toFixed(2)} m³`,
+          origem: item.origin || 'Desconhecido',
+          destino: item.destination || 'Desconhecido',
+          dataColeta: item.pickupDate || item.createdAt?.substring(0, 10) || '',
+          prazoEntrega: item.deliveryDate || '',
+          observacoes: item.notes || '',
+          requester: item.userType === 'supplier' ? 'Supplier' : 'Client',
+          requesterName: item.userName || 'Remetente Direto',
+          freightResponsibility: 'Client',
+          deliveryMode: 'Expresso',
+          status: displayStatus,
+          proposalsCount: 0,
+          rating: 5,
+          assignedCarrier: item.transporterName || '',
+          buyerId: item.userType === 'buyer' ? item.userId : undefined,
+          supplierId: item.userType === 'supplier' ? item.userId : undefined,
+          userId: item.userId,
+          isDirectAssignment: true, // Custom flag to help us update in the DB!
+          items: productsList.map((p: any) => ({
+            name: p.productName || p.name,
+            quantity: String(p.quantity || 1),
+            weight: p.totalWeightKg ? `${p.totalWeightKg} kg` : undefined,
+            volume: p.totalVolumeM3 ? `${p.totalVolumeM3} m³` : undefined
+          }))
+        } as CargoRequest;
+      });
+  }, [dbAssignments, activeUserIds, usersLoaded]);
 
   // Intercept incoming order payloads (e.g. from Purchase views)
   useEffect(() => {
@@ -476,6 +502,14 @@ export default function LogisticsView({
       const isHidden = hiddenDossiers.includes(req.id);
       if (isHidden) return false;
       
+      // Filter out if requester is deleted from Firestore
+      if (usersLoaded) {
+        const creatorId = req.buyerId || req.supplierId || req.userId;
+        if (creatorId && !activeUserIds.includes(creatorId) && creatorId !== auth.currentUser?.uid) {
+          return false;
+        }
+      }
+      
       if (userType === 'logistics') return true;
       if (userType === 'buyer') {
         return req.buyerId === auth.currentUser?.uid || req.userId === auth.currentUser?.uid;
@@ -509,7 +543,7 @@ export default function LogisticsView({
       // Secondary sorting: sort alphabetically by ID descending so newer ones are on top
       return b.id.localeCompare(a.id);
     });
-  }, [customRequests, userType, hiddenDossiers, mappedAssignmentsAsRequests, profile, auth.currentUser?.uid]);
+  }, [customRequests, userType, hiddenDossiers, mappedAssignmentsAsRequests, profile, auth.currentUser?.uid, activeUserIds, usersLoaded]);
 
   // If user is registered as logistics, default to carrier_central dashboard, otherwise 'requests_list'
   useEffect(() => {

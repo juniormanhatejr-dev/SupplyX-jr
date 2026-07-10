@@ -16,6 +16,9 @@ interface UserProfile {
   role?: 'user' | 'moderator' | 'admin' | 'superadmin';
   emailVerified: boolean;
   type: 'buyer' | 'supplier' | 'logistics';
+  userType?: string;
+  nuitStatus?: 'pending' | 'verified' | 'rejected';
+  verificationStatus?: 'pending' | 'verified' | 'rejected';
   sector: string;
   bio?: string;
   photoURL?: string;
@@ -92,12 +95,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsAdmin(false);
         });
 
-        unsubscribeProfile = onSnapshot(docRef, (docSnap) => {
+        unsubscribeProfile = onSnapshot(docRef, async (docSnap) => {
           if (docSnap.exists()) {
             const profileData = docSnap.data() as UserProfile;
+            
+            // Sync emailVerified with Firestore
+            if (user.emailVerified && !profileData.emailVerified) {
+              try {
+                await setDoc(docRef, { emailVerified: true }, { merge: true });
+              } catch (e) {
+                console.error("Failed to sync emailVerified to firestore:", e);
+              }
+            }
+
             setProfile({ 
               ...profileData, 
-              emailVerified: user.emailVerified 
+              emailVerified: user.emailVerified || profileData.emailVerified || false 
             });
 
             // Presence Initialization - ONLY if profile exists
@@ -137,15 +150,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const refreshProfile = async () => {
-    if (user) {
-      const docPath = `users/${user.uid}`;
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      const docPath = `users/${currentUser.uid}`;
       try {
-        const docRef = doc(db, 'users', user.uid);
+        try {
+          await currentUser.reload();
+          setUser(auth.currentUser);
+        } catch (reloadErr: any) {
+          console.warn('[AuthContext] Client-side currentUser.reload() failed in refreshProfile:', reloadErr.message || reloadErr);
+        }
+
+        const docRef = doc(db, 'users', currentUser.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
+          const profileData = docSnap.data();
+          const liveUser = auth.currentUser;
+          if (liveUser?.emailVerified && !profileData.emailVerified) {
+            await setDoc(docRef, { emailVerified: true }, { merge: true });
+            profileData.emailVerified = true;
+          }
           setProfile({ 
-            ...docSnap.data(), 
-            emailVerified: user.emailVerified 
+            ...profileData, 
+            emailVerified: liveUser?.emailVerified || profileData.emailVerified || false
           } as UserProfile);
         }
       } catch (err) {

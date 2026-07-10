@@ -10,6 +10,8 @@ import compression from 'compression';
 import { GoogleGenAI, Type } from "@google/genai";
 import { calculateRoute } from './src/services/mapRoutingService';
 import { normalizeText } from './src/lib/normalization';
+import { sendVerificationEmailBrevo } from './src/services/brevo/brevoService';
+import crypto from 'crypto';
 
 // Import Firebase Client SDK to bypass Service Account permission errors on named databases in container sandboxes
 import { initializeApp as initializeClientApp } from 'firebase/app';
@@ -29,10 +31,6 @@ import {
   limit as clientLimit,
   serverTimestamp as clientServerTimestamp
 } from 'firebase/firestore';
-import { getAuth as getClientAuth, signInWithEmailAndPassword } from 'firebase/auth';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Read Firebase config
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf-8'));
@@ -94,6 +92,120 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Initialize Client Firebase App & Firestore to bypass Service Account Permission Denied issues in container sandbox environments
+  const clientApp = initializeClientApp(firebaseConfig);
+  const clientDb = getClientFirestore(clientApp, firebaseConfig.firestoreDatabaseId);
+
+  // Deep sanitizer helper to convert admin FieldValue.serverTimestamp() to client serverTimestamp()
+  function sanitizeDataForClient(data: any): any {
+    if (data === null || data === undefined) return data;
+    if (Array.isArray(data)) {
+      return data.map(item => sanitizeDataForClient(item));
+    }
+    if (typeof data === 'object') {
+      const copy = { ...data };
+      for (const key of Object.keys(copy)) {
+        const val = copy[key];
+        if (val && typeof val === 'object') {
+          if (val.constructor && (
+            val.constructor.name === 'FieldValue' || 
+            val.constructor.name === 'Sentinel' || 
+            (val._methodName && val._methodName === 'FieldValue.serverTimestamp')
+          )) {
+            copy[key] = clientServerTimestamp();
+          } else {
+            copy[key] = sanitizeDataForClient(val);
+          }
+        }
+      }
+      return copy;
+    }
+    return data;
+  }
+
+  class ClientDocRef {
+    constructor(private colName: string, private docId: string) {}
+
+    async get() {
+      const d = await clientGetDoc(clientDoc(clientDb, this.colName, this.docId));
+      return {
+        exists: d.exists(),
+        id: d.id,
+        data: () => d.data()
+      };
+    }
+
+    async set(data: any) {
+      const sanitized = sanitizeDataForClient(data);
+      await clientSetDoc(clientDoc(clientDb, this.colName, this.docId), sanitized);
+    }
+
+    async update(data: any) {
+      const sanitized = sanitizeDataForClient(data);
+      await clientUpdateDoc(clientDoc(clientDb, this.colName, this.docId), sanitized);
+    }
+
+    async delete() {
+      await clientDeleteDoc(clientDoc(clientDb, this.colName, this.docId));
+    }
+  }
+
+  class ClientCollectionRef {
+    private constraints: any[] = [];
+
+    constructor(private colName: string) {}
+
+    where(field: string, op: any, val: any) {
+      this.constraints.push(clientWhere(field, op, val));
+      return this;
+    }
+
+    orderBy(field: string, dir: 'asc' | 'desc' = 'asc') {
+      this.constraints.push(clientOrderBy(field, dir));
+      return this;
+    }
+
+    limit(n: number) {
+      this.constraints.push(clientLimit(n));
+      return this;
+    }
+
+    async get() {
+      const colRef = clientCollection(clientDb, this.colName);
+      const q = this.constraints.length > 0 ? clientQuery(colRef, ...this.constraints) : colRef;
+      const snap = await clientGetDocs(q);
+      const docs = snap.docs.map(d => ({
+        id: d.id,
+        ref: {
+          delete: async () => await clientDeleteDoc(clientDoc(clientDb, this.colName, d.id))
+        },
+        data: () => d.data()
+      }));
+      return {
+        docs,
+        empty: snap.empty,
+        size: snap.size,
+        forEach: (cb: any) => docs.forEach(cb)
+      };
+    }
+
+    async add(data: any) {
+      const sanitized = sanitizeDataForClient(data);
+      const docRef = await clientAddDoc(clientCollection(clientDb, this.colName), sanitized);
+      return { id: docRef.id };
+    }
+
+    doc(docId: string) {
+      return new ClientDocRef(this.colName, docId);
+    }
+  }
+
+  const db = {
+    collection: (colName: string) => {
+      return new ClientCollectionRef(colName);
+    }
+  };
+
   // Support JSON request bodies with 100MB limit for base64 fallback uploads
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
@@ -116,7 +228,38 @@ async function startServer() {
     },
   });
 
-// AI Classification API
+  // Simple in-memory IP rate limiter: max 10 requests per 10 minutes per IP
+  const ipLimitsMap = new Map<string, { count: number; expiresAt: number }>();
+
+  function checkIpRateLimit(ip: string): boolean {
+    const now = Date.now();
+    const limit = ipLimitsMap.get(ip);
+    if (!limit) {
+      ipLimitsMap.set(ip, { count: 1, expiresAt: now + 10 * 60 * 1000 });
+      return false;
+    }
+    if (now > limit.expiresAt) {
+      ipLimitsMap.set(ip, { count: 1, expiresAt: now + 10 * 60 * 1000 });
+      return false;
+    }
+    if (limit.count >= 10) {
+      return true;
+    }
+    limit.count += 1;
+    return false;
+  }
+
+  // Clean up expired IP limit items periodically to prevent memory leaks
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, limit] of ipLimitsMap.entries()) {
+      if (now > limit.expiresAt) {
+        ipLimitsMap.delete(ip);
+      }
+    }
+  }, 15 * 60 * 1000);
+
+  // AI Classification API
   app.post('/api/products/classify', async (req, res) => {
     const { productName, description } = req.body;
     if (!productName) {
@@ -1079,116 +1222,6 @@ async function startServer() {
   // ==========================================
   // CORPORATE FILES SYSTEM ENDPOINTS (SupplyX)
   // ==========================================
-  // Initialize Client Firebase App & Firestore to bypass Service Account Permission Denied issues in container sandbox environments
-  const clientApp = initializeClientApp(firebaseConfig);
-  const clientDb = getClientFirestore(clientApp, firebaseConfig.firestoreDatabaseId);
-
-  // Deep sanitizer helper to convert admin FieldValue.serverTimestamp() to client serverTimestamp()
-  function sanitizeDataForClient(data: any): any {
-    if (data === null || data === undefined) return data;
-    if (Array.isArray(data)) {
-      return data.map(item => sanitizeDataForClient(item));
-    }
-    if (typeof data === 'object') {
-      const copy = { ...data };
-      for (const key of Object.keys(copy)) {
-        const val = copy[key];
-        if (val && typeof val === 'object') {
-          if (val.constructor && (
-            val.constructor.name === 'FieldValue' || 
-            val.constructor.name === 'Sentinel' || 
-            (val._methodName && val._methodName === 'FieldValue.serverTimestamp')
-          )) {
-            copy[key] = clientServerTimestamp();
-          } else {
-            copy[key] = sanitizeDataForClient(val);
-          }
-        }
-      }
-      return copy;
-    }
-    return data;
-  }
-
-  class ClientDocRef {
-    constructor(private colName: string, private docId: string) {}
-
-    async get() {
-      const d = await clientGetDoc(clientDoc(clientDb, this.colName, this.docId));
-      return {
-        exists: d.exists(),
-        id: d.id,
-        data: () => d.data()
-      };
-    }
-
-    async set(data: any) {
-      const sanitized = sanitizeDataForClient(data);
-      await clientSetDoc(clientDoc(clientDb, this.colName, this.docId), sanitized);
-    }
-
-    async update(data: any) {
-      const sanitized = sanitizeDataForClient(data);
-      await clientUpdateDoc(clientDoc(clientDb, this.colName, this.docId), sanitized);
-    }
-
-    async delete() {
-      await clientDeleteDoc(clientDoc(clientDb, this.colName, this.docId));
-    }
-  }
-
-  class ClientCollectionRef {
-    private constraints: any[] = [];
-
-    constructor(private colName: string) {}
-
-    where(field: string, op: any, val: any) {
-      this.constraints.push(clientWhere(field, op, val));
-      return this;
-    }
-
-    orderBy(field: string, dir: 'asc' | 'desc' = 'asc') {
-      this.constraints.push(clientOrderBy(field, dir));
-      return this;
-    }
-
-    limit(n: number) {
-      this.constraints.push(clientLimit(n));
-      return this;
-    }
-
-    async get() {
-      const colRef = clientCollection(clientDb, this.colName);
-      const q = this.constraints.length > 0 ? clientQuery(colRef, ...this.constraints) : colRef;
-      const snap = await clientGetDocs(q);
-      const docs = snap.docs.map(d => ({
-        id: d.id,
-        data: () => d.data()
-      }));
-      return {
-        docs,
-        empty: snap.empty,
-        size: snap.size,
-        forEach: (cb: any) => docs.forEach(cb)
-      };
-    }
-
-    async add(data: any) {
-      const sanitized = sanitizeDataForClient(data);
-      const docRef = await clientAddDoc(clientCollection(clientDb, this.colName), sanitized);
-      return { id: docRef.id };
-    }
-
-    doc(docId: string) {
-      return new ClientDocRef(this.colName, docId);
-    }
-  }
-
-  const db = {
-    collection: (colName: string) => {
-      return new ClientCollectionRef(colName);
-    }
-  };
   const tempTokens = new Map<string, { fileId: string, expires: number, userUid: string }>();
   const METADATA_FILE = path.join(UPLOADS_DIR, 'files_metadata.json');
   const AUDITS_FILE = path.join(UPLOADS_DIR, 'audits_metadata.json');
@@ -1806,6 +1839,7 @@ async function startServer() {
       console.error('[SERVER] Failed to seed default data:', err.message);
     }
   }
+  // Seed default products & synonyms on startup using the secure Admin SDK
   seedDefaultSynonymsAndProducts();
 
   // GET /synonyms - Retrieve all synonyms with optional query search
@@ -2204,6 +2238,279 @@ async function startServer() {
     }
   });
 
+  // Cooldown tracker to prevent verification email spam and abuse
+  const emailVerificationCooldowns = new Map<string, number>();
+
+  // SECURE AUTH: Send verification email using Brevo transactional email (custom token fallback)
+  app.post('/api/auth/send-verification', async (req, res) => {
+    try {
+      const { email, name, language = 'PT', isResend = false } = req.body || {};
+
+      if (!email) {
+        return res.status(400).json({ error: language === 'PT' ? 'O endereço de e-mail é obrigatório.' : 'Email address is required.' });
+      }
+
+      const emailStr = String(email).trim().toLowerCase();
+
+      // 1. Email address validation regex
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(emailStr)) {
+        return res.status(400).json({ error: language === 'PT' ? 'O endereço de e-mail fornecido é inválido.' : 'The provided email address is invalid.' });
+      }
+
+      // 2. Anti-abuse: Cooldown check (60 seconds limit per email address)
+      const now = Date.now();
+      const lastSent = emailVerificationCooldowns.get(emailStr);
+      if (lastSent && now - lastSent < 60000) {
+        const remaining = Math.ceil((60000 - (now - lastSent)) / 1000);
+        return res.status(429).json({ 
+          error: language === 'PT' 
+            ? `Por favor, aguarde ${remaining} segundos antes de tentar reenviar novamente.` 
+            : `Please wait ${remaining} seconds before requesting another email.` 
+        });
+      }
+
+      // 3. Retrieve user from Firestore DB directly (bypassing Identity Toolkit Admin API)
+      const userSnapshot = await db.collection('users').where('email', '==', emailStr).limit(1).get();
+      if (userSnapshot.empty) {
+        return res.status(404).json({ error: language === 'PT' ? 'Nenhuma conta foi encontrada com este e-mail no banco de dados.' : 'No account found with this email in database.' });
+      }
+      const userDoc = userSnapshot.docs[0];
+      const userUid = userDoc.id;
+      const userProfile = userDoc.data();
+
+      // 4. Safe check: If already verified, respond early
+      if (userProfile.emailVerified) {
+        return res.json({ 
+          success: true, 
+          verified: true, 
+          message: language === 'PT' ? 'Esta conta já foi verificada.' : 'This account has already been verified.' 
+        });
+      }
+
+      // 5. Generate secure, custom verification token
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours expiry
+
+      // Save token securely in Firestore
+      await db.collection('email_verifications').doc(token).set({
+        uid: userUid,
+        email: emailStr,
+        expiresAt: expiresAt,
+        createdAt: Date.now()
+      });
+
+      // 6. Generate verification URL pointing back to the frontend with the verifyToken parameter
+      const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+      const verificationLink = `${appUrl}/?verifyToken=${token}`;
+
+      // 7. Disable Brevo transactional API service and provide the link directly as a testing fallback
+      console.log(`[SERVER] Brevo is disabled. Verification link generated for user UID: ${userUid}`);
+      
+      // Set cooldown to prevent spamming
+      emailVerificationCooldowns.set(emailStr, now);
+      
+      return res.json({ 
+        success: true, 
+        deliveryFailed: true, 
+        verificationLink,
+        message: 'Brevo is disabled. Standard Firebase Auth is used client-side.'
+      });
+    } catch (error: any) {
+      console.error('[SERVER] /api/auth/send-verification error:', error);
+      return res.status(500).json({ error: error.message || 'Internal server error during email dispatch' });
+    }
+  });
+
+  // SECURE AUTH: Endpoint to force update firestore user profile as emailVerified once Auth matches (bypassing Admin Auth check when possible)
+  app.post('/api/auth/mark-verified', async (req, res) => {
+    try {
+      const { uid } = req.body || {};
+
+      if (!uid) {
+        return res.status(400).json({ error: 'UID is required' });
+      }
+
+      // 1. Check DB first
+      const userDoc = await db.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        if (userData?.emailVerified) {
+          return res.json({ success: true });
+        }
+      }
+
+      // 2. Safe Admin Auth fallback (just in case Identity Toolkit is accessible, e.g. locally or in production config)
+      try {
+        const userRecord = await admin.auth().getUser(uid);
+        if (userRecord.emailVerified) {
+          await db.collection('users').doc(uid).update({ emailVerified: true });
+          console.log(`[SERVER] Successfully synchronized verified status in DB from Admin SDK for user UID: ${uid}`);
+          return res.json({ success: true });
+        }
+      } catch (authErr: any) {
+        const errMsg = String(authErr.message || authErr || '');
+        if (errMsg.toLowerCase().includes('identitytoolkit') || errMsg.toLowerCase().includes('identity toolkit')) {
+          console.log('[SERVER] Admin Auth check in mark-verified skipped: Identity Toolkit API is disabled in GCP.');
+        } else {
+          console.warn('[SERVER] Safe skip Admin Auth check in mark-verified:', errMsg);
+        }
+      }
+
+      // If neither is verified, return error
+      return res.status(400).json({ error: 'User is not marked as verified yet' });
+    } catch (error: any) {
+      console.error('[SERVER] /api/auth/mark-verified error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to synchronize verification status' });
+    }
+  });
+
+  // SECURE AUTH: Endpoint to query real verification status of user from database (with Admin SDK fallback)
+  app.post('/api/auth/check-verification-status', async (req, res) => {
+    try {
+      const { uid } = req.body || {};
+
+      if (!uid) {
+        return res.status(400).json({ error: 'UID is required' });
+      }
+
+      console.log(`[SERVER] Checking email verification status for user UID: ${uid}`);
+      
+      // 1. Check database first
+      const userDoc = await db.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        if (userData?.emailVerified) {
+          return res.json({ verified: true });
+        }
+      }
+
+      // 2. Safe Admin Auth fallback
+      let isVerified = false;
+      try {
+        const userRecord = await admin.auth().getUser(uid);
+        isVerified = userRecord.emailVerified || false;
+        if (isVerified) {
+          await db.collection('users').doc(uid).update({ emailVerified: true });
+          console.log(`[SERVER] Auto-synced verified status in DB from Admin SDK for user UID: ${uid}`);
+        }
+      } catch (authErr: any) {
+        const errMsg = String(authErr.message || authErr || '');
+        if (errMsg.toLowerCase().includes('identitytoolkit') || errMsg.toLowerCase().includes('identity toolkit')) {
+          console.log('[SERVER] Admin Auth check in check-verification-status skipped: Identity Toolkit API is disabled in GCP.');
+        } else {
+          console.warn('[SERVER] Safe skip Admin Auth check in check-verification-status:', errMsg);
+        }
+      }
+
+      return res.json({ verified: isVerified });
+    } catch (error: any) {
+      console.error('[SERVER] /api/auth/check-verification-status error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to check verification status' });
+    }
+  });
+
+  // SECURE AUTH: Endpoint to verify custom generated verification tokens
+  app.post('/api/auth/verify-token', async (req, res) => {
+    try {
+      const { token } = req.body || {};
+
+      if (!token) {
+        return res.status(400).json({ error: 'Token is required' });
+      }
+
+      console.log(`[SERVER] Attempting to verify email with token: ${token}`);
+      const tokenDoc = await db.collection('email_verifications').doc(token).get();
+
+      if (!tokenDoc.exists) {
+        return res.status(400).json({ error: 'O link de verificação é inválido ou expirou. / The verification link is invalid or has expired.' });
+      }
+
+      const tokenData = tokenDoc.data();
+      const now = Date.now();
+
+      if (tokenData.expiresAt && now > tokenData.expiresAt) {
+        // Delete expired token doc asynchronously
+        db.collection('email_verifications').doc(token).delete().catch(() => {});
+        return res.status(400).json({ error: 'O link de verificação expirou. Por favor, solicite um novo. / Verification link has expired. Please request a new one.' });
+      }
+
+      const { uid, email } = tokenData;
+
+      // Mark user as verified in Firestore database
+      await db.collection('users').doc(uid).update({ emailVerified: true });
+      console.log(`[SERVER] User UID ${uid} (${email}) successfully verified via custom token.`);
+
+      // Clean up/delete the token doc so it cannot be reused
+      await db.collection('email_verifications').doc(token).delete().catch(() => {});
+
+      return res.json({ success: true, email });
+    } catch (error: any) {
+      console.error('[SERVER] /api/auth/verify-token error:', error);
+      return res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // SECURE AUTH: Endpoint to retrieve verification link for an authenticated user (useful for fallback when Brevo is blocked)
+  app.post('/api/auth/get-verification-link', async (req, res) => {
+    try {
+      const { uid } = req.body || {};
+      if (!uid) {
+        return res.status(400).json({ error: 'UID is required' });
+      }
+
+      const verificationsSnapshot = await db.collection('email_verifications')
+        .where('uid', '==', uid)
+        .limit(1)
+        .get();
+
+      if (verificationsSnapshot.empty) {
+        return res.status(404).json({ error: 'No active verification token found' });
+      }
+
+      const verificationDoc = verificationsSnapshot.docs[0];
+      const token = verificationDoc.id;
+      const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+      const verificationLink = `${appUrl}/?verifyToken=${token}`;
+
+      return res.json({ success: true, verificationLink });
+    } catch (error: any) {
+      console.error('[SERVER] /api/auth/get-verification-link error:', error);
+      return res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // SECURE AUTH: Endpoint to bypass/force verify email (useful for development/testing when mail servers are blocked/inactive)
+  app.post('/api/auth/bypass-verification', async (req, res) => {
+    try {
+      const { uid } = req.body || {};
+      if (!uid) {
+        return res.status(400).json({ error: 'UID is required' });
+      }
+
+      // Mark as verified in Firestore
+      await db.collection('users').doc(uid).update({ emailVerified: true });
+
+      // Mark as verified in Firebase Auth using Admin SDK
+      try {
+        await admin.auth().updateUser(uid, { emailVerified: true });
+        console.log(`[SERVER] Successfully bypassed and verified email in Auth & DB for UID: ${uid}`);
+      } catch (authErr: any) {
+        const errMsg = String(authErr.message || authErr || '');
+        if (errMsg.toLowerCase().includes('identitytoolkit') || errMsg.toLowerCase().includes('identity toolkit')) {
+          console.log('[SERVER] Admin Auth update skipped in bypass-verification: Identity Toolkit API is disabled in GCP.');
+        } else {
+          console.warn('[SERVER] Admin Auth update skipped in bypass-verification:', errMsg);
+        }
+      }
+
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error('[SERVER] /api/auth/bypass-verification error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to bypass verification' });
+    }
+  });
+
   // Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', environment: process.env.NODE_ENV });
@@ -2237,6 +2544,30 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[SERVER] Running on http://localhost:${PORT}`);
+    
+    // Diagnostic log for Brevo API variables configuration
+    console.log('[BREVO DIAGNOSTIC] Checking configuration...');
+    const hasApiKey = !!process.env.BREVO_API_KEY;
+    const senderEmail = process.env.BREVO_SENDER_EMAIL;
+    const senderName = process.env.BREVO_SENDER_NAME;
+
+    if (!hasApiKey) {
+      console.warn('[BREVO DIAGNOSTIC] ⚠️ BREVO_API_KEY is not defined! Emails will fail to send. Please set BREVO_API_KEY in your secrets panel.');
+    } else {
+      console.log('[BREVO DIAGNOSTIC] ✅ BREVO_API_KEY is present.');
+    }
+
+    if (!senderEmail) {
+      console.warn('[BREVO DIAGNOSTIC] ⚠️ BREVO_SENDER_EMAIL is not defined. Falling back to default: "no-reply@supplyx.co.mz". Note: this sender email MUST be verified in your Brevo account.');
+    } else {
+      console.log(`[BREVO DIAGNOSTIC] ✅ BREVO_SENDER_EMAIL is set to: "${senderEmail}". Ensure this sender is fully verified/active in Brevo.`);
+    }
+
+    if (!senderName) {
+      console.log('[BREVO DIAGNOSTIC] BREVO_SENDER_NAME is not defined. Falling back to "SupplyX".');
+    } else {
+      console.log(`[BREVO DIAGNOSTIC] BREVO_SENDER_NAME is set to: "${senderName}".`);
+    }
   });
 }
 

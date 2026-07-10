@@ -24,7 +24,7 @@ export interface RouteCalculationResult {
  * Polite user-agent headers required for OpenStreetMap Nominatim / OSRM and other public APIs
  */
 const HEADERS = {
-  'User-Agent': 'SupplyX-Logistics/1.0.0 (juniormanhate2@gmail.com; AI-Studio Applet Routing Integration)',
+  'User-Agent': 'SupplyX-Logistics/1.0.0 (support@supplyx.co.mz; AI-Studio Applet Routing Integration)',
   'Accept': 'application/json'
 };
 

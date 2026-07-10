@@ -12,7 +12,8 @@ import {
   MessageSquare,
   User,
   Info,
-  Tags
+  Tags,
+  ShieldCheck
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -44,7 +45,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, isDarkMode, language, userType, onLogout, logisticsSubTab }: SidebarProps) {
   const { unreadMessages, unreadNotifications } = useNotifications();
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
 
   const isLogistics = userType === 'logistics';
 
@@ -75,7 +76,7 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
 
   const nav = translations[language || 'PT'];
 
-  const filteredItems = isLogistics 
+  const baseItems = isLogistics 
     ? [
         { icon: User, label: nav.profile, originalLabel: 'Meu Perfil' },
         { icon: LayoutDashboard, label: nav.dashboard, originalLabel: 'Cockpit Analítico' },
@@ -106,6 +107,13 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
         if (item.hideForLogistics && uType === 'logistics') return false;
         return true;
       });
+
+  const filteredItems = isAdmin 
+    ? [
+        ...baseItems,
+        { icon: ShieldCheck, label: language === 'PT' ? 'Painel Fiscal' : 'Tax Panel', originalLabel: 'AdminVerifications' }
+      ]
+    : baseItems;
 
   return (
     <>

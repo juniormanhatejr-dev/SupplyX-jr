@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Menu, Plus, Moon, Sun, Globe, Loader2, ShoppingCart, User, MessageSquare } from 'lucide-react';
+import { Menu, Plus, Moon, Sun, Globe, Loader2, ShoppingCart, User, MessageSquare, CheckCircle2, AlertCircle } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
 import ProductsView from './components/ProductsView';
@@ -13,7 +13,9 @@ import NotificationsView from './components/NotificationsView';
 import ReportsView from './components/ReportsView';
 import SettingsView from './components/SettingsView';
 import RegistrationView from './components/Auth/RegistrationView';
+import AdminVerificationPanel from './components/AdminVerificationPanel';
 import LandingPageView from './components/LandingPageView';
+import EmailVerificationScreen from './components/Auth/EmailVerificationScreen';
 import ChatView from './components/ChatView';
 import CartModal from './components/CartModal';
 import ProfileModal from './components/ProfileModal';
@@ -44,10 +46,6 @@ export default function App() {
   const { user, profile, loading, refreshProfile } = useAuth();
   const hasIncompleteProfile = !!user && (!profile || !profile.type);
   
-  const { unreadMessages, unreadNotifications } = useNotifications();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('Dashboard');
-  const [showQuoteFormDirectly, setShowQuoteFormDirectly] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('supplyx_theme');
     return saved !== null ? saved === 'dark' : true; // Default to Dark Mode for premium feel
@@ -56,6 +54,74 @@ export default function App() {
     const saved = localStorage.getItem('supplyx_language');
     return (saved === 'PT' || saved === 'EN') ? saved : 'PT';
   });
+
+  const [verificationState, setVerificationState] = useState<{
+    status: 'idle' | 'verifying' | 'success' | 'error';
+    message: string;
+  }>({ status: 'idle', message: '' });
+
+  // Custom Email Verification Token handler
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('verifyToken');
+    
+    if (token) {
+      const verifyEmailToken = async () => {
+        setVerificationState({
+          status: 'verifying',
+          message: language === 'PT' ? 'A verificar o seu e-mail...' : 'Verifying your email...'
+        });
+        
+        try {
+          const response = await fetch('/api/auth/verify-token', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ token })
+          });
+          
+          const data = await response.json();
+          if (response.ok && data.success) {
+            setVerificationState({
+              status: 'success',
+              message: language === 'PT' 
+                ? 'E-mail verificado com sucesso! Carregando a sua conta...' 
+                : 'Email verified successfully! Loading your account...'
+            });
+            // Refresh user and profile to reflect changes
+            await refreshProfile();
+          } else {
+            setVerificationState({
+              status: 'error',
+              message: data.error || (language === 'PT' 
+                ? 'O link de verificação é inválido ou expirou.' 
+                : 'The verification link is invalid or has expired.')
+            });
+          }
+        } catch (err: any) {
+          console.error('Error verifying token:', err);
+          setVerificationState({
+            status: 'error',
+            message: language === 'PT' 
+              ? 'Erro de rede ao verificar o e-mail.' 
+              : 'Network error while verifying email.'
+          });
+        } finally {
+          // Remove verifyToken parameter from address bar
+          const newUrl = window.location.pathname + window.location.hash;
+          window.history.replaceState({}, document.title, newUrl);
+        }
+      };
+      
+      verifyEmailToken();
+    }
+  }, [language, refreshProfile]);
+  
+  const { unreadMessages, unreadNotifications } = useNotifications();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('Dashboard');
+  const [showQuoteFormDirectly, setShowQuoteFormDirectly] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('supplyx_theme', isDarkMode ? 'dark' : 'light');
@@ -223,11 +289,90 @@ export default function App() {
 
   const t = translations[language];
 
+  // Render custom verification state overlays if a token verification is in progress or completed
+  if (verificationState.status === 'verifying') {
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center ${isDarkMode ? 'bg-zinc-950 text-white' : 'bg-zinc-50 text-zinc-900'}`}>
+        <Loader2 className="w-12 h-12 text-brand animate-spin mb-4" />
+        <p className="text-sm font-semibold">{verificationState.message}</p>
+      </div>
+    );
+  }
+
+  if (verificationState.status === 'success') {
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center ${isDarkMode ? 'bg-zinc-950 text-white' : 'bg-zinc-50 text-zinc-900'} p-6`}>
+        <motion.div 
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className={`max-w-md w-full p-8 rounded-2xl ${isDarkMode ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-zinc-200'} shadow-xl text-center`}
+        >
+          <div className="w-16 h-16 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <CheckCircle2 className="w-10 h-10" />
+          </div>
+          <h2 className="text-xl font-bold mb-3">
+            {language === 'PT' ? 'E-mail Confirmado!' : 'Email Confirmed!'}
+          </h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
+            {verificationState.message}
+          </p>
+          <button
+            onClick={() => setVerificationState({ status: 'idle', message: '' })}
+            className="w-full py-3 px-4 bg-brand text-white rounded-xl font-semibold hover:bg-brand/95 transition-colors cursor-pointer"
+          >
+            {language === 'PT' ? 'Continuar' : 'Continue'}
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (verificationState.status === 'error') {
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center ${isDarkMode ? 'bg-zinc-950 text-white' : 'bg-zinc-50 text-zinc-900'} p-6`}>
+        <motion.div 
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className={`max-w-md w-full p-8 rounded-2xl ${isDarkMode ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-zinc-200'} shadow-xl text-center`}
+        >
+          <div className="w-16 h-16 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="w-10 h-10" />
+          </div>
+          <h2 className="text-xl font-bold mb-3">
+            {language === 'PT' ? 'Falha na Verificação' : 'Verification Failed'}
+          </h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
+            {verificationState.message}
+          </p>
+          <button
+            onClick={() => setVerificationState({ status: 'idle', message: '' })}
+            className="w-full py-3 px-4 bg-zinc-500 text-white rounded-xl font-semibold hover:bg-zinc-600 transition-colors cursor-pointer"
+          >
+            {language === 'PT' ? 'Fechar' : 'Close'}
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-zinc-950' : 'bg-zinc-50'}`}>
         <Loader2 className="w-10 h-10 text-brand animate-spin" />
       </div>
+    );
+  }
+
+  const isMicrosoftUser = user?.providerData?.some(p => p.providerId === 'microsoft.com') || user?.providerData?.some(p => p.providerId === 'google.com');
+  const isEmailVerified = user ? (user.emailVerified || profile?.emailVerified || isMicrosoftUser) : false;
+
+  if (user && !isEmailVerified) {
+    return (
+      <EmailVerificationScreen 
+        isDarkMode={isDarkMode}
+        language={language}
+        onVerified={refreshProfile}
+      />
     );
   }
 
@@ -332,6 +477,8 @@ export default function App() {
         />;
       case 'About':
         return <AboutView onNavigate={handleNavigateWithPayload} {...commonProps} />;
+      case 'AdminVerifications':
+        return <AdminVerificationPanel {...commonProps} />;
       default:
         return <DashboardView onActivateIA={handleNewRequest} {...commonProps} />;
     }

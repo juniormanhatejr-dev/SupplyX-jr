@@ -363,8 +363,8 @@ export default function App() {
     );
   }
 
-  const isMicrosoftUser = user?.providerData?.some(p => p.providerId === 'microsoft.com') || user?.providerData?.some(p => p.providerId === 'google.com');
-  const isEmailVerified = user ? (user.emailVerified || profile?.emailVerified || isMicrosoftUser) : false;
+  const isGoogleUser = user?.providerData?.some(p => p.providerId === 'google.com');
+  const isEmailVerified = user ? (user.emailVerified || profile?.emailVerified || isGoogleUser) : false;
 
   if (user && !isEmailVerified) {
     return (

@@ -87,11 +87,6 @@ googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
 
-export const microsoftProvider = new OAuthProvider('microsoft.com');
-microsoftProvider.setCustomParameters({ prompt: 'select_account' });
-
-export const signInWithMicrosoft = () => signInWithPopup(auth, microsoftProvider);
-
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',

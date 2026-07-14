@@ -446,8 +446,8 @@ export default function AboutView({ isDarkMode, language, userType, onNavigate }
               </h4>
               <p className="text-zinc-400">
                 {language === 'PT'
-                  ? 'Para exercer quaisquer direitos de acesso ou para esclarecer dúvidas sobre os nossos protocolos de cibersegurança B2B, contacte o nosso encarregado legal através do correio eletrónico: privacy@supplyx.app ou suporte pelo e-mail support@supplyx.app.'
-                  : 'To exercise your rights or clarify B2B cryptographic security guidelines, please reach our DPO team directly at privacy@supplyx.app or general support at support@supplyx.app.'}
+                  ? 'Para exercer quaisquer direitos de acesso ou para esclarecer dúvidas sobre os nossos protocolos de cibersegurança B2B, contacte o nosso encarregado legal através do correio eletrónico: supply-x@outlook.com ou suporte pelo e-mail supportsupply-x@gmail.com.'
+                  : 'To exercise your rights or clarify B2B cryptographic security guidelines, please reach our DPO team directly at supply-x@outlook.com or general support at supportsupply-x@gmail.com.'}
               </p>
             </div>
           </div>

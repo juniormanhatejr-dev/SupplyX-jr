@@ -24,7 +24,7 @@ import {
   X,
   Scale
 } from 'lucide-react';
-import { auth, db, signInWithGoogle, signInWithMicrosoft } from '../../lib/firebase';
+import { auth, db, signInWithGoogle } from '../../lib/firebase';
 import { 
   createUserWithEmailAndPassword, 
   updateProfile, 
@@ -78,7 +78,6 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       login: 'ENTRAR NA MINHA CONTA',
       orEnter: 'OU ENTRE COM',
       google: 'GOOGLE',
-      outlook: 'MICROSOFT / OUTLOOK',
       noAccount: 'NÃO TEM UMA CONTA? CADASTRE-SE',
       hasAccount: 'JÁ TEM UMA CONTA? ENTRE AQUI',
       features: {
@@ -131,7 +130,6 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       login: 'LOGIN TO MY ACCOUNT',
       orEnter: 'OR ENTER WITH',
       google: 'GOOGLE',
-      outlook: 'MICROSOFT / OUTLOOK',
       noAccount: "DON'T HAVE AN ACCOUNT? REGISTER",
       hasAccount: 'ALREADY HAVE AN ACCOUNT? LOGIN',
       features: {
@@ -223,42 +221,6 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
 
 
 
-  const handleMicrosoftSignIn = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const result = await signInWithMicrosoft();
-      const user = result.user;
-
-      const docRef = doc(db, 'users', user.uid);
-      const docSnap = await getDoc(docRef);
-      const profileData = docSnap.exists() ? docSnap.data() : null;
-
-      if (!profileData || !profileData.type) {
-        setOnboardingUser(user);
-        setFormData({
-          ...formData,
-          name: user.displayName || '',
-          userName: user.displayName || '',
-          email: user.email || '',
-        });
-        setMode('onboarding');
-        setStep(0);
-        setIsRobotValid(false);
-        return;
-      }
-
-      onSuccess();
-    } catch (err: any) {
-      if (err.message?.includes('auth/popup-closed-by-user')) {
-        return;
-      }
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -332,6 +294,10 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
         const userCredential = await createUserWithEmailAndPassword(auth, formData.email.trim().toLowerCase(), formData.password);
         const user = userCredential.user;
 
+        if (user && user.uid) {
+          localStorage.setItem(`supplyx_new_user_registration_${user.uid}`, 'true');
+        }
+
         await updateProfile(user, { displayName: formData.name });
 
         if (!user.uid) throw new Error("Firebase Auth UID not found after creation.");
@@ -369,6 +335,9 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
         
         setVerificationSent(true);
       } else if (mode === 'onboarding' && onboardingUser) {
+        if (onboardingUser.uid) {
+          localStorage.setItem(`supplyx_new_user_registration_${onboardingUser.uid}`, 'true');
+        }
         await createProfileDoc(onboardingUser.uid, {
           name: type === 'logistics' ? formData.companyName : formData.name,
           userName: type === 'buyer' ? formData.name : (type === 'logistics' ? formData.fullName : formData.userName),
@@ -1129,16 +1098,6 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
               <span className="text-[11px] font-black uppercase tracking-tighter">{t.google}</span>
             </button>
 
-            <button 
-              type="button"
-              onClick={handleMicrosoftSignIn}
-              disabled={isLoading}
-              className={`w-full py-4 rounded-2xl border-2 flex items-center justify-center gap-3 transition-all active:scale-95 ${isDarkMode ? 'bg-zinc-800 border-zinc-700 hover:border-zinc-500' : 'bg-zinc-50 border-zinc-200'}`}
-            >
-              <svg viewBox="0 0 23 23" className="w-4 h-4"><path fill="#F35325" d="M0 0h11v11H0z"/><path fill="#80BB00" d="M12 0h11v11H12z"/><path fill="#00A1F1" d="M0 12h11v11H0z"/><path fill="#FFB900" d="M12 12h11v11H12z"/></svg>
-              <span className="text-[11px] font-black uppercase tracking-tighter">{t.outlook}</span>
-            </button>
-
             <div className="text-center pt-2 px-2">
               <p className="text-[9px] text-zinc-500 font-bold leading-normal uppercase tracking-wider">
                 {language === 'PT' ? 'Ao prosseguir, você concorda com nossos ' : 'By continuing, you agree to our '}
@@ -1280,8 +1239,8 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                       </h4>
                       <p className="text-zinc-400">
                         {language === 'PT'
-                          ? 'Para exercer quaisquer direitos de acesso ou para esclarecer dúvidas sobre os nossos protocolos de cibersegurança B2B, contacte o nosso encarregado legal através do correio eletrónico: privacy@supplyx.app ou suporte pelo e-mail support@supplyx.app.'
-                          : 'To exercise your rights or clarify B2B cryptographic security guidelines, please reach our DPO team directly at privacy@supplyx.app or general support at support@supplyx.app.'}
+                          ? 'Para exercer quaisquer direitos de acesso ou para esclarecer dúvidas sobre os nossos protocolos de cibersegurança B2B, contacte o nosso encarregado legal através do correio eletrónico: supply-x@outlook.com ou suporte pelo e-mail supportsupply-x@gmail.com.'
+                          : 'To exercise your rights or clarify B2B cryptographic security guidelines, please reach our DPO team directly at supply-x@outlook.com or general support at supportsupply-x@gmail.com.'}
                       </p>
                     </div>
                   </>

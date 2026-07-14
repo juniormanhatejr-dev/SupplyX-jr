@@ -23,6 +23,7 @@ import SupplyXLogo from './components/SupplyXLogo';
 import DiagnosticOverlay from './components/DiagnosticOverlay';
 import AboutView from './components/AboutView';
 import OfflineView from './components/OfflineView';
+import MarketHealthView from './components/MarketHealthView';
 import { OptimizedImage } from './components/ui/OptimizedImage';
 import { useAuth } from './contexts/AuthContext';
 import { useCart } from './contexts/CartContext';
@@ -254,6 +255,7 @@ export default function App() {
       buyer: 'Comprador',
       tabs: {
         'Dashboard': 'Painel',
+        'Saúde do Mercado': 'Saúde do Mercado',
         'Produtos / Materiais': 'Produtos / Materiais',
         'Pedidos / Cotações': 'Pedidos / Cotações',
         'Fornecedores': 'Fornecedores',
@@ -273,6 +275,7 @@ export default function App() {
       buyer: 'Buyer',
       tabs: {
         'Dashboard': 'Dashboard',
+        'Saúde do Mercado': 'Market Health',
         'Produtos / Materiais': 'Products / Materials',
         'Pedidos / Cotações': 'Orders / Quotes',
         'Fornecedores': 'Suppliers',
@@ -410,6 +413,8 @@ export default function App() {
           onNavigate={handleNavigateWithPayload}
           {...commonProps} 
         />;
+      case 'Saúde do Mercado':
+        return <MarketHealthView isDarkMode={isDarkMode} language={language} />;
       case 'Produtos / Materiais':
         return <ProductsView 
           onNavigate={handleNavigateWithPayload} 

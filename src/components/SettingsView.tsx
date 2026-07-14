@@ -1391,29 +1391,6 @@ export default function SettingsView({
                       {notifPreferences.emailQuotes && <Check className="w-4 h-4" />}
                     </div>
                   </div>
-                  
-                  {notifPreferences.emailQuotes && (
-                    <div className="border-t border-zinc-500/10 pt-3 flex justify-end">
-                      <button
-                        type="button"
-                        disabled={testingChannel !== null}
-                        onClick={(e) => handleTestChannel('emailQuotes', e)}
-                        className="text-[9px] font-black uppercase tracking-wider text-brand hover:brightness-110 flex items-center gap-1.5 bg-brand/10 px-3 py-1.5 rounded-xl border border-brand/15 transition-all active:scale-95"
-                      >
-                        {testingChannel === 'emailQuotes' ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            {language === 'PT' ? 'Testando...' : 'Testing...'}
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-3 h-3 text-brand" />
-                            {language === 'PT' ? 'Testar Operação' : 'Test Operation'}
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
                 </div>
 
                 {/* Email Orders */}
@@ -1455,29 +1432,6 @@ export default function SettingsView({
                       {notifPreferences.emailOrders && <Check className="w-4 h-4" />}
                     </div>
                   </div>
-                  
-                  {notifPreferences.emailOrders && (
-                    <div className="border-t border-zinc-500/10 pt-3 flex justify-end">
-                      <button
-                        type="button"
-                        disabled={testingChannel !== null}
-                        onClick={(e) => handleTestChannel('emailOrders', e)}
-                        className="text-[9px] font-black uppercase tracking-wider text-brand hover:brightness-110 flex items-center gap-1.5 bg-brand/10 px-3 py-1.5 rounded-xl border border-brand/15 transition-all active:scale-95"
-                      >
-                        {testingChannel === 'emailOrders' ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            {language === 'PT' ? 'Testando...' : 'Testing...'}
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-3 h-3 text-brand" />
-                            {language === 'PT' ? 'Testar Operação' : 'Test Operation'}
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
                 </div>
 
                 {/* WhatsApp Alertas */}
@@ -1519,29 +1473,6 @@ export default function SettingsView({
                       {notifPreferences.whatsappAlerts && <Check className="w-4 h-4" />}
                     </div>
                   </div>
-                  
-                  {notifPreferences.whatsappAlerts && (
-                    <div className="border-t border-zinc-500/10 pt-3 flex justify-end">
-                      <button
-                        type="button"
-                        disabled={testingChannel !== null}
-                        onClick={(e) => handleTestChannel('whatsappAlerts', e)}
-                        className="text-[9px] font-black uppercase tracking-wider text-emerald-500 hover:brightness-110 flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/15 transition-all active:scale-95"
-                      >
-                        {testingChannel === 'whatsappAlerts' ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            {language === 'PT' ? 'Testando...' : 'Testing...'}
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-500" />
-                            {language === 'PT' ? 'Testar Operação' : 'Test Operation'}
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
                 </div>
 
                 {/* Browser Push */}
@@ -1583,29 +1514,6 @@ export default function SettingsView({
                       {notifPreferences.pushMessages && <Check className="w-4 h-4" />}
                     </div>
                   </div>
-                  
-                  {notifPreferences.pushMessages && (
-                    <div className="border-t border-zinc-500/10 pt-3 flex justify-end">
-                      <button
-                        type="button"
-                        disabled={testingChannel !== null}
-                        onClick={(e) => handleTestChannel('pushMessages', e)}
-                        className="text-[9px] font-black uppercase tracking-wider text-brand hover:brightness-110 flex items-center gap-1.5 bg-brand/10 px-3 py-1.5 rounded-xl border border-brand/15 transition-all active:scale-95"
-                      >
-                        {testingChannel === 'pushMessages' ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            {language === 'PT' ? 'Testando...' : 'Testing...'}
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-3 h-3 text-brand" />
-                            {language === 'PT' ? 'Testar Operação' : 'Test Operation'}
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

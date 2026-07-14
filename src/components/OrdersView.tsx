@@ -29,12 +29,16 @@ import {
   User,
   Truck,
   Folder,
-  FolderOpen
+  FolderOpen,
+  TrendingUp,
+  TrendingDown,
+  Coins
 } from 'lucide-react';
 import { collection, query, where, onSnapshot, addDoc, setDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import ProfileModal from './ProfileModal';
 import QuotationDocument from './QuotationDocument';
+import MarketHealthView from './MarketHealthView';
 import { notificationService } from '../services/notificationService';
 
 const availableSuppliers: any[] = [];
@@ -342,6 +346,32 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   });
   const [recentFolderOpen, setRecentFolderOpen] = useState(true);
   const [oldFolderOpen, setOldFolderOpen] = useState(false);
+
+  const [marketHealthData, setMarketHealthData] = useState<any>(null);
+  const [isMarketModalOpen, setIsMarketModalOpen] = useState(false);
+  const [loadingMarketHealth, setLoadingMarketHealth] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const fetchMarket = async () => {
+      try {
+        setLoadingMarketHealth(true);
+        const res = await fetch('/api/market-health');
+        if (res.ok) {
+          const json = await res.json();
+          if (active) setMarketHealthData(json);
+        }
+      } catch (err) {
+        console.error('Error fetching market health in OrdersView:', err);
+      } finally {
+        if (active) setLoadingMarketHealth(false);
+      }
+    };
+    fetchMarket();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const deleteQuotation = async (quoteId: string, isMock: boolean, event?: React.MouseEvent) => {
     if (event) event.stopPropagation();
@@ -3952,8 +3982,8 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           )}
         </div>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-8">
+      <div className="w-full">
+        <div className="space-y-8">
           {/* Folders Layout for Quotation Requests */}
           <div className="space-y-6">
             {/* Recent/New Folder */}
@@ -4406,15 +4436,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             </motion.div>
           ))}
         </div>
-        <div className={`${isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'} p-8 rounded-3xl border h-fit shadow-sm relative overflow-hidden group`}>
-          <h3 className={`font-black italic uppercase mb-8 relative z-10 ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{t.marketHealth}</h3>
-          <div className="space-y-8 relative z-10">
-            <div className="flex items-center gap-4"><div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-500"><CheckCircle2 className="w-6 h-6" /></div><div><p className={`text-2xl font-black leading-none ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>85</p><p className="text-xs text-zinc-500 font-bold uppercase mt-1">{t.finished}</p></div></div>
-            <div className="flex items-center gap-4"><div className="w-12 h-12 bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-600"><Clock className="w-6 h-6" /></div><div><p className={`text-2xl font-black leading-none ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>12</p><p className="text-xs text-zinc-500 font-bold uppercase mt-1">{t.pending}</p></div></div>
-            <div className="flex items-center gap-4"><div className="w-12 h-12 bg-rose-500/10 rounded-2xl flex items-center justify-center text-rose-600"><AlertCircle className="w-6 h-6" /></div><div><p className={`text-2xl font-black leading-none ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>3</p><p className="text-xs text-zinc-500 font-bold uppercase mt-1">{t.bottlenecks}</p></div></div>
-          </div>
-          <Zap className="absolute right-0 bottom-0 opacity-5 w-32 h-32 -mb-8 -mr-8 group-hover:scale-110 transition-transform" />
-        </div>
       </div>
 
       {selectedRealQuoteForPreview && (
@@ -4446,6 +4467,38 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
               <div className="max-w-[210mm] w-full bg-white rounded-2xl shadow-xl p-4 sm:p-8 text-zinc-900">
                 <QuotationDocument data={getPreviewData(selectedRealQuoteForPreview)} language={language} />
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isMarketModalOpen && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-zinc-950/85 backdrop-blur-sm animate-fadeIn">
+          <div 
+            className={`w-full max-w-[1200px] max-h-[92vh] rounded-[32px] shadow-2xl overflow-hidden flex flex-col ${
+              isDarkMode ? 'bg-zinc-900 border border-white/5 text-white' : 'bg-white text-zinc-950'
+            }`}
+          >
+            {/* Header */}
+            <div className="p-6 border-b border-zinc-200 dark:border-white/5 flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="w-6 h-6 text-supplyx-blue" />
+                <h3 className={`font-black uppercase tracking-tight italic ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                  {language === 'PT' ? 'Saúde do Mercado em Tempo Real' : 'Real-Time Market Health'}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setIsMarketModalOpen(false)}
+                className={`p-2 rounded-xl transition-all active:scale-95 ${
+                  isDarkMode ? 'hover:bg-white/5 text-zinc-400 hover:text-white' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-900'
+                }`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {/* Content */}
+            <div className="flex-grow overflow-y-auto p-4 sm:p-6 bg-zinc-50 dark:bg-zinc-950">
+              <MarketHealthView isDarkMode={isDarkMode} language={language as 'PT' | 'EN'} />
             </div>
           </div>
         </div>

@@ -137,7 +137,7 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     }
 
     const filtered = allUsers.filter(u => 
-      u.uid !== auth.currentUser?.uid && 
+      u.uid === auth.currentUser?.uid && 
       allowedTypes.includes(u.type)
     );
 

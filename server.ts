@@ -1990,6 +1990,50 @@ async function startServer() {
   // Seed default products & synonyms on startup using the secure Admin SDK
   seedDefaultSynonymsAndProducts();
 
+  // Automatic database cleanup to remove all visible users (except current tester) and their products
+  async function cleanupAllOtherUsersAndProducts() {
+    try {
+      console.log('[SERVER] Starting database cleanup of all other users and their products...');
+      const usersSnap = await db.collection('users').get();
+      const keptUserIds = new Set<string>();
+      const deletedUserIds = new Set<string>();
+
+      for (const doc of usersSnap.docs) {
+        const data = doc.data() || {};
+        const email = (data.email || '').toLowerCase();
+        const name = (data.name || '').toLowerCase();
+
+        // Keep our test user (Junior Manhate / juniormanhate2@gmail.com)
+        const isJuniorManhate = email === 'juniormanhate2@gmail.com' || email.includes('juniormanhate') || name.includes('junior manhate');
+
+        if (isJuniorManhate) {
+          keptUserIds.add(doc.id);
+          console.log(`[SERVER] Keeping user: ${doc.id} (${data.name || 'No Name'}, ${data.email || 'No Email'})`);
+        } else {
+          deletedUserIds.add(doc.id);
+          console.log(`[SERVER] Deleting user: ${doc.id} (${data.name || 'No Name'}, ${data.email || 'No Email'})`);
+          await db.collection('users').doc(doc.id).delete();
+        }
+      }
+
+      const productsSnap = await db.collection('products').get();
+      for (const doc of productsSnap.docs) {
+        const data = doc.data() || {};
+        const supplierId = data.supplierId;
+
+        if (supplierId && (deletedUserIds.has(supplierId) || !keptUserIds.has(supplierId))) {
+          console.log(`[SERVER] Deleting product registered by deleted user: ${doc.id} ("${data.name}")`);
+          await db.collection('products').doc(doc.id).delete();
+        }
+      }
+
+      console.log('[SERVER] Database cleanup completed successfully!');
+    } catch (err: any) {
+      console.error('[SERVER] Database cleanup failed:', err.message);
+    }
+  }
+  cleanupAllOtherUsersAndProducts();
+
   // GET /synonyms - Retrieve all synonyms with optional query search
   app.get(['/synonyms', '/api/synonyms'], async (req, res) => {
     try {

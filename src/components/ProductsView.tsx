@@ -291,7 +291,10 @@ export default function ProductsView({
 
   const products = useMemo(() => {
     if (!suppliersLoaded) return rawProducts;
-    return rawProducts.filter(item => activeSuppliers.includes(item.supplierId));
+    return rawProducts.filter(item => {
+      if (!item.supplierId) return true;
+      return item.supplierId === auth.currentUser?.uid || activeSuppliers.includes(item.supplierId);
+    });
   }, [rawProducts, activeSuppliers, suppliersLoaded]);
 
   // Auto-clean orphaned products (whose supplier is no longer registered in the users collection)

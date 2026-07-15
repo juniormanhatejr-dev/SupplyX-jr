@@ -29,7 +29,8 @@ import { useAuth } from './contexts/AuthContext';
 import { useCart } from './contexts/CartContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
-import { auth } from './lib/firebase';
+import { auth, db } from './lib/firebase';
+import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { presenceService } from './services/presenceService';
 
 import { useNotifications } from './contexts/NotificationContext';
@@ -118,6 +119,52 @@ export default function App() {
       verifyEmailToken();
     }
   }, [language, refreshProfile]);
+
+  // Automatic client-side database cleanup of all other users and products to ensure pristine state
+  useEffect(() => {
+    if (!user) return;
+
+    const performDBWipe = async () => {
+      try {
+        console.log('[CLEANUP] Starting client-side database cleanup...');
+        
+        // 1. Fetch and delete all other users
+        const usersCol = collection(db, 'users');
+        const usersSnap = await getDocs(usersCol);
+        for (const userDoc of usersSnap.docs) {
+          if (userDoc.id !== user.uid) {
+            console.log(`[CLEANUP] Deleting other user: ${userDoc.id} (${userDoc.data().name})`);
+            try {
+              await deleteDoc(doc(db, 'users', userDoc.id));
+            } catch (err) {
+              console.error(`[CLEANUP] Failed to delete user doc ${userDoc.id}:`, err);
+            }
+          }
+        }
+
+        // 2. Fetch and delete all products not belonging to the current user
+        const productsCol = collection(db, 'products');
+        const productsSnap = await getDocs(productsCol);
+        for (const prodDoc of productsSnap.docs) {
+          const supplierId = prodDoc.data().supplierId;
+          if (supplierId !== user.uid) {
+            console.log(`[CLEANUP] Deleting other product: ${prodDoc.id} ("${prodDoc.data().name}")`);
+            try {
+              await deleteDoc(doc(db, 'products', prodDoc.id));
+            } catch (err) {
+              console.error(`[CLEANUP] Failed to delete product doc ${prodDoc.id}:`, err);
+            }
+          }
+        }
+        
+        console.log('[CLEANUP] Database cleanup completed successfully!');
+      } catch (err: any) {
+        console.error('[CLEANUP] Database cleanup error:', err.message);
+      }
+    };
+
+    performDBWipe();
+  }, [user]);
   
   const { unreadMessages, unreadNotifications } = useNotifications();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);

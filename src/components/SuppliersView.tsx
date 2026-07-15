@@ -106,9 +106,11 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
   }, [suppliers, profile, cartItems]);
 
   const filteredSuppliers = rankedSuppliers.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.sector?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.city?.toLowerCase().includes(searchTerm.toLowerCase())
+    s.uid === auth.currentUser?.uid && (
+      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.sector?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.city?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
   const t = {

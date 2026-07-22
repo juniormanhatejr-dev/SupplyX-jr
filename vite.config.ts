@@ -16,7 +16,10 @@ export default defineConfig(({mode}) => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    publicDir: 'public',
     build: {
+      outDir: 'dist',
+      copyPublicDir: true,
       chunkSizeWarningLimit: 1200,
     },
     server: {

@@ -1,5 +1,5 @@
 import React from 'react';
-import logoImg from '../assets/images/supplyx_icon_perfect_1779289258482.png';
+import logoImg from '../assets/images/supplyx_icon_v2_1784724107890.jpg';
 
 interface SupplyXLogoProps {
   className?: string;

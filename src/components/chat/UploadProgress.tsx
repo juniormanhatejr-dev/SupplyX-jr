@@ -89,8 +89,13 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
 
           {(status === 'concluido' || status === 'falha' || status === 'cancelado') && onReset && (
             <button
+              type="button"
               onClick={onReset}
-              className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-lg transition-colors text-[10px] font-black uppercase tracking-wider"
+              className={`px-3 py-1 rounded-lg transition-all text-xs font-black uppercase tracking-wider cursor-pointer active:scale-95 ${
+                status === 'concluido' 
+                  ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' 
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+              }`}
             >
               OK
             </button>

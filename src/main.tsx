@@ -78,9 +78,11 @@ if (typeof window !== 'undefined') {
   if ('caches' in window) {
     caches.keys().then((keys) => {
       keys.forEach((key) => {
-        caches.delete(key).then(() => {
-          log(`Cleared legacy cache: ${key}`);
-        });
+        if (key !== 'supplyx-cache-v2') {
+          caches.delete(key).then(() => {
+            log(`Cleared legacy cache: ${key}`);
+          });
+        }
       });
     }).catch((err) => {
       console.warn('[Cache] Failed to clear legacy caches:', err);

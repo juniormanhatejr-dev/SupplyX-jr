@@ -252,6 +252,12 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
     }
   };
 
+  useEffect(() => {
+    if (uploadStatus === 'concluido') {
+      setTimeout(scrollToBottom, 150);
+    }
+  }, [uploadStatus]);
+
   // File Preview States
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewFileUrl, setPreviewFileUrl] = useState('');
@@ -929,7 +935,10 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
               onPause={pause}
               onResume={resume}
               onCancel={cancel}
-              onReset={reset}
+              onReset={() => {
+                reset();
+                setTimeout(scrollToBottom, 50);
+              }}
             />
           </>
         ) : (

@@ -25,6 +25,7 @@ import {
   Scale
 } from 'lucide-react';
 import { auth, db, signInWithGoogle } from '../../lib/firebase';
+import { isProfileComplete } from '../../contexts/AuthContext';
 import { 
   createUserWithEmailAndPassword, 
   updateProfile, 
@@ -42,6 +43,53 @@ interface RegistrationViewProps {
   onBack?: () => void;
   forceOnboarding?: boolean;
 }
+
+const getFriendlyAuthErrorMessage = (err: any, lang: string): string => {
+  const code = err?.code || '';
+  const msg = err?.message || '';
+  const fullStr = String(msg || code || err || '').toLowerCase();
+
+  if (code === 'auth/invalid-credential' || fullStr.includes('invalid-credential') || fullStr.includes('invalid_credential')) {
+    return lang === 'PT' 
+      ? 'E-mail ou senha incorretos. Por favor, verifique os seus dados e tente novamente.' 
+      : 'Invalid email or password. Please check your credentials and try again.';
+  }
+  if (code === 'auth/user-not-found' || fullStr.includes('user-not-found')) {
+    return lang === 'PT' 
+      ? 'Usuário não encontrado. Verifique o e-mail digitado.' 
+      : 'User not found. Please check your email.';
+  }
+  if (code === 'auth/wrong-password' || fullStr.includes('wrong-password')) {
+    return lang === 'PT' 
+      ? 'Senha incorreta. Tente novamente ou redefina sua senha.' 
+      : 'Wrong password. Please try again.';
+  }
+  if (code === 'auth/email-already-in-use' || fullStr.includes('email-already-in-use') || fullStr.includes('email_already_in_use')) {
+    return lang === 'PT' 
+      ? 'Este e-mail já está em uso por outro utilizador.' 
+      : 'Email already in use. Please sign in or use a different email.';
+  }
+  if (code === 'auth/invalid-email' || fullStr.includes('invalid-email')) {
+    return lang === 'PT' ? 'Endereço de e-mail inválido.' : 'Invalid email address.';
+  }
+  if (code === 'auth/weak-password' || fullStr.includes('weak-password')) {
+    return lang === 'PT' ? 'A senha deve ter pelo menos 6 caracteres.' : 'Password is too weak.';
+  }
+  if (code === 'auth/too-many-requests' || fullStr.includes('too-many-requests')) {
+    return lang === 'PT' 
+      ? 'Muitas tentativas de acesso. Aguarde alguns instantes e tente novamente.' 
+      : 'Too many attempts. Please try again later.';
+  }
+  if (code === 'auth/user-disabled' || fullStr.includes('user-disabled')) {
+    return lang === 'PT' ? 'Esta conta de utilizador foi desativada.' : 'This account has been disabled.';
+  }
+  if (fullStr.includes('firebase:') || fullStr.includes('auth/')) {
+    return lang === 'PT' 
+      ? 'Credenciais ou senha inválidas. Por favor, verifique os seus dados.' 
+      : 'Invalid credentials or login details. Please check your inputs.';
+  }
+  return msg || (lang === 'PT' ? 'Ocorreu um erro ao processar a solicitação.' : 'An error occurred.');
+};
 
 export default function RegistrationView({ isDarkMode, language, onSuccess, onBack, forceOnboarding }: RegistrationViewProps) {
   const [activeModal, setActiveModal] = useState<'privacy' | 'terms' | null>(null);
@@ -222,216 +270,27 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
 
 
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if ((mode === 'register' || mode === 'onboarding') && !isRobotValid) {
-      setError(t.robotError);
-      return;
-    }
-
-    if (mode === 'register' || mode === 'onboarding') {
-      if (type === 'logistics') {
-        if (!formData.fullName.trim()) {
-          setError(language === 'PT' ? 'Por favor, insira o nome completo do motorista.' : 'Please enter the full name of the driver.');
-          return;
-        }
-        if (!formData.companyName.trim()) {
-          setError(language === 'PT' ? 'Por favor, insira o nome da empresa em que trabalha.' : 'Please enter the company name you work for.');
-          return;
-        }
-        if (!formData.biNumber.trim()) {
-          setError(language === 'PT' ? 'Por favor, insira o Nº BI.' : 'Please enter your BI number.');
-          return;
-        }
-        if (!formData.licenseNumber.trim()) {
-          setError(language === 'PT' ? 'Por favor, insira o Nº da carta de condução.' : 'Please enter your driving license number.');
-          return;
-        }
-        if (!formData.address.trim()) {
-          setError(language === 'PT' ? 'Por favor, insira a localização.' : 'Please enter your location.');
-          return;
-        }
-      } else {
-        if (type === 'supplier' && !formData.userName.trim()) {
-          setError(language === 'PT' ? 'Por favor, insira o nome do responsável.' : 'Please enter responsible user name.');
-          return;
-        }
-        if (!formData.name.trim()) {
-          setError(language === 'PT' ? 'Por favor, insira o nome.' : 'Please enter the name.');
-          return;
-        }
-      }
-
-      if (formData.nuit.length !== 9) {
-        setError(language === 'PT' ? 'O NUIT deve ter exatamente 9 dígitos.' : 'NUIT must be exactly 9 digits.');
-        return;
-      }
-    }
-
-    if (mode === 'register' || (mode === 'onboarding' && formData.password.trim())) {
-      if (!validatePassword(formData.password)) {
-        setError(language === 'PT' ? 'A senha deve ter no mínimo 6 caracteres, incluindo letras maiúsculas, minúsculas, números e símbolos.' : 'Password must be at least 6 characters, including uppercase, lowercase, numbers, and symbols.');
-        return;
-      }
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      if (mode === 'register' || mode === 'onboarding') {
-        // NUIT duplicate verification within SupplyX local database
-        const nuitQuery = query(collection(db, 'users'), where('nuit', '==', formData.nuit));
-        const nuitSnap = await getDocs(nuitQuery);
-        const currentUid = mode === 'onboarding' ? onboardingUser?.uid : auth.currentUser?.uid;
-        const isOtherUser = nuitSnap.docs.some(d => d.id !== currentUid);
-        if (isOtherUser) {
-          setError(language === 'PT' ? 'Este NUIT já está associado a outro utilizador.' : 'This NUIT is already registered.');
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      if (mode === 'register') {
-        const userCredential = await createUserWithEmailAndPassword(auth, formData.email.trim().toLowerCase(), formData.password);
-        const user = userCredential.user;
-
-        if (user && user.uid) {
-          localStorage.setItem(`supplyx_new_user_registration_${user.uid}`, 'true');
-        }
-
-        await updateProfile(user, { displayName: formData.name });
-
-        if (!user.uid) throw new Error("Firebase Auth UID not found after creation.");
-
-        await createProfileDoc(user.uid, {
-          name: type === 'logistics' ? formData.companyName : formData.name,
-          userName: type === 'buyer' ? formData.name : (type === 'logistics' ? formData.fullName : formData.userName),
-          nuit: formData.nuit,
-          address: formData.address,
-          phone: formData.phone,
-          email: formData.email.trim().toLowerCase(),
-          type: type,
-          sector: formData.sector,
-          city: formData.city,
-          fleetSize: type === 'logistics' ? formData.fleetSize : null,
-          specialization: type === 'logistics' ? formData.specialization : null,
-          companyName: type === 'logistics' ? formData.companyName : null,
-          biNumber: type === 'logistics' ? formData.biNumber : null,
-          licenseNumber: type === 'logistics' ? formData.licenseNumber : null,
-          fullName: type === 'logistics' ? formData.fullName : null,
-          bankAccounts: [],
-          mobileWallets: [],
-          emailVerified: false,
-        });
-        
-        // Pillar Check: Send verification email directly to ensure identity
-        try {
-          const emailRes = await sendVerificationEmail(formData.email.trim().toLowerCase(), formData.name, language);
-          if (!emailRes.success) {
-            console.warn('[REGISTRATION] Verification email sending failed, but profile created:', emailRes.error);
-          }
-        } catch (emailErr) {
-          console.warn('[REGISTRATION] Failed to send verification email during signup:', emailErr);
-        }
-        
-        setVerificationSent(true);
-      } else if (mode === 'onboarding' && onboardingUser) {
-        if (formData.password.trim()) {
-          try {
-            await updatePassword(onboardingUser, formData.password.trim());
-          } catch (pwErr: any) {
-            console.warn('[ONBOARDING] Could not set password on Google account:', pwErr.message || pwErr);
-          }
-        }
-        if (onboardingUser.uid) {
-          localStorage.setItem(`supplyx_new_user_registration_${onboardingUser.uid}`, 'true');
-        }
-        await createProfileDoc(onboardingUser.uid, {
-          name: type === 'logistics' ? formData.companyName : formData.name,
-          userName: type === 'buyer' ? formData.name : (type === 'logistics' ? formData.fullName : formData.userName),
-          nuit: formData.nuit,
-          address: formData.address,
-          phone: formData.phone || onboardingUser.phoneNumber || '',
-          email: (onboardingUser.email || '').toLowerCase(),
-          type: type,
-          sector: formData.sector,
-          city: formData.city,
-          fleetSize: type === 'logistics' ? formData.fleetSize : null,
-          specialization: type === 'logistics' ? formData.specialization : null,
-          companyName: type === 'logistics' ? formData.companyName : null,
-          biNumber: type === 'logistics' ? formData.biNumber : null,
-          licenseNumber: type === 'logistics' ? formData.licenseNumber : null,
-          fullName: type === 'logistics' ? formData.fullName : null,
-          bankAccounts: [],
-          mobileWallets: [],
-          emailVerified: false,
-        });
-      } else {
-        const userCredential = await signInWithEmailAndPassword(auth, formData.email.trim().toLowerCase(), formData.password);
-        const user = userCredential.user;
-
-        const docRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(docRef);
-        const profileData = docSnap.exists() ? docSnap.data() : null;
-
-        if (!profileData || !profileData.type) {
-          setMode('onboarding');
-          setStep(0);
-          setOnboardingUser(user);
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      onSuccess();
-    } catch (err: any) {
-      console.error(err);
-      let message = err.message;
-      const code = err.code || '';
-      const msg = err.message || '';
-      const fullErrorStr = String(err.message || err.code || err || '').toLowerCase();
-
-      if (code === 'auth/invalid-credential' || msg.includes('auth/invalid-credential')) {
-        message = language === 'PT' ? 'E-mail ou senha incorretos.' : 'Invalid email or password.';
-      } else if (code === 'auth/user-not-found' || msg.includes('auth/user-not-found')) {
-        message = language === 'PT' ? 'Usuário não encontrado.' : 'User not found.';
-      } else if (code === 'auth/wrong-password' || msg.includes('auth/wrong-password')) {
-        message = language === 'PT' ? 'Senha incorreta.' : 'Wrong password.';
-      } else if (
-        code === 'auth/email-already-in-use' || 
-        msg.includes('auth/email-already-in-use') || 
-        fullErrorStr.includes('email-already-in-use') || 
-        fullErrorStr.includes('email_already_in_use')
-      ) {
-        message = language === 'PT' ? 'Este e-mail já está em uso.' : 'Email already in use.';
-      } else if (code === 'auth/invalid-email' || msg.includes('auth/invalid-email')) {
-        message = t.invalidEmail;
-      } else if (code === 'auth/weak-password' || msg.includes('auth/weak-password')) {
-        message = language === 'PT' ? 'Senha muito fraca.' : 'Weak password.';
-      }
-      setError(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const createProfileDoc = async (uid: string, data: any) => {
+  async function createProfileDoc(uid: string, data: any) {
     try {
       const docRef = doc(db, 'users', uid);
       const docSnap = await getDoc(docRef);
       const exists = docSnap.exists();
       const existingData = exists ? docSnap.data() : {};
 
+      const fallbackDisplayName = auth.currentUser?.displayName || (auth.currentUser?.email ? auth.currentUser.email.split('@')[0] : 'Usuário');
+      const resolvedName = data.name || data.companyName || data.fullName || data.userName || existingData.name || existingData.companyName || existingData.userName || fallbackDisplayName;
+      const resolvedUserName = data.userName || data.name || data.fullName || data.companyName || existingData.userName || existingData.name || fallbackDisplayName;
+      const resolvedCompanyName = data.companyName || existingData.companyName || (data.type === 'supplier' || data.type === 'logistics' ? resolvedName : '');
+
       const profileData: any = {
         uid,
-        name: data.name || existingData.name || '',
-        userName: data.userName || existingData.userName || '',
+        name: resolvedName,
+        userName: resolvedUserName,
+        companyName: resolvedCompanyName,
         nuit: data.nuit || existingData.nuit || '',
         address: data.address || existingData.address || '',
-        phone: data.phone || existingData.phone || '',
-        email: data.email || existingData.email || '',
+        phone: data.phone || existingData.phone || auth.currentUser?.phoneNumber || '',
+        email: (data.email || existingData.email || auth.currentUser?.email || '').toLowerCase(),
         type: data.type || existingData.type || 'buyer',
         userType: data.type || existingData.userType || existingData.type || 'buyer',
         nuitStatus: existingData.nuitStatus || 'pending',
@@ -478,6 +337,201 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
     }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if ((mode === 'register' || mode === 'onboarding') && !isRobotValid) {
+      setError(t.robotError);
+      return;
+    }
+
+    if (mode === 'register' || mode === 'onboarding') {
+      if (type === 'logistics') {
+        if (!formData.fullName.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira o nome completo do motorista.' : 'Please enter the full name of the driver.');
+          return;
+        }
+        if (!formData.companyName.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira o nome da empresa em que trabalha.' : 'Please enter the company name you work for.');
+          return;
+        }
+        if (!formData.biNumber.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira o Nº BI.' : 'Please enter your BI number.');
+          return;
+        }
+        if (!formData.licenseNumber.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira o Nº da carta de condução.' : 'Please enter your driving license number.');
+          return;
+        }
+        if (!formData.address.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira a localização.' : 'Please enter your location.');
+          return;
+        }
+      } else {
+        if (type === 'supplier' && !formData.userName.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira o nome do responsável.' : 'Please enter responsible user name.');
+          return;
+        }
+        if (!formData.name.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira o nome.' : 'Please enter the name.');
+          return;
+        }
+        if (!formData.address.trim()) {
+          setError(language === 'PT' ? 'Por favor, insira a localização / endereço.' : 'Please enter your location / address.');
+          return;
+        }
+      }
+
+      if (!formData.phone || formData.phone.trim().length < 8) {
+        setError(language === 'PT' ? 'Por favor, insira um número de telefone válido (mínimo 8 dígitos).' : 'Please enter a valid phone number (minimum 8 digits).');
+        return;
+      }
+
+      if (formData.nuit.length !== 9) {
+        setError(language === 'PT' ? 'O NUIT deve ter exatamente 9 dígitos.' : 'NUIT must be exactly 9 digits.');
+        return;
+      }
+    }
+
+    if (mode === 'register' || (mode === 'onboarding' && formData.password.trim())) {
+      if (!validatePassword(formData.password)) {
+        setError(language === 'PT' ? 'A senha deve ter no mínimo 6 caracteres, incluindo letras maiúsculas, minúsculas, números e símbolos.' : 'Password must be at least 6 characters, including uppercase, lowercase, numbers, and symbols.');
+        return;
+      }
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      if (mode === 'register' || mode === 'onboarding') {
+        const activeUid = mode === 'onboarding' ? (onboardingUser?.uid || auth.currentUser?.uid) : auth.currentUser?.uid;
+        if (formData.nuit) {
+          const nuitQuery = query(collection(db, 'users'), where('nuit', '==', formData.nuit));
+          const nuitSnap = await getDocs(nuitQuery);
+          const isOtherUser = nuitSnap.docs.some(d => d.id !== activeUid);
+          if (isOtherUser) {
+            setError(language === 'PT' ? 'Este NUIT já está associado a outro utilizador.' : 'This NUIT is already registered.');
+            setIsLoading(false);
+            return;
+          }
+        }
+      }
+
+      if (mode === 'register') {
+        const userCredential = await createUserWithEmailAndPassword(auth, formData.email.trim().toLowerCase(), formData.password);
+        const user = userCredential.user;
+
+        if (user && user.uid) {
+          localStorage.setItem(`supplyx_new_user_registration_${user.uid}`, 'true');
+        }
+
+        await updateProfile(user, { displayName: formData.name });
+
+        if (!user.uid) throw new Error("Firebase Auth UID not found after creation.");
+
+        await createProfileDoc(user.uid, {
+          name: type === 'logistics' ? formData.companyName : formData.name,
+          userName: type === 'buyer' ? formData.name : (type === 'logistics' ? formData.fullName : formData.userName),
+          nuit: formData.nuit,
+          address: formData.address,
+          phone: formData.phone,
+          email: formData.email.trim().toLowerCase(),
+          type: type,
+          sector: formData.sector,
+          city: formData.city,
+          fleetSize: type === 'logistics' ? formData.fleetSize : null,
+          specialization: type === 'logistics' ? formData.specialization : null,
+          companyName: type === 'logistics' ? formData.companyName : null,
+          biNumber: type === 'logistics' ? formData.biNumber : null,
+          licenseNumber: type === 'logistics' ? formData.licenseNumber : null,
+          fullName: type === 'logistics' ? formData.fullName : null,
+          bankAccounts: [],
+          mobileWallets: [],
+          emailVerified: false,
+        });
+        
+        try {
+          const emailRes = await sendVerificationEmail(formData.email.trim().toLowerCase(), formData.name, language);
+          if (!emailRes.success) {
+            console.warn('[REGISTRATION] Verification email sending failed, but profile created:', emailRes.error);
+          }
+        } catch (emailErr) {
+          console.warn('[REGISTRATION] Failed to send verification email during signup:', emailErr);
+        }
+        
+        setVerificationSent(true);
+      } else if (mode === 'onboarding') {
+        const activeUser = onboardingUser || auth.currentUser;
+        if (!activeUser) {
+          throw new Error(language === 'PT' ? 'Sessão expirada. Por favor, entre novamente.' : 'Session expired. Please sign in again.');
+        }
+
+        if (formData.password.trim()) {
+          try {
+            await updatePassword(activeUser, formData.password.trim());
+          } catch (pwErr: any) {
+            console.warn('[ONBOARDING] Could not set password on Google account:', pwErr.message || pwErr);
+          }
+        }
+        if (activeUser.uid) {
+          localStorage.setItem(`supplyx_new_user_registration_${activeUser.uid}`, 'true');
+        }
+        await createProfileDoc(activeUser.uid, {
+          name: type === 'logistics' ? formData.companyName : formData.name,
+          userName: type === 'buyer' ? formData.name : (type === 'logistics' ? formData.fullName : formData.userName),
+          nuit: formData.nuit,
+          address: formData.address,
+          phone: formData.phone || activeUser.phoneNumber || '',
+          email: (activeUser.email || '').toLowerCase(),
+          type: type,
+          sector: formData.sector,
+          city: formData.city,
+          fleetSize: type === 'logistics' ? formData.fleetSize : null,
+          specialization: type === 'logistics' ? formData.specialization : null,
+          companyName: type === 'logistics' ? formData.companyName : null,
+          biNumber: type === 'logistics' ? formData.biNumber : null,
+          licenseNumber: type === 'logistics' ? formData.licenseNumber : null,
+          fullName: type === 'logistics' ? formData.fullName : null,
+          bankAccounts: [],
+          mobileWallets: [],
+          emailVerified: false,
+        });
+      } else {
+        const userCredential = await signInWithEmailAndPassword(auth, formData.email.trim().toLowerCase(), formData.password);
+        const user = userCredential.user;
+
+        const docRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(docRef);
+        const profileData = docSnap.exists() ? docSnap.data() : null;
+
+        if (!docSnap.exists() || !isProfileComplete(profileData as any)) {
+          setMode('onboarding');
+          setStep(0);
+          setOnboardingUser(user);
+          setFormData(prev => ({
+            ...prev,
+            email: user.email || prev.email,
+            name: profileData?.name || user.displayName || prev.name,
+            userName: profileData?.userName || user.displayName || prev.userName,
+            phone: profileData?.phone || user.phoneNumber || prev.phone,
+            nuit: profileData?.nuit || prev.nuit || '',
+            address: profileData?.address || prev.address || '',
+          }));
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      onSuccess();
+    } catch (err: any) {
+      console.error(err);
+      setError(getFriendlyAuthErrorMessage(err, language));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleGoogleSignIn = async () => {
@@ -501,28 +555,29 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       const docSnap = await getDoc(docRef);
       const profileData = docSnap.exists() ? docSnap.data() : null;
 
-      if (!profileData || !profileData.type) {
-        setOnboardingUser(user);
-        setFormData({
-          ...formData,
-          name: user.displayName || '',
-          userName: user.displayName || '',
-          email: user.email || '',
-        });
+      if (!docSnap.exists() || !isProfileComplete(profileData as any)) {
         setMode('onboarding');
-        setStep(1); // Go straight to form if name/email is known, but maybe step 0 is better for role?
-        // Let's go to step 0 so they can pick Buyer/Supplier/Logistics
         setStep(0);
-        setIsRobotValid(false);
+        setOnboardingUser(user);
+        setFormData(prev => ({
+          ...prev,
+          email: user.email || prev.email,
+          name: profileData?.name || user.displayName || prev.name,
+          userName: profileData?.userName || user.displayName || prev.userName,
+          phone: profileData?.phone || user.phoneNumber || prev.phone,
+          nuit: profileData?.nuit || prev.nuit || '',
+          address: profileData?.address || prev.address || '',
+        }));
+        setIsLoading(false);
         return;
       }
 
       onSuccess();
     } catch (err: any) {
-      if (err.message?.includes('auth/popup-closed-by-user')) {
+      if (err.message?.includes('auth/popup-closed-by-user') || err.code === 'auth/popup-closed-by-user') {
         return;
       }
-      setError(err.message);
+      setError(getFriendlyAuthErrorMessage(err, language));
     } finally {
       setIsLoading(false);
     }
@@ -919,16 +974,14 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                               }}
                             />
                             {type === 'buyer' ? (
-                              mode === 'register' && (
-                                <InputField 
-                                  icon={Phone} 
-                                  label={t.phone} 
-                                  placeholder="+258 84 123 4567" 
-                                  isDarkMode={isDarkMode}
-                                  value={formData.phone}
-                                  onChange={(v) => setFormData({...formData, phone: v})}
-                                />
-                              )
+                              <InputField 
+                                icon={Phone} 
+                                label={t.phone} 
+                                placeholder="+258 84 123 4567" 
+                                isDarkMode={isDarkMode}
+                                value={formData.phone}
+                                onChange={(v) => setFormData({...formData, phone: v})}
+                              />
                             ) : (
                               <InputField 
                                 icon={MapPin} 

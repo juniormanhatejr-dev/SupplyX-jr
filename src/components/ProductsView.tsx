@@ -30,7 +30,7 @@ import {
   SearchCode
 } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType, uploadFile } from '../lib/firebase';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, setDoc, deleteDoc, serverTimestamp, getDocs, getDoc } from 'firebase/firestore';
 import { normalizeText, generateSearchTokens } from '../lib/normalization';
 import { getProductMetadata, MASTER_CATALOG } from '../lib/masterCatalog';
 import { classifyProduct } from '../services/geminiService';
@@ -1578,6 +1578,7 @@ export default function ProductsView({
                     ])).map(t => normalizeText(t)).filter(t => t.length > 1);
 
                     try {
+                      let savedProductId = editingProduct.id as string | undefined;
                       if (editingProduct.id) {
                         const { id, createdAt, ...rest } = editingProduct;
                         await updateDoc(doc(db, 'products', id as string), {
@@ -1606,8 +1607,42 @@ export default function ProductsView({
                           createdAt: now,
                           updatedAt: now
                         };
-                        await addDoc(collection(db, 'products'), data);
+                        const docRef = await addDoc(collection(db, 'products'), data);
+                        savedProductId = docRef.id;
                       }
+
+                      // If product is on sale, broadcast promotion notifications to all buyer users
+                      if (editingProduct.onSale && savedProductId) {
+                        try {
+                          const buyersQ = query(collection(db, 'users'), where('type', '==', 'buyer'));
+                          const buyersSnap = await getDocs(buyersQ);
+                          const buyerIds = new Set(buyersSnap.docs.map(d => d.id));
+
+                          const userTypeBuyersQ = query(collection(db, 'users'), where('userType', '==', 'buyer'));
+                          const userTypeBuyersSnap = await getDocs(userTypeBuyersQ);
+                          userTypeBuyersSnap.docs.forEach(d => buyerIds.add(d.id));
+
+                          const promoTitle = `⚡ Promoção Especial: ${editingProduct.name}`;
+                          const promoMessage = `Não perca: o produto ${editingProduct.name} está em promoção imperdível por apenas MT ${editingProduct.salePrice || editingProduct.price}!`;
+
+                          for (const buyerId of buyerIds) {
+                            if (buyerId === auth.currentUser?.uid) continue;
+                            const notifId = `notif_promo_product_${savedProductId}_for_${buyerId}`;
+                            await setDoc(doc(db, 'notifications', notifId), {
+                              userId: buyerId,
+                              title: promoTitle,
+                              message: promoMessage,
+                              type: 'promotion',
+                              priority: 'high',
+                              read: false,
+                              createdAt: serverTimestamp()
+                            }, { merge: true });
+                          }
+                        } catch (promoErr) {
+                          console.warn('Could not broadcast promo notifications to buyers:', promoErr);
+                        }
+                      }
+
                       setIsEditorOpen(false);
                     } catch (err) {
                       handleFirestoreError(err, editingProduct.id ? OperationType.UPDATE : OperationType.CREATE, 'products');

@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings, User, Bell, Shield, CreditCard, HelpCircle, Moon, Sun, Monitor, Loader2, CheckCircle2, Eye, EyeOff, ArrowLeft, Upload, FileImage, Image as ImageIcon, X, Lock, Smartphone, Receipt, AlertCircle, Check } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType, uploadFile } from '../lib/firebase';
-import { doc, updateDoc, serverTimestamp, collection, getDocs, deleteDoc, query, where } from 'firebase/firestore';
+import { doc, updateDoc, setDoc, serverTimestamp, collection, getDocs, deleteDoc, query, where } from 'firebase/firestore';
 import { sendEmailVerification, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { useAuth } from '../contexts/AuthContext';
 import ProfileModal from './ProfileModal';
+import { OptimizedImage } from './ui/OptimizedImage';
 
 interface SettingsViewProps {
   isDarkMode: boolean;
@@ -301,12 +302,12 @@ export default function SettingsView({
       setFormData({
         name: profile.name || '',
         userName: profile.userName || '',
-        nuit: profile.nuit || '',
-        phone: profile.phone || '',
+        nuit: profile.nuit || (profile as any).nuitNumber || (profile as any).taxId || '',
+        phone: profile.phone || (profile as any).phoneNumber || (profile as any).contactPhone || '',
         address: profile.address || '',
-        license: (profile as any).license || '',
+        license: profile.license || (profile as any).licenseNumber || '',
         bio: profile.bio || '',
-        city: profile.city || '',
+        city: profile.city || 'Maputo Cidade',
         photoURL: profile.photoURL || '',
         coverURL: profile.coverURL || '',
         fleetSize: String(profile.fleetSize || ''),
@@ -323,10 +324,10 @@ export default function SettingsView({
 
     setIsLoading(true);
     try {
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+      await setDoc(doc(db, 'users', auth.currentUser.uid), {
         ...formData,
         updatedAt: serverTimestamp(),
-      });
+      }, { merge: true });
       await refreshProfile();
       setSuccess(true);
       setTimeout(() => {
@@ -538,11 +539,10 @@ export default function SettingsView({
       const prodsQ = query(collection(db, 'products'), where('supplierId', '==', userId));
       const prodsSnap = await getDocs(prodsQ);
       await Promise.all(prodsSnap.docs.map(doc => {
-        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `products/${doc.id}`));
+        return deleteDoc(doc.ref).catch(err => console.warn(`Could not delete product ${doc.id}:`, err));
       }));
     } catch (e) { 
-      console.error('Error cascading products:', e); 
-      handleFirestoreError(e, OperationType.DELETE, 'products');
+      console.warn('Error cascading products:', e); 
     }
 
     // 2. Delete user quotations (where buyerId or supplierId matches)
@@ -552,11 +552,10 @@ export default function SettingsView({
       const [snap1, snap2] = await Promise.all([getDocs(quotesQ1), getDocs(quotesQ2)]);
       const quotesToDelete = [...snap1.docs, ...snap2.docs];
       await Promise.all(quotesToDelete.map(doc => {
-        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `quotations/${doc.id}`));
+        return deleteDoc(doc.ref).catch(err => console.warn(`Could not delete quotation ${doc.id}:`, err));
       }));
     } catch (e) { 
-      console.error('Error cascading quotations:', e); 
-      handleFirestoreError(e, OperationType.DELETE, 'quotations');
+      console.warn('Error cascading quotations:', e); 
     }
 
     // 3. Delete user trucks
@@ -564,11 +563,10 @@ export default function SettingsView({
       const trucksQ = query(collection(db, 'trucks'), where('ownerId', '==', userId));
       const trucksSnap = await getDocs(trucksQ);
       await Promise.all(trucksSnap.docs.map(doc => {
-        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `trucks/${doc.id}`));
+        return deleteDoc(doc.ref).catch(err => console.warn(`Could not delete truck ${doc.id}:`, err));
       }));
     } catch (e) { 
-      console.error('Error cascading trucks:', e); 
-      handleFirestoreError(e, OperationType.DELETE, 'trucks');
+      console.warn('Error cascading trucks:', e); 
     }
 
     // 4. Delete user loads
@@ -576,11 +574,10 @@ export default function SettingsView({
       const loadsQ = query(collection(db, 'loads'), where('carrierId', '==', userId));
       const loadsSnap = await getDocs(loadsQ);
       await Promise.all(loadsSnap.docs.map(doc => {
-        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `loads/${doc.id}`));
+        return deleteDoc(doc.ref).catch(err => console.warn(`Could not delete load ${doc.id}:`, err));
       }));
     } catch (e) { 
-      console.error('Error cascading loads:', e); 
-      handleFirestoreError(e, OperationType.DELETE, 'loads');
+      console.warn('Error cascading loads:', e); 
     }
 
     // 5. Delete user notifications
@@ -588,11 +585,10 @@ export default function SettingsView({
       const notifsQ = query(collection(db, 'notifications'), where('userId', '==', userId));
       const notifsSnap = await getDocs(notifsQ);
       await Promise.all(notifsSnap.docs.map(doc => {
-        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `notifications/${doc.id}`));
+        return deleteDoc(doc.ref).catch(err => console.warn(`Could not delete notification ${doc.id}:`, err));
       }));
     } catch (e) { 
-      console.error('Error cascading notifications:', e); 
-      handleFirestoreError(e, OperationType.DELETE, 'notifications');
+      console.warn('Error cascading notifications:', e); 
     }
 
     // 6. Delete user chats
@@ -603,17 +599,15 @@ export default function SettingsView({
         try {
           const msgsSnap = await getDocs(collection(db, 'chats', chatDoc.id, 'messages'));
           await Promise.all(msgsSnap.docs.map(m => {
-            return deleteDoc(m.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `chats/${chatDoc.id}/messages/${m.id}`));
+            return deleteDoc(m.ref).catch(err => console.warn(`Could not delete chat message ${m.id}:`, err));
           }));
         } catch (e) { 
-          console.error('Error deleting chat messages:', e); 
-          handleFirestoreError(e, OperationType.DELETE, `chats/${chatDoc.id}/messages`);
+          console.warn('Error deleting chat messages:', e); 
         }
-        await deleteDoc(chatDoc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `chats/${chatDoc.id}`));
+        await deleteDoc(chatDoc.ref).catch(err => console.warn(`Could not delete chat ${chatDoc.id}:`, err));
       }));
     } catch (e) { 
-      console.error('Error cascading chats:', e); 
-      handleFirestoreError(e, OperationType.DELETE, 'chats');
+      console.warn('Error cascading chats:', e); 
     }
 
     // 7. Delete user freight_orders
@@ -623,10 +617,10 @@ export default function SettingsView({
       const [snapF1, snapF2] = await Promise.all([getDocs(f1), getDocs(f2)]);
       const freightsToDelete = [...snapF1.docs, ...snapF2.docs];
       await Promise.all(freightsToDelete.map(doc => {
-        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `freight_orders/${doc.id}`));
+        return deleteDoc(doc.ref).catch(err => console.warn(`Could not delete freight order ${doc.id}:`, err));
       }));
     } catch (e) {
-      console.error('Error cascading freight_orders:', e);
+      console.warn('Error cascading freight_orders:', e);
     }
 
     // 8. Delete user carrier_bids
@@ -634,10 +628,10 @@ export default function SettingsView({
       const bidsQ = query(collection(db, 'carrier_bids'), where('carrierId', '==', userId));
       const bidsSnap = await getDocs(bidsQ);
       await Promise.all(bidsSnap.docs.map(doc => {
-        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `carrier_bids/${doc.id}`));
+        return deleteDoc(doc.ref).catch(err => console.warn(`Could not delete bid ${doc.id}:`, err));
       }));
     } catch (e) {
-      console.error('Error cascading carrier_bids:', e);
+      console.warn('Error cascading carrier_bids:', e);
     }
 
     // 9. Delete user transportAssignments
@@ -645,18 +639,17 @@ export default function SettingsView({
       const assignQ = query(collection(db, 'transportAssignments'), where('carrierId', '==', userId));
       const assignSnap = await getDocs(assignQ);
       await Promise.all(assignSnap.docs.map(doc => {
-        return deleteDoc(doc.ref).catch(err => handleFirestoreError(err, OperationType.DELETE, `transportAssignments/${doc.id}`));
+        return deleteDoc(doc.ref).catch(err => console.warn(`Could not delete assignment ${doc.id}:`, err));
       }));
     } catch (e) {
-      console.error('Error cascading transportAssignments:', e);
+      console.warn('Error cascading transportAssignments:', e);
     }
 
-    // 10. Delete professional user document itself
+    // 10. Delete user document itself
     try {
       await deleteDoc(doc(db, 'users', userId));
     } catch (e) { 
-      console.error('Error deleting user profile:', e); 
-      handleFirestoreError(e, OperationType.DELETE, `users/${userId}`);
+      console.warn('Error deleting user profile doc:', e); 
     }
   };
 
@@ -917,28 +910,63 @@ export default function SettingsView({
       />
 
       {activeSection === null ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {sections.map((section) => (
-            <button 
-              key={section.id}
-              onClick={() => setActiveSection(section.id)}
-              className={`p-6 rounded-3xl border text-left transition-all hover:scale-[1.02] active:scale-98 ${
-                isDarkMode ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800' : 'bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
-              }`}
-            >
+        <div className="space-y-6">
+          {profile && (
+            <div className={`p-6 rounded-3xl border flex flex-col sm:flex-row sm:items-center justify-between gap-6 ${
+              isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'
+            }`}>
               <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${section.bg}`}>
-                  <section.icon className={`w-7 h-7 ${section.color}`} />
+                <div className={`w-16 h-16 rounded-2xl overflow-hidden shrink-0 border-2 ${isDarkMode ? 'border-zinc-800 bg-zinc-950' : 'border-zinc-100 bg-zinc-50'} flex items-center justify-center`}>
+                  {profile.photoURL ? (
+                    <OptimizedImage src={profile.photoURL} alt={profile.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-2xl font-black text-brand italic">{profile.name?.charAt(0) || '?'}</span>
+                  )}
                 </div>
-                <div>
-                  <h3 className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
-                    {section.title}
-                  </h3>
-                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">{section.desc}</p>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className={`text-base font-black italic uppercase tracking-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{profile.name}</h3>
+                    <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-brand/10 text-brand">{profile.type || 'comprador'}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-zinc-500">
+                    <span><strong className={isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}>NUIT:</strong> {profile.nuit || (language === 'PT' ? 'Não informado' : 'Not specified')}</span>
+                    <span><strong className={isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}>TEL:</strong> {profile.phone || (language === 'PT' ? 'Não informado' : 'Not specified')}</span>
+                    <span><strong className={isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}>EMAIL:</strong> {profile.email || '—'}</span>
+                  </div>
                 </div>
               </div>
-            </button>
-          ))}
+              <button
+                onClick={() => setActiveSection('profile')}
+                className="px-5 py-3 rounded-2xl bg-brand text-white font-black text-[10px] uppercase tracking-widest italic hover:bg-brand/90 transition-all shadow-lg shadow-brand/20 self-start sm:self-center shrink-0"
+              >
+                {language === 'PT' ? 'Editar Dados' : 'Edit Profile'}
+              </button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {sections.map((section) => (
+              <button 
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
+                className={`p-6 rounded-3xl border text-left transition-all hover:scale-[1.02] active:scale-98 ${
+                  isDarkMode ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800' : 'bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50'
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${section.bg}`}>
+                    <section.icon className={`w-7 h-7 ${section.color}`} />
+                  </div>
+                  <div>
+                    <h3 className={`text-sm font-black uppercase italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                      {section.title}
+                    </h3>
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">{section.desc}</p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       ) : activeSection === 'profile' ? (
         <motion.form 

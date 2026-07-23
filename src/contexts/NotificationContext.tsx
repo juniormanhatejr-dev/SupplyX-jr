@@ -154,7 +154,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
     if (!user) return;
 
     const currentUserId = user.uid;
-    const userRole = profile?.type;
+    const userRole = profile?.type || profile?.userType || 'buyer';
+    const isBuyerRole = !userRole || userRole === 'buyer';
     
     // Automatic system alerts constructor to populate Firestore notifications specifically for currentUserId
     const syncRealtimeAlerts = async () => {
@@ -176,33 +177,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
             read: false,
             createdAt: serverTimestamp()
           });
-          
-          // Since they are receiving the welcome notification for the first time,
-          // they should NOT receive any other automated notifications instantly.
-          // So we return early and skip generating the rest of the alerts right now!
-          return;
-        }
-
-        // Check if user is newly registered (created within the last 10 minutes)
-        // to prevent instant automated notifications inundation upon registration.
-        const isNewUserLocal = localStorage.getItem(`supplyx_new_user_registration_${currentUserId}`) === 'true';
-        let isNewUserTime = false;
-        if (profile?.createdAt) {
-          const createdAtAny = profile.createdAt as any;
-          const createdTime = createdAtAny?.toMillis ? createdAtAny.toMillis() : new Date(createdAtAny).getTime();
-          const ageInMs = Date.now() - createdTime;
-          if (ageInMs < 10 * 60 * 1000) {
-            isNewUserTime = true;
-          }
-        }
-
-        if (isNewUserLocal || isNewUserTime) {
-          // Newly registered user, skip other automatic alerts to let them see only the welcome message first
-          return;
         }
 
         // 1. Check for suppliers - ONLY for buyers
-        if (userRole === 'buyer') {
+        if (isBuyerRole) {
           const qSuppliers = query(collection(db, 'users'), where('type', '==', 'supplier'));
           const suppliersSnap = await getDocs(qSuppliers);
           for (const sDoc of suppliersSnap.docs) {
@@ -228,7 +206,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
         }
 
         // 2. Check for products on sale - ONLY for buyers
-        if (userRole === 'buyer') {
+        if (isBuyerRole) {
           const qProducts = query(collection(db, 'products'), where('onSale', '==', true));
           const productsSnap = await getDocs(qProducts);
           for (const pDoc of productsSnap.docs) {
@@ -401,28 +379,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
       
       // Filter out deleted notifications (which we mark with deleted: true to prevent automatic re-creation by syncRealtimeAlerts)
       fetched = fetched.filter((n: any) => !n.deleted);
-
-      // Enforce: When a user registers, they must only receive/see the welcome notification first, and no other notifications instantly.
-      const isNewUserLocal = localStorage.getItem(`supplyx_new_user_registration_${currentUserId}`) === 'true';
-      let isNewUserTime = false;
-      if (profile?.createdAt) {
-        const createdAtAny = profile.createdAt as any;
-        const createdTime = createdAtAny?.toMillis ? createdAtAny.toMillis() : new Date(createdAtAny).getTime();
-        const ageInMs = Date.now() - createdTime;
-        if (ageInMs < 10 * 60 * 1000) {
-          isNewUserTime = true;
-        }
-      }
-
-      if (isNewUserLocal || isNewUserTime) {
-        // Suppress all automated background notifications and show only the welcome one
-        fetched = fetched.filter((n: any) => 
-          n.id === `notif_welcome_${currentUserId}` || 
-          (n.type || '').toLowerCase() === 'welcome' || 
-          n.title.includes('Bem-vindo') || 
-          n.title.includes('Welcome')
-        );
-      }
 
       // SIFT out buyer-specific alerts (promotion/supplier) if current user is supplier or logistics
       if (userRole && userRole !== 'buyer') {

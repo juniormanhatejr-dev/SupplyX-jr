@@ -116,7 +116,15 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
           const docRef = doc(db, 'users', userId);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
-            setProfile(docSnap.data() as UserProfile);
+            const raw = docSnap.data() as any;
+            setProfile({
+              ...raw,
+              phone: raw.phone || raw.phoneNumber || raw.contactPhone || '',
+              nuit: raw.nuit || raw.nuitNumber || raw.taxId || '',
+              email: raw.email || raw.userEmail || '',
+              license: raw.license || raw.licenseNumber || '',
+              address: raw.address || '',
+            } as UserProfile);
           }
         } catch (error) {
           console.error("Error fetching profile:", error);
@@ -250,65 +258,85 @@ export default function ProfileModal({ userId, isOpen, onClose, onEdit, onViewCa
                       
                       <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
-                          <MapPin className="w-3.5 h-3.5" />
+                          <Phone className="w-3.5 h-3.5" />
                         </div>
-                        <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{profile.address || (language === 'PT' ? 'Maputo, Moçambique' : 'Maputo, Mozambique')}</p>
+                        <div>
+                          <p className="text-[8px] font-black text-zinc-500 uppercase">Telefone / WhatsApp</p>
+                          <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                            {profile.phone || (language === 'PT' ? 'Não informado' : 'Not specified')}
+                          </p>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
-                          <Phone className="w-3.5 h-3.5" />
+                          <Mail className="w-3.5 h-3.5" />
                         </div>
-                        <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{profile.phone || '+258 84 000 0000'}</p>
+                        <div>
+                          <p className="text-[8px] font-black text-zinc-500 uppercase">E-mail Corporativo</p>
+                          <p className={`text-xs font-bold leading-tight truncate ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                            {profile.email || (language === 'PT' ? 'Não informado' : 'Not specified')}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
+                          <MapPin className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <p className="text-[8px] font-black text-zinc-500 uppercase">Endereço / Localização</p>
+                          <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                            {profile.address || (profile.city ? `${profile.city}, Moçambique` : (language === 'PT' ? 'Maputo, Moçambique' : 'Maputo, Mozambique'))}
+                          </p>
+                        </div>
                       </div>
                     </div>
 
                     <div className="space-y-4">
                       <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{t.company}</h4>
                       
-                      {profile.type === 'logistics' ? (
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
+                          <Building2 className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex flex-col">
+                          <p className="text-[8px] font-black text-zinc-500 uppercase">Identificação Fiscal (NUIT)</p>
+                          <p className={`text-xs font-black tracking-wider font-mono ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>
+                            {profile.nuit ? `NUIT: ${profile.nuit}` : (language === 'PT' ? 'NUIT: Não informado' : 'NUIT: Not specified')}
+                          </p>
+                          {profile.license && (
+                            <p className={`text-[9px] font-bold uppercase tracking-tight mt-0.5 ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                              {t.license}: {profile.license}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {profile.type === 'logistics' && (
                         <>
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
-                              <Briefcase className="w-3.5 h-3.5" />
-                            </div>
-                            <div>
+                          {profile.specialization && (
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
+                                <Briefcase className="w-3.5 h-3.5" />
+                              </div>
+                              <div>
                                 <p className="text-[8px] font-black text-zinc-500 uppercase">{t.specialization}</p>
                                 <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{profile.specialization}</p>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
-                              <Database className="w-3.5 h-3.5" />
-                            </div>
-                            <div>
+                          )}
+                          {profile.fleetSize && (
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
+                                <Database className="w-3.5 h-3.5" />
+                              </div>
+                              <div>
                                 <p className="text-[8px] font-black text-zinc-500 uppercase">{t.fleetSize}</p>
                                 <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{profile.fleetSize} Veículos</p>
+                              </div>
                             </div>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
-                              <Mail className="w-3.5 h-3.5" />
-                            </div>
-                            <p className={`text-xs font-bold leading-tight truncate ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>{profile.email}</p>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
-                              <Building2 className="w-3.5 h-3.5" />
-                            </div>
-                            <div className="flex flex-col">
-                              <p className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}>NUIT: {profile.nuit}</p>
-                              {profile.license && (
-                                <p className={`text-[9px] font-bold uppercase tracking-tight mt-1 ${isDarkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                  {t.license}: {profile.license}
-                                </p>
-                              )}
-                            </div>
-                          </div>
+                          )}
                         </>
                       )}
                     </div>

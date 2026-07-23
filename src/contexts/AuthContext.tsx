@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { presenceService } from '../services/presenceService';
 
-interface UserProfile {
+export interface UserProfile {
   uid: string;
   name: string;
   userName?: string;
@@ -32,7 +32,25 @@ interface UserProfile {
   fleetSize?: string | number;
   specialization?: string;
   companyName?: string;
+  fullName?: string;
+  status?: 'online' | 'offline' | 'away';
   id?: string;
+}
+
+export function isProfileComplete(p: UserProfile | null | undefined): boolean {
+  if (!p) return false;
+  const hasType = Boolean(p.type || p.userType);
+  const hasName = Boolean(
+    (p.name && p.name.trim().length > 0) || 
+    (p.userName && p.userName.trim().length > 0) || 
+    (p.companyName && p.companyName.trim().length > 0) || 
+    (p.fullName && p.fullName.trim().length > 0)
+  );
+  const hasNuit = Boolean(p.nuit && String(p.nuit).trim().length === 9);
+  const hasPhone = Boolean(p.phone && String(p.phone).trim().length >= 8);
+  const hasAddress = Boolean(p.address && String(p.address).trim().length > 0);
+
+  return hasType && hasName && hasNuit && hasPhone && hasAddress;
 }
 
 interface AuthContextType {
@@ -99,6 +117,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unsubscribeProfile = onSnapshot(docRef, async (docSnap) => {
           if (docSnap.exists()) {
             const profileData = docSnap.data() as UserProfile;
+            const effectiveType = (profileData.type || profileData.userType) as 'buyer' | 'supplier' | 'logistics' | undefined;
+            const displayNameFallback = user.displayName || (user.email ? user.email.split('@')[0] : '');
             
             // Sync emailVerified with Firestore
             if (user.emailVerified && !profileData.emailVerified) {
@@ -109,8 +129,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             }
 
+            const resolvedName = profileData.name || profileData.companyName || profileData.userName || profileData.fullName || displayNameFallback;
+            const resolvedUserName = profileData.userName || profileData.name || profileData.fullName || profileData.companyName || displayNameFallback;
+            const resolvedPhone = profileData.phone || (profileData as any).phoneNumber || (profileData as any).contactPhone || user.phoneNumber || '';
+            const resolvedNuit = profileData.nuit || (profileData as any).nuitNumber || (profileData as any).taxId || '';
+            const resolvedAddress = profileData.address || '';
+            const resolvedLicense = profileData.license || (profileData as any).licenseNumber || '';
+
             setProfile({ 
               ...profileData, 
+              name: resolvedName,
+              userName: resolvedUserName,
+              companyName: profileData.companyName || (effectiveType === 'logistics' || effectiveType === 'supplier' ? resolvedName : ''),
+              email: profileData.email || user.email || '',
+              phone: resolvedPhone,
+              nuit: resolvedNuit,
+              address: resolvedAddress,
+              license: resolvedLicense,
+              type: effectiveType as any,
+              userType: effectiveType as any,
               emailVerified: user.emailVerified || profileData.emailVerified || false 
             });
 
@@ -122,12 +159,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             }
           } else {
+            // Profile document does not exist yet in Firestore - set profile to null so onboarding is triggered
             setProfile(null);
-            // If profile is deleted/non-existent, stop presence monitoring
-            if (unsubscribePresence) {
-              unsubscribePresence();
-              unsubscribePresence = null;
-            }
           }
           setLoading(false);
         }, (error) => {

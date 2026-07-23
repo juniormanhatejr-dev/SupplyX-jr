@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Settings, User, Bell, Shield, CreditCard, HelpCircle, Moon, Sun, Monitor, Loader2, CheckCircle2, Eye, EyeOff, ArrowLeft, Upload, FileImage, Image as ImageIcon, X, Lock, Smartphone, Receipt, AlertCircle, Check } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType, uploadFile } from '../lib/firebase';
 import { doc, updateDoc, serverTimestamp, collection, getDocs, deleteDoc, query, where } from 'firebase/firestore';
-import { sendEmailVerification } from 'firebase/auth';
+import { sendEmailVerification, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { useAuth } from '../contexts/AuthContext';
 import ProfileModal from './ProfileModal';
 
@@ -122,33 +122,66 @@ export default function SettingsView({
   const [passwdLoading, setPasswdLoading] = useState(false);
   const [passwdError, setPasswdError] = useState('');
 
-  const handleSavePassword = (e: React.FormEvent) => {
+  const handleSavePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswdError('');
     setPasswdSuccess(false);
 
-    if (!currentPassword) {
-      setPasswdError(language === 'PT' ? 'Por favor, introduza a senha atual.' : 'Please enter your current password.');
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setPasswdError(language === 'PT' ? 'Nenhum utilizador com sessão ativa.' : 'No active user logged in.');
       return;
     }
+
+    const isGoogleUser = currentUser.providerData.some(p => p.providerId === 'google.com');
+
+    if (!isGoogleUser && !currentPassword) {
+      setPasswdError(language === 'PT' ? 'Por favor, introduza a sua senha atual.' : 'Please enter your current password.');
+      return;
+    }
+
     if (newPassword.length < 6) {
       setPasswdError(language === 'PT' ? 'A nova senha deve ter no mínimo 6 caracteres.' : 'The new password must be at least 6 characters long.');
       return;
     }
+
     if (newPassword !== confirmPassword) {
       setPasswdError(language === 'PT' ? 'As senhas não coincidem.' : 'Passwords do not match.');
       return;
     }
 
     setPasswdLoading(true);
-    setTimeout(() => {
-      setPasswdLoading(false);
+    try {
+      if (currentPassword && currentUser.email) {
+        try {
+          const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+          await reauthenticateWithCredential(currentUser, credential);
+        } catch (reauthErr: any) {
+          console.warn('Reauth check:', reauthErr);
+          if (reauthErr.code === 'auth/wrong-password' || reauthErr.code === 'auth/invalid-credential') {
+            setPasswdError(language === 'PT' ? 'A senha atual está incorreta.' : 'Current password is incorrect.');
+            setPasswdLoading(false);
+            return;
+          }
+        }
+      }
+
+      await updatePassword(currentUser, newPassword);
       setPasswdSuccess(true);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      setTimeout(() => setPasswdSuccess(false), 2500);
-    }, 1000);
+      setTimeout(() => setPasswdSuccess(false), 3500);
+    } catch (err: any) {
+      console.error('Password change error:', err);
+      if (err.code === 'auth/requires-recent-login') {
+        setPasswdError(language === 'PT' ? 'Por segurança, termine a sessão e entre novamente para alterar a senha.' : 'For security, please sign out and sign in again before changing password.');
+      } else {
+        setPasswdError(err.message || (language === 'PT' ? 'Erro ao atualizar a senha.' : 'Error updating password.'));
+      }
+    } finally {
+      setPasswdLoading(false);
+    }
   };
 
   const handleToggle2FA = () => {
@@ -1630,9 +1663,25 @@ export default function SettingsView({
             <div className="md:col-span-2 space-y-6">
               {/* Reset password form */}
               <form onSubmit={handleSavePassword} className="space-y-4">
-                <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
-                  {language === 'PT' ? 'Alterar Senha do Usuário' : 'Update Log-in Credentials'}
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                    {language === 'PT' ? 'Alterar Senha do Usuário' : 'Update Log-in Credentials'}
+                  </h4>
+                  {auth.currentUser?.providerData.some(p => p.providerId === 'google.com') && (
+                    <span className="text-[9px] font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+                      {language === 'PT' ? 'Autenticado via Google' : 'Google Authenticated'}
+                    </span>
+                  )}
+                </div>
+
+                <div className={`p-3 rounded-xl border text-[11px] leading-relaxed flex items-start gap-2.5 ${isDarkMode ? 'bg-zinc-950/60 border-zinc-800 text-zinc-400' : 'bg-blue-50/50 border-blue-100 text-zinc-600'}`}>
+                  <Shield className="w-4 h-4 text-brand shrink-0 mt-0.5" />
+                  <p>
+                    {language === 'PT' 
+                      ? 'Nota de Segurança: Por normas criptográficas de proteção de dados, senhas atuais são encriptadas (hash de via única) e nunca armazenadas em texto legível. Digite a sua senha atual abaixo para validar a alteração ou utilize o ícone do olho para conferir o que digita.'
+                      : 'Security Note: Passwords are encrypted (one-way hash) and never stored in plain text. Please type your current password below to authorize changes or use the eye icon to verify typed characters.'}
+                  </p>
+                </div>
 
                 {passwdError && (
                   <div className="p-4 bg-red-500/10 text-red-500 border border-red-500/20 rounded-2xl flex items-center gap-3 text-xs font-bold leading-normal">
@@ -1651,14 +1700,21 @@ export default function SettingsView({
                 {/* Password input block 1: Current Password */}
                 <div className={`p-4 rounded-2xl border flex items-center justify-between relative ${isDarkMode ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}`}>
                   <div className="flex-1">
-                    <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block mb-1">
-                      {language === 'PT' ? 'Senha Atual' : 'Current Password'}
-                    </label>
+                    <div className="flex items-center justify-between pr-2 mb-1">
+                      <label className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block">
+                        {language === 'PT' ? 'Senha Atual' : 'Current Password'}
+                      </label>
+                      {auth.currentUser?.providerData.some(p => p.providerId === 'google.com') && (
+                        <span className="text-[8px] font-bold text-zinc-500 uppercase">
+                          ({language === 'PT' ? 'Opcional para contas Google' : 'Optional for Google logins'})
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       <Lock className="w-4 h-4 text-zinc-500 mb-0.5" />
                       <input 
                         type={showCurrentPassword ? "text" : "password"} 
-                        placeholder="••••••••••••"
+                        placeholder={language === 'PT' ? "Digite a sua senha atual..." : "Type your current password..."}
                         value={currentPassword}
                         onChange={(e) => setCurrentPassword(e.target.value)}
                         className={`bg-transparent outline-none border-none font-bold text-xs flex-1 w-full ${isDarkMode ? 'text-white' : 'text-zinc-900'}`}
@@ -1669,6 +1725,7 @@ export default function SettingsView({
                     type="button"
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
                     className="p-1 px-2 text-zinc-500 hover:text-white transition-colors cursor-pointer flex items-center justify-center z-10"
+                    title={showCurrentPassword ? "Ocultar senha" : "Mostrar senha"}
                   >
                     {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>

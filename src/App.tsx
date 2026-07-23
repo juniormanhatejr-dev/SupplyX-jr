@@ -603,11 +603,11 @@ export default function App() {
           logisticsSubTab={logisticsSubTab}
         />
         
-        <main className="lg:ml-64 transition-all pb-12 pt-28 relative z-10">
-          <header className={`fixed top-4 left-4 right-4 lg:left-[calc(16rem+1rem)] lg:right-4 z-40 rounded-[32px] border transition-all duration-500 glass-dark ${
+        <main className="lg:ml-64 transition-all pb-12 pt-20 sm:pt-28 px-2 sm:px-6 relative z-10">
+          <header className={`fixed top-2 left-2 right-2 sm:top-4 sm:left-4 sm:right-4 lg:left-[calc(16rem+1rem)] lg:right-4 z-40 rounded-[20px] sm:rounded-[32px] border transition-all duration-500 glass-dark ${
             isDarkMode ? ' border-white/5 shadow-3xl' : 'bg-white/80 border-zinc-100 shadow-sm shadow-zinc-200/20'
           }`}>
-            <div className="w-full h-20 flex items-center justify-between px-6 sm:px-10">
+            <div className="w-full h-14 sm:h-20 flex items-center justify-between px-3 sm:px-6 md:px-10">
               <div className="flex items-center gap-6">
                 <button 
                   onClick={() => setIsSidebarOpen(true)}

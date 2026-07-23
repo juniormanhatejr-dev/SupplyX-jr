@@ -529,8 +529,8 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
   };
 
   return (
-    <div className={`min-h-screen flex flex-col items-center py-12 px-4 relative overflow-y-auto ${isDarkMode ? 'bg-supplyx-deep text-white' : 'bg-zinc-50 text-zinc-900'}`}>
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-supplyx-blue/5 blur-[120px] rounded-full -z-10" />
+    <div className={`min-h-screen flex flex-col items-center py-6 sm:py-12 px-3 sm:px-6 relative overflow-y-auto ${isDarkMode ? 'bg-supplyx-deep text-white' : 'bg-zinc-50 text-zinc-900'}`}>
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] max-w-full bg-supplyx-blue/5 blur-[120px] rounded-full -z-10 pointer-events-none" />
       
       {(onBack || (mode === 'onboarding' && step === 1)) && (
         <button 
@@ -541,7 +541,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
               onBack();
             }
           }}
-          className="fixed top-8 left-8 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors z-50"
+          className="fixed top-4 left-4 sm:top-8 sm:left-8 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors z-50 bg-zinc-900/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 sm:bg-transparent sm:p-0 sm:border-none"
         >
           <ChevronDown className="w-4 h-4 rotate-90" />
           Voltar
@@ -551,12 +551,12 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-lg mb-8 text-center shrink-0"
+        className="w-full max-w-lg mb-6 sm:mb-8 text-center shrink-0 mt-8 sm:mt-0"
       >
         <div className="flex items-center justify-center gap-4 mb-4">
           <SupplyXLogo size="lg" isDark={true} />
         </div>
-        <p className="text-supplyx-blue text-[10px] font-black uppercase tracking-widest leading-none bg-supplyx-blue/10 px-4 py-1.5 rounded-full inline-block border border-supplyx-blue/20">{t.slogan}</p>
+        <p className="text-supplyx-blue text-[9px] sm:text-[10px] font-black uppercase tracking-widest leading-none bg-supplyx-blue/10 px-3 sm:px-4 py-1.5 rounded-full inline-block border border-supplyx-blue/20">{t.slogan}</p>
         
         {verificationSent && (
           <motion.div 
@@ -585,43 +585,52 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
         )}
       </motion.div>
 
-      <div className={`w-full max-w-2xl rounded-[48px] border shadow-3xl relative mb-12 ${isDarkMode ? 'bg-zinc-900/80 border-white/5 backdrop-blur-xl' : 'bg-white border-zinc-100 shadow-zinc-200'}`}>
+      <div className={`w-full max-w-2xl rounded-[28px] sm:rounded-[48px] border shadow-3xl relative mb-12 ${isDarkMode ? 'bg-zinc-900/80 border-white/5 backdrop-blur-xl' : 'bg-white border-zinc-100 shadow-zinc-200'}`}>
         {!(mode === 'onboarding' && step === 0) && (
           <div className="flex p-1 gap-1 border-b border-white/5">
             <button 
               type="button"
-              onClick={() => setType('buyer')}
-              className={`flex-1 py-4 flex flex-col items-center gap-1.5 rounded-[24px] transition-all relative ${type === 'buyer' ? (isDarkMode ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-supplyx-blue/10 border border-supplyx-blue/20') : 'opacity-40 grayscale'}`}
+              onClick={() => {
+                setType('buyer');
+                if (mode === 'login') setMode('register');
+              }}
+              className={`flex-1 py-2.5 sm:py-4 px-1 flex flex-col items-center justify-center gap-1 rounded-[18px] sm:rounded-[24px] transition-all relative ${type === 'buyer' ? (isDarkMode ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-supplyx-blue/10 border border-supplyx-blue/20') : 'opacity-40 grayscale'}`}
             >
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${type === 'buyer' ? 'bg-supplyx-blue text-white shadow-lg shadow-supplyx-blue/20' : 'bg-zinc-700/50'}`}>
-                <User className="w-4 h-4" />
+              <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center ${type === 'buyer' ? 'bg-supplyx-blue text-white shadow-lg shadow-supplyx-blue/20' : 'bg-zinc-700/50'}`}>
+                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
-              <p className={`text-[10px] font-black uppercase tracking-tight ${type === 'buyer' ? (isDarkMode ? 'text-white' : 'text-supplyx-blue') : 'text-zinc-500'}`}>{t.buyerTitle}</p>
+              <p className={`text-[9px] sm:text-[10px] font-black uppercase tracking-tight text-center truncate w-full ${type === 'buyer' ? (isDarkMode ? 'text-white' : 'text-supplyx-blue') : 'text-zinc-500'}`}>{t.buyerTitle}</p>
             </button>
             <button 
               type="button"
-              onClick={() => setType('supplier')}
-              className={`flex-1 py-4 flex flex-col items-center gap-1.5 rounded-[24px] transition-all relative ${type === 'supplier' ? (isDarkMode ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-supplyx-blue/10 border border-supplyx-blue/20') : 'opacity-40 grayscale'}`}
+              onClick={() => {
+                setType('supplier');
+                if (mode === 'login') setMode('register');
+              }}
+              className={`flex-1 py-2.5 sm:py-4 px-1 flex flex-col items-center justify-center gap-1 rounded-[18px] sm:rounded-[24px] transition-all relative ${type === 'supplier' ? (isDarkMode ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-supplyx-blue/10 border border-supplyx-blue/20') : 'opacity-40 grayscale'}`}
             >
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${type === 'supplier' ? 'bg-supplyx-blue text-white shadow-lg shadow-supplyx-blue/20' : 'bg-zinc-700/50'}`}>
-                <Package className="w-4 h-4" />
+              <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center ${type === 'supplier' ? 'bg-supplyx-blue text-white shadow-lg shadow-supplyx-blue/20' : 'bg-zinc-700/50'}`}>
+                <Package className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
-              <p className={`text-[10px] font-black uppercase tracking-tight ${type === 'supplier' ? (isDarkMode ? 'text-white' : 'text-supplyx-blue') : 'text-zinc-500'}`}>{t.supplierTitle}</p>
+              <p className={`text-[9px] sm:text-[10px] font-black uppercase tracking-tight text-center truncate w-full ${type === 'supplier' ? (isDarkMode ? 'text-white' : 'text-supplyx-blue') : 'text-zinc-500'}`}>{t.supplierTitle}</p>
             </button>
             <button 
               type="button"
-              onClick={() => setType('logistics')}
-              className={`flex-1 py-4 flex flex-col items-center gap-1.5 rounded-[24px] transition-all relative ${type === 'logistics' ? (isDarkMode ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-supplyx-blue/10 border border-supplyx-blue/20') : 'opacity-40 grayscale'}`}
+              onClick={() => {
+                setType('logistics');
+                if (mode === 'login') setMode('register');
+              }}
+              className={`flex-1 py-2.5 sm:py-4 px-1 flex flex-col items-center justify-center gap-1 rounded-[18px] sm:rounded-[24px] transition-all relative ${type === 'logistics' ? (isDarkMode ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-supplyx-blue/10 border border-supplyx-blue/20') : 'opacity-40 grayscale'}`}
             >
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${type === 'logistics' ? 'bg-supplyx-blue text-white shadow-lg shadow-supplyx-blue/20' : 'bg-zinc-700/50'}`}>
-                <Activity className="w-4 h-4" />
+              <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center ${type === 'logistics' ? 'bg-supplyx-blue text-white shadow-lg shadow-supplyx-blue/20' : 'bg-zinc-700/50'}`}>
+                <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
-              <p className={`text-[10px] font-black uppercase tracking-tight ${type === 'logistics' ? (isDarkMode ? 'text-white' : 'text-supplyx-blue') : 'text-zinc-500'}`}>{t.logisticsTitle}</p>
+              <p className={`text-[9px] sm:text-[10px] font-black uppercase tracking-tight text-center truncate w-full ${type === 'logistics' ? (isDarkMode ? 'text-white' : 'text-supplyx-blue') : 'text-zinc-500'}`}>{t.logisticsTitle}</p>
             </button>
           </div>
         )}
 
-        <div className="p-8">
+        <div className="p-4 sm:p-8">
           <AnimatePresence mode="wait">
             {isPendingVerification ? (
               <motion.div 

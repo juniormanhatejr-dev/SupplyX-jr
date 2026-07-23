@@ -28,7 +28,8 @@ import { auth, db, signInWithGoogle } from '../../lib/firebase';
 import { 
   createUserWithEmailAndPassword, 
   updateProfile, 
-  signInWithEmailAndPassword
+  signInWithEmailAndPassword,
+  updatePassword
 } from 'firebase/auth';
 import { sendVerificationEmail } from '../../services/firebase/emailVerificationService';
 import { doc, setDoc, serverTimestamp, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
@@ -268,7 +269,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
       }
     }
 
-    if (mode === 'register') {
+    if (mode === 'register' || (mode === 'onboarding' && formData.password.trim())) {
       if (!validatePassword(formData.password)) {
         setError(language === 'PT' ? 'A senha deve ter no mínimo 6 caracteres, incluindo letras maiúsculas, minúsculas, números e símbolos.' : 'Password must be at least 6 characters, including uppercase, lowercase, numbers, and symbols.');
         return;
@@ -283,7 +284,9 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
         // NUIT duplicate verification within SupplyX local database
         const nuitQuery = query(collection(db, 'users'), where('nuit', '==', formData.nuit));
         const nuitSnap = await getDocs(nuitQuery);
-        if (!nuitSnap.empty) {
+        const currentUid = mode === 'onboarding' ? onboardingUser?.uid : auth.currentUser?.uid;
+        const isOtherUser = nuitSnap.docs.some(d => d.id !== currentUid);
+        if (isOtherUser) {
           setError(language === 'PT' ? 'Este NUIT já está associado a outro utilizador.' : 'This NUIT is already registered.');
           setIsLoading(false);
           return;
@@ -335,6 +338,13 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
         
         setVerificationSent(true);
       } else if (mode === 'onboarding' && onboardingUser) {
+        if (formData.password.trim()) {
+          try {
+            await updatePassword(onboardingUser, formData.password.trim());
+          } catch (pwErr: any) {
+            console.warn('[ONBOARDING] Could not set password on Google account:', pwErr.message || pwErr);
+          }
+        }
         if (onboardingUser.uid) {
           localStorage.setItem(`supplyx_new_user_registration_${onboardingUser.uid}`, 'true');
         }
@@ -994,20 +1004,18 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                     />
                   )}
 
-                  {mode !== 'onboarding' && (
-                    <div className="grid grid-cols-1 gap-4">
-                      <InputField 
-                        icon={Lock} 
-                        label={t.password} 
-                        placeholder={t.passwordPlaceholder} 
-                        isDarkMode={isDarkMode}
-                        type="password"
-                        badge={mode === 'register' ? t.taxIdBadge : undefined}
-                        value={formData.password}
-                        onChange={(v) => setFormData({...formData, password: v})}
-                      />
-                    </div>
-                  )}
+                  <div className="grid grid-cols-1 gap-4">
+                    <InputField 
+                      icon={Lock} 
+                      label={t.password} 
+                      placeholder={t.passwordPlaceholder} 
+                      isDarkMode={isDarkMode}
+                      type="password"
+                      badge={mode === 'onboarding' ? (language === 'PT' ? 'OPCIONAL' : 'OPTIONAL') : (mode === 'register' ? t.taxIdBadge : undefined)}
+                      value={formData.password}
+                      onChange={(v) => setFormData({...formData, password: v})}
+                    />
+                  </div>
 
                   {(mode === 'register' || mode === 'onboarding') && (
                     <div className={`p-4 rounded-2xl border flex items-center justify-between gap-4 select-none transition-all ${isRobotValid ? (isDarkMode ? 'bg-emerald-500/10 border-emerald-500/50' : 'bg-emerald-50 border-emerald-200') : (isDarkMode ? 'bg-white/5 border-white/5' : 'bg-zinc-50 border-zinc-100')}`}>
@@ -1051,7 +1059,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                           setMode(mode === 'login' ? 'register' : 'login');
                           setError(null);
                         }}
-                        className="w-full text-center py-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-brand transition-colors"
+                        className="w-full text-center py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:text-red-400 transition-colors cursor-pointer"
                       >
                         {mode === 'login' ? t.noAccount : t.hasAccount}
                       </button>

@@ -590,10 +590,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
           <div className="flex p-1 gap-1 border-b border-white/5">
             <button 
               type="button"
-              onClick={() => {
-                setType('buyer');
-                if (mode === 'login') setMode('register');
-              }}
+              onClick={() => setType('buyer')}
               className={`flex-1 py-2.5 sm:py-4 px-1 flex flex-col items-center justify-center gap-1 rounded-[18px] sm:rounded-[24px] transition-all relative ${type === 'buyer' ? (isDarkMode ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-supplyx-blue/10 border border-supplyx-blue/20') : 'opacity-40 grayscale'}`}
             >
               <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center ${type === 'buyer' ? 'bg-supplyx-blue text-white shadow-lg shadow-supplyx-blue/20' : 'bg-zinc-700/50'}`}>
@@ -603,10 +600,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
             </button>
             <button 
               type="button"
-              onClick={() => {
-                setType('supplier');
-                if (mode === 'login') setMode('register');
-              }}
+              onClick={() => setType('supplier')}
               className={`flex-1 py-2.5 sm:py-4 px-1 flex flex-col items-center justify-center gap-1 rounded-[18px] sm:rounded-[24px] transition-all relative ${type === 'supplier' ? (isDarkMode ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-supplyx-blue/10 border border-supplyx-blue/20') : 'opacity-40 grayscale'}`}
             >
               <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center ${type === 'supplier' ? 'bg-supplyx-blue text-white shadow-lg shadow-supplyx-blue/20' : 'bg-zinc-700/50'}`}>
@@ -616,10 +610,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
             </button>
             <button 
               type="button"
-              onClick={() => {
-                setType('logistics');
-                if (mode === 'login') setMode('register');
-              }}
+              onClick={() => setType('logistics')}
               className={`flex-1 py-2.5 sm:py-4 px-1 flex flex-col items-center justify-center gap-1 rounded-[18px] sm:rounded-[24px] transition-all relative ${type === 'logistics' ? (isDarkMode ? 'bg-supplyx-blue/20 border border-supplyx-blue/30' : 'bg-supplyx-blue/10 border border-supplyx-blue/20') : 'opacity-40 grayscale'}`}
             >
               <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center ${type === 'logistics' ? 'bg-supplyx-blue text-white shadow-lg shadow-supplyx-blue/20' : 'bg-zinc-700/50'}`}>

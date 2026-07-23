@@ -1,4 +1,4 @@
-const CACHE_NAME = 'supplyx-cache-v1';
+const CACHE_NAME = 'supplyx-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -44,27 +44,29 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Network-First Strategy: Always fetch fresh code from server first, update cache, fall back to cache when offline
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((response) => {
-        // Cache static basic responses
-        if (response && response.status === 200 && response.type === 'basic') {
-          const responseToCache = response.clone();
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
           });
         }
-        return response;
-      }).catch(() => {
-        // Fallback for offline mode when navigation occurs
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
-      });
-    })
+        return networkResponse;
+      })
+      .catch(() => {
+        return caches.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          if (event.request.mode === 'navigate') {
+            return caches.match('/index.html');
+          }
+        });
+      })
   );
 });
+
 

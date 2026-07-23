@@ -68,6 +68,7 @@ if (typeof window !== 'undefined') {
     navigator.serviceWorker.register('/sw.js')
       .then((reg) => {
         log('Service Worker registered successfully with scope: ' + reg.scope);
+        reg.update().catch(() => {});
       })
       .catch((err) => {
         console.warn('[ServiceWorker] Main bundle registration failed:', err);

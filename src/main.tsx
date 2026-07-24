@@ -1,11 +1,11 @@
-import {StrictMode} from 'react';
-import {createRoot} from 'react-dom/client';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-import {AuthProvider} from './contexts/AuthContext';
-import {CartProvider} from './contexts/CartContext';
-import {NotificationProvider} from './contexts/NotificationContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { CartProvider } from './contexts/CartContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import ErrorBoundary from './components/ErrorBoundary';
 
 // Global DOM Shield to prevent removeChild / insertBefore crashes from browsers, extensions (like translation engines) or React concurrent reconciliator
@@ -63,16 +63,19 @@ log('Initializing main.tsx bundle execution');
 // Register the Service Worker and clear old cache if needed for complete PWA compliance
 if (typeof window !== 'undefined') {
   log(`Reading environment variables... PROD: ${(import.meta as any).env.PROD}`);
-  
+
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js')
-      .then((reg) => {
-        log('Service Worker registered successfully with scope: ' + reg.scope);
-        reg.update().catch(() => {});
-      })
-      .catch((err) => {
-        console.warn('[ServiceWorker] Main bundle registration failed:', err);
-      });
+    window.addEventListener('load', () => {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((reg) => {
+          log('Service Worker registered successfully with scope: ' + reg.scope);
+          reg.update().catch(() => {});
+        })
+        .catch((err) => {
+          console.warn('[ServiceWorker] Main bundle registration failed:', err);
+        });
+    });
   }
 
   if ('caches' in window) {
@@ -114,10 +117,4 @@ if (!rootElement) {
   } catch (renderError: any) {
     log(`FATAL: React render throw exception: ${renderError.message || renderError}`, 'error');
   }
-}
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/service-worker.js");
-  });
-}
-
+                   }

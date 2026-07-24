@@ -14,9 +14,9 @@ interface UploadProgressProps {
 }
 
 export const UploadProgress: React.FC<UploadProgressProps> = ({
-  progress,
-  status,
-  fileName,
+  progress = 0,
+  status = 'idle',
+  fileName = 'Arquivo',
   error,
   onPause,
   onResume,
@@ -24,6 +24,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
   onReset
 }) => {
   if (status === 'idle') return null;
+  const safeProgress = Math.min(100, Math.max(0, Math.round(progress || 0)));
 
   return (
     <motion.div
@@ -113,7 +114,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
               status === 'offline' ? 'bg-amber-500 animate-pulse' :
               status === 'pausado' ? 'bg-zinc-500' : 'bg-teal-400'
             }`}
-            animate={{ width: `${progress}%` }}
+            animate={{ width: `${safeProgress}%` }}
             transition={{ ease: 'easeInOut', duration: 0.2 }}
           />
         </div>
@@ -127,7 +128,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
               </span>
             )}
             {status === 'enviando' && (
-              <span className="text-teal-400">Processando ({progress}%)</span>
+              <span className="text-teal-400">Processando ({safeProgress}%)</span>
             )}
             {status === 'concluido' && (
               <span className="flex items-center gap-1 text-emerald-400">
@@ -146,7 +147,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
               <span className="text-red-400">Operação cancelada</span>
             )}
           </div>
-          <span className="text-zinc-500 font-black tracking-wider">{progress}%</span>
+          <span className="text-zinc-500 font-black tracking-wider">{safeProgress}%</span>
         </div>
       </div>
     </motion.div>

@@ -20,15 +20,30 @@ export const fileValidationService = {
    * Validate file extension and MIME type
    */
   validateFile(file: File): FileValidationResult {
-    const fileName = file.name;
-    const fileSize = file.size;
-    const fileType = file.type;
+    if (!file || typeof file !== 'object') {
+      return {
+        isValid: false,
+        error: 'Arquivo inválido ou não selecionado.'
+      };
+    }
+
+    const fileName = file.name || 'arquivo';
+    const fileSize = typeof file.size === 'number' ? file.size : 0;
+    const fileType = typeof file.type === 'string' ? file.type : '';
+
+    // 1. Block empty files or zero byte files
+    if (fileSize <= 0) {
+      return {
+        isValid: false,
+        error: 'Arquivo inválido: O arquivo está vazio (0 bytes).'
+      };
+    }
 
     // Extract extension
     const extensionMatch = fileName.match(/\.([^.]+)$/);
     const extension = extensionMatch ? extensionMatch[1].toLowerCase() : '';
 
-    // 1. Block empty names/extensions
+    // 2. Block empty names/extensions
     if (!extension) {
       return {
         isValid: false,
@@ -36,7 +51,7 @@ export const fileValidationService = {
       };
     }
 
-    // 2. Block dangerous extensions
+    // 3. Block dangerous extensions
     if (BLOCKED_EXTENSIONS.includes(extension)) {
       return {
         isValid: false,
@@ -44,7 +59,7 @@ export const fileValidationService = {
       };
     }
 
-    // 3. Max size check
+    // 4. Max size check
     const sizeInMB = fileSize / (1024 * 1024);
     if (sizeInMB > MAX_FILE_SIZE_MB) {
       return {
@@ -53,14 +68,14 @@ export const fileValidationService = {
       };
     }
 
-    // 4. Validate dangerous mime types
+    // 5. Validate dangerous mime types safely
     const dangerousMimeTypes = [
       'application/x-msdownload',
       'application/x-sh',
       'application/x-bash',
       'application/x-msi'
     ];
-    if (dangerousMimeTypes.includes(fileType.toLowerCase())) {
+    if (fileType && dangerousMimeTypes.includes(fileType.toLowerCase())) {
       return {
         isValid: false,
         error: 'Tipo MIME inválido: Executáveis e scripts não são permitidos.'

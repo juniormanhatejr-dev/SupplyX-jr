@@ -29,9 +29,15 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
     e.stopPropagation();
     setIsDragActive(false);
 
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      onFileSelect(file);
+    try {
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        if (file) {
+          onFileSelect(file);
+        }
+      }
+    } catch (err) {
+      console.error('[FileUploader] Error handling file drop:', err);
     }
   };
 

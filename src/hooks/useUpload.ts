@@ -39,10 +39,17 @@ export function useUpload() {
 
   const upload = async (file: File, roomId: string) => {
     try {
+      if (!file) {
+        throw new Error('Nenhum arquivo foi selecionado.');
+      }
+
+      const fileId = 'file_' + Math.random().toString(36).substring(2, 15) + '_' + Date.now();
+      
       setProgress(0);
       setStatus('enviando');
       setError(null);
-      setFileName(file.name);
+      setFileName(file.name || 'arquivo');
+      setActiveFileId(fileId);
 
       const onProgress = (event: UploadProgressEvent) => {
         setProgress(event.progress);
@@ -59,17 +66,12 @@ export function useUpload() {
         }
       };
 
-      const fileIdPromise = uploadService.uploadFile(file, roomId, onProgress);
-      // Wait a tick for the service to generate and begin, so we can capture the fileId
-      const simulatedFileId = 'file_' + Math.random().toString(36).substring(2, 15);
-      setActiveFileId(simulatedFileId); // temporary key
-
-      const actualFileId = await fileIdPromise;
-      setActiveFileId(actualFileId);
+      const actualFileId = await uploadService.uploadFile(file, roomId, onProgress, fileId);
       return actualFileId;
     } catch (err: any) {
       setStatus('falha');
-      setError(err?.message || 'Falha no upload do arquivo.');
+      const errText = err?.message || 'Falha no upload do arquivo.';
+      setError(errText);
       throw err;
     }
   };

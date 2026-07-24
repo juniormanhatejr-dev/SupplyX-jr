@@ -230,7 +230,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef, l
     }
 
     // 3. Look-ahead to make sure the totals/signatures block fits on the last page.
-    // If not, transfer items from the last page to a new page until there is enough space.
+    // If not, transfer at most 1 item from the last page to a new page for the totals block.
     let lastPageIndex = pages.length - 1;
     let lastPageItems = pages[lastPageIndex];
     let lastPageY = (pages.length === 1 ? firstPageHeaderHeight : miniHeaderHeight) + tableHeaderHeight;
@@ -239,14 +239,11 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef, l
     }
 
     if (lastPageY + totalsBlockHeight > MAX_CONTENT_HEIGHT) {
-      // Pop items to the next page to make space for the Totals/Signatures block
-      // ensuring at least 1 item stays on the last page.
       const nextPageItems: QuotationItem[] = [];
-      while (lastPageItems.length > 1 && lastPageY + totalsBlockHeight > MAX_CONTENT_HEIGHT) {
+      if (lastPageItems.length > 1) {
         const popped = lastPageItems.pop();
         if (popped) {
           nextPageItems.unshift(popped);
-          lastPageY -= getItemHeight(popped);
         }
       }
       pages[lastPageIndex] = lastPageItems;

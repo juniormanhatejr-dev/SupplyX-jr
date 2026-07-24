@@ -348,6 +348,12 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
     }
 
     if (mode === 'register' || mode === 'onboarding') {
+      // Auto-fallback address if empty so user is never blocked
+      const currentAddress = formData.address.trim() || (formData.city ? `${formData.city}, Moçambique` : 'Maputo Cidade, Moçambique');
+      if (!formData.address.trim()) {
+        setFormData(prev => ({ ...prev, address: currentAddress }));
+      }
+
       if (type === 'logistics') {
         if (!formData.fullName.trim()) {
           setError(language === 'PT' ? 'Por favor, insira o nome completo do motorista.' : 'Please enter the full name of the driver.');
@@ -365,10 +371,6 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
           setError(language === 'PT' ? 'Por favor, insira o Nº da carta de condução.' : 'Please enter your driving license number.');
           return;
         }
-        if (!formData.address.trim()) {
-          setError(language === 'PT' ? 'Por favor, insira a localização.' : 'Please enter your location.');
-          return;
-        }
       } else {
         if (type === 'supplier' && !formData.userName.trim()) {
           setError(language === 'PT' ? 'Por favor, insira o nome do responsável.' : 'Please enter responsible user name.');
@@ -376,10 +378,6 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
         }
         if (!formData.name.trim()) {
           setError(language === 'PT' ? 'Por favor, insira o nome.' : 'Please enter the name.');
-          return;
-        }
-        if (!formData.address.trim()) {
-          setError(language === 'PT' ? 'Por favor, insira a localização / endereço.' : 'Please enter your location / address.');
           return;
         }
       }
@@ -916,6 +914,7 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                         </>
                       ) : (
                         <>
+                          {/* Buyer or Supplier Form */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <InputField 
                               icon={Building2} 
@@ -926,26 +925,15 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                               onChange={(v) => setFormData({...formData, name: v})}
                             />
                             {type === 'buyer' ? (
-                              mode === 'register' ? (
-                                <InputField 
-                                  icon={Mail} 
-                                  label={t.email} 
-                                  placeholder="email@exemplo.com" 
-                                  isDarkMode={isDarkMode}
-                                  type="email"
-                                  value={formData.email}
-                                  onChange={(v) => setFormData({...formData, email: v})}
-                                />
-                              ) : (
-                                <InputField 
-                                  icon={MapPin} 
-                                  label={t.address} 
-                                  placeholder="Ex: Av. Eduardo Mondlane, Maputo" 
-                                  isDarkMode={isDarkMode}
-                                  value={formData.address}
-                                  onChange={(v) => setFormData({...formData, address: v})}
-                                />
-                              )
+                              <InputField 
+                                icon={Mail} 
+                                label={t.email} 
+                                placeholder="email@exemplo.com" 
+                                isDarkMode={isDarkMode}
+                                type="email"
+                                value={formData.email}
+                                onChange={(v) => setFormData({...formData, email: v})}
+                              />
                             ) : (
                               <InputField 
                                 icon={User} 
@@ -973,50 +961,48 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                                 }
                               }}
                             />
-                            {type === 'buyer' ? (
-                              <InputField 
-                                icon={Phone} 
-                                label={t.phone} 
-                                placeholder="+258 84 123 4567" 
-                                isDarkMode={isDarkMode}
-                                value={formData.phone}
-                                onChange={(v) => setFormData({...formData, phone: v})}
-                              />
-                            ) : (
-                              <InputField 
-                                icon={MapPin} 
-                                label={t.address} 
-                                placeholder="Ex: Av. Eduardo Mondlane, Maputo" 
-                                isDarkMode={isDarkMode}
-                                value={formData.address}
-                                onChange={(v) => setFormData({...formData, address: v})}
-                              />
-                            )}
+                            <InputField 
+                              icon={Phone} 
+                              label={t.phone} 
+                              placeholder="+258 84 123 4567" 
+                              isDarkMode={isDarkMode}
+                              value={formData.phone}
+                              onChange={(v) => setFormData({...formData, phone: v})}
+                            />
                           </div>
 
-                          {type !== 'buyer' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <InputField 
+                              icon={MapPin} 
+                              label={t.address} 
+                              placeholder="Ex: Av. Eduardo Mondlane, Nº 1234, Maputo" 
+                              isDarkMode={isDarkMode}
+                              value={formData.address}
+                              onChange={(v) => setFormData({...formData, address: v})}
+                            />
+                            {type === 'supplier' ? (
                               <InputField 
-                                icon={Phone} 
-                                label={t.phone} 
-                                placeholder="+258 84 123 4567" 
+                                icon={Mail} 
+                                label={t.email} 
+                                placeholder="email@exemplo.com" 
                                 isDarkMode={isDarkMode}
-                                value={formData.phone}
-                                onChange={(v) => setFormData({...formData, phone: v})}
+                                type="email"
+                                value={formData.email}
+                                onChange={(v) => setFormData({...formData, email: v})}
                               />
-                              {mode === 'register' && (
-                                <InputField 
-                                  icon={Mail} 
-                                  label={t.email} 
-                                  placeholder="email@exemplo.com" 
-                                  isDarkMode={isDarkMode}
-                                  type="email"
-                                  value={formData.email}
-                                  onChange={(v) => setFormData({...formData, email: v})}
-                                />
-                              )}
-                            </div>
-                          )}
+                            ) : (
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.sector}</label>
+                                <select 
+                                  className={`w-full bg-transparent border rounded-2xl py-4 px-4 text-xs font-bold appearance-none outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
+                                  value={formData.sector}
+                                  onChange={(e) => setFormData({...formData, sector: e.target.value})}
+                                >
+                                  {t.sectors.map(s => <option key={s} value={s} className={isDarkMode ? 'bg-zinc-900' : ''}>{s}</option>)}
+                                </select>
+                              </div>
+                            )}
+                          </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
@@ -1029,16 +1015,18 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
                                 {t.provinces.map(p => <option key={p} value={p} className={isDarkMode ? 'bg-zinc-900' : ''}>{p}</option>)}
                               </select>
                             </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.sector}</label>
-                              <select 
-                                className={`w-full bg-transparent border rounded-2xl py-4 px-4 text-xs font-bold appearance-none outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
-                                value={formData.sector}
-                                onChange={(e) => setFormData({...formData, sector: e.target.value})}
-                              >
-                                {t.sectors.map(s => <option key={s} value={s} className={isDarkMode ? 'bg-zinc-900' : ''}>{s}</option>)}
-                              </select>
-                            </div>
+                            {type === 'supplier' && (
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t.sector}</label>
+                                <select 
+                                  className={`w-full bg-transparent border rounded-2xl py-4 px-4 text-xs font-bold appearance-none outline-none transition-all ${isDarkMode ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
+                                  value={formData.sector}
+                                  onChange={(e) => setFormData({...formData, sector: e.target.value})}
+                                >
+                                  {t.sectors.map(s => <option key={s} value={s} className={isDarkMode ? 'bg-zinc-900' : ''}>{s}</option>)}
+                                </select>
+                              </div>
+                            )}
                           </div>
                         </>
                       )}

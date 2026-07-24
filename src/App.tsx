@@ -268,7 +268,12 @@ export default function App() {
         'Relatórios': 'Relatórios',
         'Mensagens': 'Mensagens',
         'Ajustes': 'Ajustes',
-        'About': 'Sobre o SupplyX'
+        'About': 'Sobre o SupplyX',
+        'Meu Perfil': 'Meu Perfil',
+        'Cockpit Analítico': 'Cockpit Analítico',
+        'Monitor de Cargas': 'Monitor de Cargas',
+        'Frotas & Motoristas': 'Frotas & Motoristas',
+        'AdminVerifications': 'Painel Fiscal Admin'
       }
     },
     EN: {
@@ -288,7 +293,12 @@ export default function App() {
         'Relatórios': 'Reports',
         'Mensagens': 'Messages',
         'Ajustes': 'Settings',
-        'About': 'About SupplyX'
+        'About': 'About SupplyX',
+        'Meu Perfil': 'My Profile',
+        'Cockpit Analítico': 'Control Dashboard',
+        'Monitor de Cargas': 'Cargo Monitor',
+        'Frotas & Motoristas': 'Fleets & Drivers',
+        'AdminVerifications': 'Admin Tax Panel'
       }
     }
   };
@@ -577,7 +587,7 @@ export default function App() {
                 <div className="flex items-center gap-3">
                   <div className="hidden sm:flex items-center">
                     <p className={`text-[11px] font-black italic uppercase tracking-[0.3em] ${isDarkMode ? 'text-supplyx-blue' : 'text-zinc-400'}`}>
-                      {t.tabs[activeTab === 'Seller Central' && profile?.type !== 'supplier' ? 'Dashboard' : activeTab as keyof typeof t.tabs]}
+                      {t.tabs[activeTab === 'Seller Central' && profile?.type !== 'supplier' ? 'Dashboard' : activeTab as keyof typeof t.tabs] || activeTab}
                     </p>
                   </div>
                 </div>

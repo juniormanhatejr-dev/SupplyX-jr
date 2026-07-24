@@ -344,6 +344,10 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     const saved = localStorage.getItem('supplyx_deleted_mock_orders');
     return saved ? JSON.parse(saved) : [];
   });
+  const [deletedRealIds, setDeletedRealIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('supplyx_deleted_real_orders');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [recentFolderOpen, setRecentFolderOpen] = useState(true);
   const [oldFolderOpen, setOldFolderOpen] = useState(false);
 
@@ -387,11 +391,44 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       setDeletedMockIds(newDeletedList);
       localStorage.setItem('supplyx_deleted_mock_orders', JSON.stringify(newDeletedList));
     } else {
+      const newDeletedRealList = Array.from(new Set([...deletedRealIds, quoteId]));
+      setDeletedRealIds(newDeletedRealList);
+      localStorage.setItem('supplyx_deleted_real_orders', JSON.stringify(newDeletedRealList));
       try {
         await deleteDoc(doc(db, 'quotations', quoteId));
       } catch (err) {
         console.error('Error deleting quotation:', err);
         handleFirestoreError(err, OperationType.DELETE, `quotations/${quoteId}`);
+      }
+    }
+  };
+
+  const clearOldFolder = async () => {
+    const confirmMessage = language === 'PT'
+      ? 'Tem a certeza de que deseja esvaziar a pasta de pedidos antigos? Esta ação removerá todos os itens históricos.'
+      : 'Are you sure you want to clear the old requests folder? This action will remove all historical items.';
+    if (!window.confirm(confirmMessage)) return;
+
+    const oldMockIds = partitionedQuotations.oldMock.map((m: any) => m.id);
+    if (oldMockIds.length > 0) {
+      const newDeletedMock = Array.from(new Set([...deletedMockIds, ...oldMockIds]));
+      setDeletedMockIds(newDeletedMock);
+      localStorage.setItem('supplyx_deleted_mock_orders', JSON.stringify(newDeletedMock));
+    }
+
+    const oldRealItems = partitionedQuotations.oldReal;
+    if (oldRealItems.length > 0) {
+      const oldRealIds = oldRealItems.map((r: any) => r.id);
+      const newDeletedReal = Array.from(new Set([...deletedRealIds, ...oldRealIds]));
+      setDeletedRealIds(newDeletedReal);
+      localStorage.setItem('supplyx_deleted_real_orders', JSON.stringify(newDeletedReal));
+
+      for (const item of oldRealItems) {
+        try {
+          await deleteDoc(doc(db, 'quotations', item.id));
+        } catch (err) {
+          console.error(`Error deleting old quotation ${item.id}:`, err);
+        }
       }
     }
   };
@@ -647,55 +684,53 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                 <MessageSquare className="w-4 h-4" />
               </button>
               
-              {!isMock && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const currentSupplierName = order.supplierName || 'Fornecedor Parceiro';
-                    let materialsList = order.materials?.map((m: any) => typeof m === 'object' ? m.name : m).filter(Boolean).join(', ');
-                    if (!materialsList && order.items) {
-                      materialsList = order.items.map((it: any) => it.material || it.description).filter(Boolean).join(', ');
-                    }
-                    if (!materialsList) materialsList = 'Materiais de Construção B2B';
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const currentSupplierName = order.supplierName || order.supplier || 'Fornecedor Parceiro';
+                  let materialsList = order.materials?.map((m: any) => typeof m === 'object' ? m.name : m).filter(Boolean).join(', ');
+                  if (!materialsList && order.items) {
+                    materialsList = order.items.map((it: any) => it.material || it.description).filter(Boolean).join(', ');
+                  }
+                  if (!materialsList) materialsList = 'Materiais de Construção B2B';
 
-                    const calculatedOrigem = order.supplierAddress || currentSupplierName + ', Moçambique';
-                    const calculatedDestino = profile?.address || order.buyerName || 'Província de Nampula, Moçambique';
+                  const calculatedOrigem = order.supplierAddress || currentSupplierName + ', Moçambique';
+                  const calculatedDestino = profile?.address || order.buyerName || 'Província de Nampula, Moçambique';
 
-                    setLogisticsFormFields({
-                      origem: calculatedOrigem,
-                      destino: calculatedDestino,
-                      tipoCarga: materialsList,
-                      peso: '12',
+                  setLogisticsFormFields({
+                    origem: calculatedOrigem,
+                    destino: calculatedDestino,
+                    tipoCarga: materialsList,
+                    peso: '12',
+                    volume: '24',
+                    prioridade: 'normal',
+                    dataDesejada: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    tipoVeiculo: 'caminhão pesado',
+                    observacoes: `Ordem Logística vinculada à Cotação #${order.id || 'QT-01'}. Faturamento sob custódia SupplyX. Urgência: ALTA`,
+                    seguroCarga: 'Incluso (Fidelidade)',
+                    cargaFragil: false,
+                    temperaturaControlada: false
+                  });
 
-                      volume: '24',
-                      prioridade: 'normal',
-                      dataDesejada: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                      tipoVeiculo: 'caminhão pesado',
-                      observacoes: `Ordem Logística vinculada à Cotação #${order.id || 'QT-01'}. Faturamento sob custódia SupplyX. Urgência: ALTA`,
-                      seguroCarga: 'Incluso (Fidelidade)',
-                      cargaFragil: false,
-                      temperaturaControlada: false
-                    });
+                  setSpreadsheetOrigem(calculatedOrigem);
+                  setSpreadsheetDestino(calculatedDestino);
+                  setSpreadsheetRows([
+                    { id: '1', name: '', quantity: '1', weight: '' }
+                  ]);
 
-                    setSpreadsheetOrigem(calculatedOrigem);
-                    setSpreadsheetDestino(calculatedDestino);
-                    setSpreadsheetRows([
-                      { id: '1', name: '', quantity: '1', weight: '' }
-                    ]);
-
-                    setRespondingTo(order);
-                    setIsDirectLogisticsRequest(true);
-                    setShowForm(true);
-                    setStep(4);
-                    setPaymentSuccess(true);
-                    setSelectedScenario(3);
-                    setShowLogisticsQuestion(true);
-                  }}
-                  className="px-4 py-2.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
-                >
-                  {language === 'PT' ? 'Solicitar Logística' : 'Request Logistics'}
-                </button>
-              )}
+                  setRespondingTo(order);
+                  setIsDirectLogisticsRequest(true);
+                  setShowForm(true);
+                  setStep(4);
+                  setPaymentSuccess(true);
+                  setSelectedScenario(3);
+                  setShowLogisticsQuestion(true);
+                }}
+                className="px-3.5 py-2.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Truck className="w-3.5 h-3.5" />
+                {language === 'PT' ? 'Atribuir Carga ao Logístico' : 'Assign Cargo to Logistics'}
+              </button>
             </div>
           </div>
         </div>
@@ -737,14 +772,17 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
   }, [rawAllProducts, dbUsers]);
 
   const displayedQuotations = useMemo(() => {
-    if (dbUsers.length === 0 && realQuotations.length > 0) return realQuotations;
-    const userIds = new Set(dbUsers.map(u => u.id));
-    return realQuotations.filter(qObj => {
-      const hasBuyer = qObj.buyerId ? userIds.has(qObj.buyerId) : true;
-      const hasSupplier = qObj.supplierId ? userIds.has(qObj.supplierId) : true;
-      return hasBuyer && hasSupplier;
-    });
-  }, [realQuotations, dbUsers]);
+    let list = realQuotations;
+    if (dbUsers.length > 0) {
+      const userIds = new Set(dbUsers.map(u => u.id));
+      list = realQuotations.filter(qObj => {
+        const hasBuyer = qObj.buyerId ? userIds.has(qObj.buyerId) : true;
+        const hasSupplier = qObj.supplierId ? userIds.has(qObj.supplierId) : true;
+        return hasBuyer && hasSupplier;
+      });
+    }
+    return list.filter(qObj => !deletedRealIds.includes(qObj.id));
+  }, [realQuotations, dbUsers, deletedRealIds]);
 
   // Auto-clean orphaned quotations (whose buyer or supplier is no longer registered in the users collection)
   useEffect(() => {
@@ -2312,54 +2350,54 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
               >
                 <Trash2 className="w-4 h-4" />
               </button>
-              {!isMock && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Populate logistics form parameters for this specific quote/order
-                    let materialsList = order.materials?.map((m: any) => typeof m === 'object' ? m.name : m).filter(Boolean).join(', ');
-                    if (!materialsList && order.items) {
-                      materialsList = order.items.map((it: any) => it.material || it.description).filter(Boolean).join(', ');
-                    }
-                    if (!materialsList) materialsList = 'Materiais de Construção B2B';
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Populate logistics form parameters for this specific quote/order
+                  const currentSupplierName = order.supplierName || order.supplier || 'Fornecedor Parceiro';
+                  let materialsList = order.materials?.map((m: any) => typeof m === 'object' ? m.name : m).filter(Boolean).join(', ');
+                  if (!materialsList && order.items) {
+                    materialsList = order.items.map((it: any) => it.material || it.description).filter(Boolean).join(', ');
+                  }
+                  if (!materialsList) materialsList = 'Materiais de Construção B2B';
 
-                    const calculatedOrigem = order.supplierAddress || currentSupplierName + ', Moçambique';
-                    const calculatedDestino = profile?.address || order.buyerName || 'Província de Nampula, Moçambique';
+                  const calculatedOrigem = order.supplierAddress || currentSupplierName + ', Moçambique';
+                  const calculatedDestino = profile?.address || order.buyerName || 'Província de Nampula, Moçambique';
 
-                    setLogisticsFormFields({
-                      origem: calculatedOrigem,
-                      destino: calculatedDestino,
-                      tipoCarga: materialsList,
-                      peso: '12',
-                      volume: '24',
-                      prioridade: 'normal',
-                      dataDesejada: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                      tipoVeiculo: 'caminhão pesado',
-                      observacoes: `Ordem Logística vinculada à Cotação #${order.id || 'QT-01'}. Faturamento sob custódia SupplyX. Urgência: ALTA`,
-                      seguroCarga: 'Incluso (Fidelidade)',
-                      cargaFragil: false,
-                      temperaturaControlada: false
-                    });
+                  setLogisticsFormFields({
+                    origem: calculatedOrigem,
+                    destino: calculatedDestino,
+                    tipoCarga: materialsList,
+                    peso: '12',
+                    volume: '24',
+                    prioridade: 'normal',
+                    dataDesejada: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    tipoVeiculo: 'caminhão pesado',
+                    observacoes: `Ordem Logística vinculada à Cotação #${order.id || 'QT-01'}. Faturamento sob custódia SupplyX. Urgência: ALTA`,
+                    seguroCarga: 'Incluso (Fidelidade)',
+                    cargaFragil: false,
+                    temperaturaControlada: false
+                  });
 
-                    setSpreadsheetOrigem(calculatedOrigem);
-                    setSpreadsheetDestino(calculatedDestino);
-                    setSpreadsheetRows([
-                      { id: '1', name: '', quantity: '1', weight: '' }
-                    ]);
+                  setSpreadsheetOrigem(calculatedOrigem);
+                  setSpreadsheetDestino(calculatedDestino);
+                  setSpreadsheetRows([
+                    { id: '1', name: '', quantity: '1', weight: '' }
+                  ]);
 
-                    setRespondingTo(order);
-                    setIsDirectLogisticsRequest(true);
-                    setShowForm(true);
-                    setStep(4);
-                    setPaymentSuccess(true);
-                    setSelectedScenario(3);
-                    setShowLogisticsQuestion(true);
-                  }}
-                  className="px-4 py-2.5 bg-emerald-500/10 text-emerald-554 hover:bg-emerald-500 hover:text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
-                >
-                  {language === 'PT' ? 'Solicitar Logística' : 'Request Logistics'}
-                </button>
-              )}
+                  setRespondingTo(order);
+                  setIsDirectLogisticsRequest(true);
+                  setShowForm(true);
+                  setStep(4);
+                  setPaymentSuccess(true);
+                  setSelectedScenario(3);
+                  setShowLogisticsQuestion(true);
+                }}
+                className="px-3.5 py-2.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Truck className="w-3.5 h-3.5" />
+                {language === 'PT' ? 'Atribuir Carga ao Logístico' : 'Assign Cargo to Logistics'}
+              </button>
             </div>
           </div>
         </div>
@@ -2556,8 +2594,9 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             <button 
               onClick={handleClose}
               className={`p-2 transition-colors ${isDarkMode ? 'text-zinc-600 hover:text-white' : 'text-zinc-300 hover:text-zinc-900'}`}
+              title={language === 'PT' ? 'Fechar' : 'Close'}
             >
-              <Trash2 className="w-5 h-5" />
+              <X className="w-5 h-5" />
             </button>
           </div>
 
@@ -4086,17 +4125,35 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                     </p>
                   </div>
                 </div>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all duration-300 ${
-                  isDarkMode ? 'border-white/5 bg-zinc-900' : 'border-zinc-200 bg-zinc-50'
-                }`}>
-                  <svg 
-                    className={`w-3.5 h-3.5 transition-transform duration-300 ${oldFolderOpen ? 'transform rotate-180' : ''}`} 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
-                  </svg>
+                <div className="flex items-center gap-2">
+                  {(partitionedQuotations.oldReal.length + partitionedQuotations.oldMock.length > 0) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearOldFolder();
+                      }}
+                      className={`p-2 rounded-xl transition-all ${
+                        isDarkMode 
+                          ? 'bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white' 
+                          : 'bg-red-50 text-red-500 hover:bg-red-500 hover:text-white'
+                      }`}
+                      title={language === 'PT' ? 'Esvaziar pasta de pedidos antigos' : 'Clear old requests folder'}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all duration-300 ${
+                    isDarkMode ? 'border-white/5 bg-zinc-900' : 'border-zinc-200 bg-zinc-50'
+                  }`}>
+                    <svg 
+                      className={`w-3.5 h-3.5 transition-transform duration-300 ${oldFolderOpen ? 'transform rotate-180' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
                 </div>
               </div>
               
@@ -4307,9 +4364,10 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                         // Show the logistics question popup on screen
                         setShowLogisticsQuestion(true);
                       }}
-                      className="px-4 py-2.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all"
+                      className="px-3.5 py-2.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
                     >
-                      {language === 'PT' ? 'Solicitar Logística' : 'Request Logistics'}
+                      <Truck className="w-3.5 h-3.5" />
+                      {language === 'PT' ? 'Atribuir Carga ao Logístico' : 'Assign Cargo to Logistics'}
                     </button>
                   </div>
                 </div>
@@ -4429,6 +4487,47 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                       className={`p-2 sm:p-2.5 rounded-xl transition-all active:scale-95 ${isDarkMode ? 'bg-white/5 text-zinc-400 hover:text-supplyx-blue' : 'bg-zinc-50 text-zinc-500 hover:text-supplyx-blue'}`}
                     >
                       <MessageSquare className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const currentSupplierName = order.supplier || 'Fornecedor Parceiro';
+                        const calculatedOrigem = currentSupplierName + ', Moçambique';
+                        const calculatedDestino = profile?.address || 'Província de Nampula, Moçambique';
+
+                        setLogisticsFormFields({
+                          origem: calculatedOrigem,
+                          destino: calculatedDestino,
+                          tipoCarga: 'Materiais de Construção B2B',
+                          peso: '12',
+                          volume: '24',
+                          prioridade: 'normal',
+                          dataDesejada: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                          tipoVeiculo: 'caminhão pesado',
+                          observacoes: `Ordem Logística vinculada à Cotação #${order.id || 'QT-01'}. Faturamento sob custódia SupplyX. Urgência: ALTA`,
+                          seguroCarga: 'Incluso (Fidelidade)',
+                          cargaFragil: false,
+                          temperaturaControlada: false
+                        });
+
+                        setSpreadsheetOrigem(calculatedOrigem);
+                        setSpreadsheetDestino(calculatedDestino);
+                        setSpreadsheetRows([
+                          { id: '1', name: '', quantity: '1', weight: '' }
+                        ]);
+
+                        setRespondingTo(order);
+                        setIsDirectLogisticsRequest(true);
+                        setShowForm(true);
+                        setStep(4);
+                        setPaymentSuccess(true);
+                        setSelectedScenario(3);
+                        setShowLogisticsQuestion(true);
+                      }}
+                      className="px-3.5 py-2.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Truck className="w-3.5 h-3.5" />
+                      {language === 'PT' ? 'Atribuir Carga ao Logístico' : 'Assign Cargo to Logistics'}
                     </button>
                   </div>
                 </div>

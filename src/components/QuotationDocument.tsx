@@ -195,17 +195,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef, l
     const tableHeaderHeight = 8;
     const totalsBlockHeight = 80;
 
-    // 1. If everything fits nicely on a single page, keep it all on Page 1
-    let totalItemsHeight = 0;
-    for (const item of itemsList) {
-      totalItemsHeight += getItemHeight(item);
-    }
-    const singlePageNeededHeight = firstPageHeaderHeight + tableHeaderHeight + totalItemsHeight + totalsBlockHeight;
-    if (singlePageNeededHeight <= MAX_CONTENT_HEIGHT + 10) { // Allow minor flexibility (up to 237mm)
-      return [itemsList];
-    }
-
-    // 2. Multi-page packing
+    // 1. Initial item distribution across pages based strictly on available item height
     const pages: QuotationItem[][] = [];
     let currentPageItems: QuotationItem[] = [];
     let currentY = firstPageHeaderHeight + tableHeaderHeight;
@@ -215,7 +205,7 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef, l
       const rowH = getItemHeight(item);
 
       // If adding this item exceeds the page limit, push existing items and start a new page
-      if (currentY + rowH > MAX_CONTENT_HEIGHT) {
+      if (currentPageItems.length > 0 && currentY + rowH > MAX_CONTENT_HEIGHT) {
         pages.push(currentPageItems);
         currentPageItems = [];
         currentY = miniHeaderHeight + tableHeaderHeight;
@@ -229,25 +219,51 @@ const QuotationDocument: React.FC<QuotationDocumentProps> = ({ data, innerRef, l
       pages.push(currentPageItems);
     }
 
-    // 3. Look-ahead to make sure the totals/signatures block fits on the last page.
-    // If not, transfer at most 1 item from the last page to a new page for the totals block.
-    let lastPageIndex = pages.length - 1;
-    let lastPageItems = pages[lastPageIndex];
-    let lastPageY = (pages.length === 1 ? firstPageHeaderHeight : miniHeaderHeight) + tableHeaderHeight;
-    for (const item of lastPageItems) {
-      lastPageY += getItemHeight(item);
+    if (pages.length === 0) {
+      return [[]];
     }
 
-    if (lastPageY + totalsBlockHeight > MAX_CONTENT_HEIGHT) {
+    // 2. Analyze the last page to check if totals/signatures block fits
+    let lastPageIndex = pages.length - 1;
+    let lastPageItems = pages[lastPageIndex];
+    let lastPageHeaderHeight = (pages.length === 1 ? firstPageHeaderHeight : miniHeaderHeight) + tableHeaderHeight;
+    
+    let lastPageItemsY = lastPageHeaderHeight;
+    for (const item of lastPageItems) {
+      lastPageItemsY += getItemHeight(item);
+    }
+
+    // If totals block doesn't fit on the last page alongside its items:
+    if (lastPageItemsY + totalsBlockHeight > MAX_CONTENT_HEIGHT) {
       const nextPageItems: QuotationItem[] = [];
-      if (lastPageItems.length > 1) {
+      
+      // Move minimum number of items from last page to new page
+      while (lastPageItems.length > 1) {
         const popped = lastPageItems.pop();
         if (popped) {
           nextPageItems.unshift(popped);
         }
+
+        // Calculate Y on the new page (which will become the last page where totals block renders)
+        const newPageHeaderHeight = miniHeaderHeight + tableHeaderHeight;
+        let newPageY = newPageHeaderHeight;
+        for (const item of nextPageItems) {
+          newPageY += getItemHeight(item);
+        }
+
+        // Check if totals block fits on the new page with the moved items
+        if (newPageY + totalsBlockHeight <= MAX_CONTENT_HEIGHT) {
+          break; // Stop! Minimum number of items moved.
+        }
       }
+
       pages[lastPageIndex] = lastPageItems;
-      pages.push(nextPageItems);
+      if (nextPageItems.length > 0) {
+        pages.push(nextPageItems);
+      } else {
+        // If last page only had 1 item and totals block still didn't fit, push an empty page for totals
+        pages.push([]);
+      }
     }
 
     return pages;

@@ -64,14 +64,16 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
   };
 
   useEffect(() => {
-    const q = query(collection(db, 'users'), where('type', '==', 'supplier'));
+    const q = query(collection(db, 'users'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({
-        id: doc.id,
-        uid: doc.id,
-        ...doc.data()
-      })) as Supplier[];
+      const fetched = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          uid: doc.id,
+          ...doc.data()
+        }) as any)
+        .filter(u => u.type === 'supplier' || u.userType === 'supplier') as Supplier[];
       setSuppliers(fetched);
       setLoading(false);
     }, (err) => {
@@ -106,10 +108,10 @@ export default function SuppliersView({ isDarkMode, language, onViewProfile, onN
   }, [suppliers, profile, cartItems]);
 
   const filteredSuppliers = rankedSuppliers.filter(s => 
-    s.uid === auth.currentUser?.uid && (
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.sector?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.city?.toLowerCase().includes(searchTerm.toLowerCase())
+    (
+      (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.sector || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.city || '').toLowerCase().includes(searchTerm.toLowerCase())
     )
   );
 

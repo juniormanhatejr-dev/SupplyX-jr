@@ -115,4 +115,9 @@ if (!rootElement) {
     log(`FATAL: React render throw exception: ${renderError.message || renderError}`, 'error');
   }
 }
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/service-worker.js");
+  });
+}
 

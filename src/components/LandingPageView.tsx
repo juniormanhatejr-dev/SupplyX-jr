@@ -29,9 +29,10 @@ interface LandingPageViewProps {
   onLogin: () => void;
   isDarkMode: boolean;
   language: 'PT' | 'EN';
+  onLanguageChange?: (lang: 'PT' | 'EN') => void;
 }
 
-export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, language }: LandingPageViewProps) {
+export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, language, onLanguageChange }: LandingPageViewProps) {
   const [activeModal, setActiveModal] = useState<'privacy' | 'terms' | null>(null);
 
   const t = {
@@ -183,25 +184,40 @@ export default function LandingPageView({ onGetStarted, onLogin, isDarkMode, lan
     <div className="min-h-screen bg-supplyx-deep text-supplyx-white selection:bg-supplyx-blue selection:text-white font-sans">
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-[100] backdrop-blur-2xl border-b border-white/5 bg-supplyx-deep/70">
-        <div className="w-full px-8 h-24 flex items-center justify-between">
+        <div className="w-full px-4 sm:px-8 h-20 sm:h-24 flex items-center justify-between">
           <SupplyXLogo size="md" isDark={true} />
-          <div className="hidden lg:flex items-center gap-12">
-            <div className="flex items-center gap-8">
-              <a href="#problem" className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 hover:text-white transition-all uppercase tracking-[0.2em]">{t.problem.title}</a>
-              <a href="#solution" className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 hover:text-white transition-all uppercase tracking-[0.2em]">{t.solution.title}</a>
-              <a href="#how" className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 hover:text-white transition-all uppercase tracking-[0.2em]">{t.howItWorks.title}</a>
+
+          <div className="flex items-center gap-3 lg:gap-12">
+            <div className="hidden lg:flex items-center gap-8">
+              <a href="#problem" className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 hover:text-white transition-all">{t.problem.title}</a>
+              <a href="#solution" className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 hover:text-white transition-all">{t.solution.title}</a>
+              <a href="#how" className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 hover:text-white transition-all">{t.howItWorks.title}</a>
             </div>
-            <div className="h-4 w-px bg-white/10" />
-            <div className="flex items-center gap-4">
+
+            {/* Language Switcher */}
+            <div className="flex items-center gap-1 bg-white/5 p-1 rounded-2xl border border-white/10">
+              <button
+                onClick={() => onLanguageChange?.(language === 'PT' ? 'EN' : 'PT')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black text-white hover:bg-white/10 transition-all"
+                title="Mudar idioma / Switch language"
+              >
+                <Globe className="w-3.5 h-3.5 text-supplyx-blue" />
+                <span className="tracking-widest">{language}</span>
+              </button>
+            </div>
+
+            <div className="hidden sm:block h-4 w-px bg-white/10" />
+
+            <div className="flex items-center gap-2 sm:gap-4">
               <button 
                 onClick={onLogin} 
-                className="text-xs font-black uppercase tracking-widest text-white px-8 py-4 rounded-2xl border border-white/5 hover:bg-white/5 transition-all active:scale-95"
+                className="text-xs font-black uppercase tracking-widest text-white px-4 sm:px-8 py-2.5 sm:py-4 rounded-xl sm:rounded-2xl border border-white/10 hover:bg-white/5 transition-all active:scale-95"
               >
-                {language === 'PT' ? 'Fazer Login' : 'Login'}
+                {language === 'PT' ? 'Login' : 'Login'}
               </button>
               <button 
                 onClick={onGetStarted} 
-                className="text-xs font-black uppercase tracking-widest bg-supplyx-blue text-white px-10 py-4 rounded-2xl hover:bg-blue-600 shadow-2xl shadow-blue-500/20 transition-all active:scale-95"
+                className="text-xs font-black uppercase tracking-widest bg-supplyx-blue text-white px-5 sm:px-10 py-2.5 sm:py-4 rounded-xl sm:rounded-2xl hover:bg-blue-600 shadow-2xl shadow-blue-500/20 transition-all active:scale-95"
               >
                 {t.hero.cta1}
               </button>

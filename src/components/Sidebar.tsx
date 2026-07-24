@@ -13,7 +13,10 @@ import {
   User,
   Info,
   Tags,
-  ShieldCheck
+  ShieldCheck,
+  Globe,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -38,12 +41,26 @@ interface SidebarProps {
   onNavItemClick: (label: string) => void;
   isDarkMode?: boolean;
   language?: 'PT' | 'EN';
+  onLanguageChange?: (lang: 'PT' | 'EN') => void;
+  onThemeToggle?: () => void;
   userType?: 'buyer' | 'supplier' | 'logistics';
   onLogout?: () => void;
   logisticsSubTab?: string;
 }
 
-export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, isDarkMode, language, userType, onLogout, logisticsSubTab }: SidebarProps) {
+export default function Sidebar({ 
+  isOpen, 
+  onClose, 
+  activeItem, 
+  onNavItemClick, 
+  isDarkMode, 
+  language = 'PT', 
+  onLanguageChange,
+  onThemeToggle,
+  userType, 
+  onLogout, 
+  logisticsSubTab 
+}: SidebarProps) {
   const { unreadMessages, unreadNotifications } = useNotifications();
   const { profile, isAdmin } = useAuth();
 
@@ -202,10 +219,39 @@ export default function Sidebar({ isOpen, onClose, activeItem, onNavItemClick, i
         })}
       </nav>
 
-      <div className={`p-6 border-t ${isDarkMode ? 'border-white/5' : 'border-zinc-100'}`}>
+      <div className={`p-4 sm:p-6 border-t space-y-3 ${isDarkMode ? 'border-white/5' : 'border-zinc-100'}`}>
+        <div className="flex items-center justify-between gap-2 px-2 py-1 bg-white/5 rounded-xl border border-white/5">
+          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase text-zinc-500">
+            <Globe className="w-3.5 h-3.5 text-supplyx-blue" />
+            <span>{language === 'PT' ? 'Idioma' : 'Language'}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onLanguageChange?.('PT')}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
+                language === 'PT' 
+                  ? 'bg-supplyx-blue text-white shadow-md' 
+                  : 'text-zinc-500 hover:text-white'
+              }`}
+            >
+              PT
+            </button>
+            <button
+              onClick={() => onLanguageChange?.('EN')}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
+                language === 'EN' 
+                  ? 'bg-supplyx-blue text-white shadow-md' 
+                  : 'text-zinc-500 hover:text-white'
+              }`}
+            >
+              EN
+            </button>
+          </div>
+        </div>
+
         <button 
           onClick={onLogout}
-          className={`w-full flex items-center gap-3 px-4 py-4 text-[11px] font-black uppercase tracking-[0.2em] transition-all rounded-2xl group
+          className={`w-full flex items-center gap-3 px-4 py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all rounded-2xl group
             ${isDarkMode ? 'text-zinc-500 hover:text-red-400 hover:bg-red-500/5' : 'text-zinc-400 hover:text-zinc-900'}`}
         >
           <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />

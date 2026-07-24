@@ -141,6 +141,16 @@ export default function App() {
     localStorage.setItem('supplyx_language', language);
     window.dispatchEvent(new Event('language-changed'));
   }, [language]);
+
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'supplyx_language' && (e.newValue === 'PT' || e.newValue === 'EN')) {
+        setLanguage(e.newValue);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
   const [selectedCategory, setSelectedCategory] = useState('Tudo');
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -398,6 +408,7 @@ export default function App() {
         <LandingPageView 
           isDarkMode={isDarkMode} 
           language={language}
+          onLanguageChange={setLanguage}
           onGetStarted={() => setView('auth')}
           onLogin={() => setView('auth')}
         />
@@ -407,6 +418,7 @@ export default function App() {
       <RegistrationView 
         isDarkMode={isDarkMode} 
         language={language} 
+        onLanguageChange={setLanguage}
         onSuccess={refreshProfile}
         onBack={() => setView('landing')}
         forceOnboarding={hasIncompleteProfile}
@@ -564,6 +576,8 @@ export default function App() {
           }}
           isDarkMode={isDarkMode}
           language={language}
+          onLanguageChange={setLanguage}
+          onThemeToggle={() => setIsDarkMode(!isDarkMode)}
           userType={profile?.type}
           onLogout={handleLogout}
           logisticsSubTab={logisticsSubTab}
@@ -597,12 +611,13 @@ export default function App() {
                 <div className="flex items-center gap-1.5 sm:gap-2 bg-white/5 p-1 rounded-[18px] border border-white/5">
                   <button 
                     onClick={() => setLanguage(language === 'PT' ? 'EN' : 'PT')}
-                    className={`flex items-center gap-2 px-4 h-8 rounded-[14px] text-[10px] font-black transition-all ${
-                      isDarkMode ? 'text-zinc-400 hover:text-white hover:bg-white/5' : 'text-zinc-500 hover:text-zinc-900'
+                    className={`flex items-center gap-1.5 px-3 sm:px-4 h-8 rounded-[14px] text-[10px] font-black transition-all ${
+                      isDarkMode ? 'text-zinc-300 hover:text-white hover:bg-white/5' : 'text-zinc-600 hover:text-zinc-900'
                     }`}
+                    title="Alternar idioma / Switch language"
                   >
-                    <Globe className="w-3.5 h-3.5 text-supplyx-blue" />
-                    <span className="hidden xs:inline tracking-widest">{language}</span>
+                    <Globe className="w-3.5 h-3.5 text-supplyx-blue shrink-0" />
+                    <span className="tracking-widest font-black">{language}</span>
                   </button>
                   <button 
                     onClick={() => setIsDarkMode(!isDarkMode)}

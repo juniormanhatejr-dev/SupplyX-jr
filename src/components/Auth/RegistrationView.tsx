@@ -42,6 +42,7 @@ interface RegistrationViewProps {
   onSuccess: () => void;
   onBack?: () => void;
   forceOnboarding?: boolean;
+  onLanguageChange?: (lang: 'PT' | 'EN') => void;
 }
 
 const getFriendlyAuthErrorMessage = (err: any, lang: string): string => {
@@ -91,7 +92,7 @@ const getFriendlyAuthErrorMessage = (err: any, lang: string): string => {
   return msg || (lang === 'PT' ? 'Ocorreu um erro ao processar a solicitação.' : 'An error occurred.');
 };
 
-export default function RegistrationView({ isDarkMode, language, onSuccess, onBack, forceOnboarding }: RegistrationViewProps) {
+export default function RegistrationView({ isDarkMode, language, onSuccess, onBack, forceOnboarding, onLanguageChange }: RegistrationViewProps) {
   const [activeModal, setActiveModal] = useState<'privacy' | 'terms' | null>(null);
 
   const t = {
@@ -597,9 +598,19 @@ export default function RegistrationView({ isDarkMode, language, onSuccess, onBa
           className="fixed top-4 left-4 sm:top-8 sm:left-8 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors z-50 bg-zinc-900/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 sm:bg-transparent sm:p-0 sm:border-none"
         >
           <ChevronDown className="w-4 h-4 rotate-90" />
-          Voltar
+          {language === 'PT' ? 'Voltar' : 'Back'}
         </button>
       )}
+
+      {/* Top-right Language Toggle Button */}
+      <button
+        onClick={() => onLanguageChange?.(language === 'PT' ? 'EN' : 'PT')}
+        className="fixed top-4 right-4 sm:top-8 sm:right-8 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white z-50 bg-zinc-900/80 backdrop-blur-md border border-white/15 hover:border-supplyx-blue transition-all"
+        title="Mudar idioma / Switch language"
+      >
+        <Globe className="w-3.5 h-3.5 text-supplyx-blue" />
+        <span>{language}</span>
+      </button>
 
       <motion.div 
         initial={{ opacity: 0, y: 20 }}

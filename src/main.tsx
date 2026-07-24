@@ -117,4 +117,4 @@ if (!rootElement) {
   } catch (renderError: any) {
     log(`FATAL: React render throw exception: ${renderError.message || renderError}`, 'error');
   }
-                   }
+ }

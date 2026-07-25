@@ -35,7 +35,7 @@ import {
   Coins
 } from 'lucide-react';
 import { collection, query, where, onSnapshot, addDoc, setDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, getDoc, orderBy } from 'firebase/firestore';
-import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType, cleanFirestoreData } from '../lib/firebase';
 import ProfileModal from './ProfileModal';
 import QuotationDocument from './QuotationDocument';
 import MarketHealthView from './MarketHealthView';
@@ -1213,7 +1213,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     existing = [newLogisticsOrder, ...existing];
     localStorage.setItem('supplyx_freight_requests', JSON.stringify(existing));
 
-    setDoc(doc(db, 'freight_orders', logisticsId), newLogisticsOrder).catch(err => {
+    setDoc(doc(db, 'freight_orders', logisticsId), cleanFirestoreData(newLogisticsOrder)).catch(err => {
       console.warn('Firestore write warning:', err);
     });
 
@@ -1335,7 +1335,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       localStorage.setItem('supplyx_freight_requests', JSON.stringify(existing));
 
       // Push to Firestore freight_orders collection using doc reference
-      setDoc(doc(db, 'freight_orders', logisticsId), newLogisticsOrder).catch(err => {
+      setDoc(doc(db, 'freight_orders', logisticsId), cleanFirestoreData(newLogisticsOrder)).catch(err => {
         console.warn('Firestore write warning:', err);
       });
 

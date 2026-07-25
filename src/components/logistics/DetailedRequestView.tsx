@@ -24,9 +24,10 @@ import {
   Trash2
 } from 'lucide-react';
 import { CargoRequest, CommercialDriver, CarrierProposal, Occurrence } from './types';
-import { db, auth } from '../../lib/firebase';
+import { db, auth, cleanFirestoreData } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { calculateVehicleRecommendation } from './vehicleRecommendation';
+import { syncChatMessageToFreightOrders } from './logisticsSync';
 import { collection, query, where, getDocs, getDoc, addDoc, updateDoc, doc, serverTimestamp, onSnapshot, setDoc } from 'firebase/firestore';
 
 interface DetailedRequestViewProps {
@@ -506,11 +507,11 @@ export default function DetailedRequestView({
     if (latestBid) {
       try {
         const docRef = doc(collection(db, 'carrier_bids'));
-        await setDoc(docRef, {
+        await setDoc(docRef, cleanFirestoreData({
           ...latestBid,
           id: docRef.id,
           userId: user?.uid || 'anonymous'
-        });
+        }));
       } catch (err) {
         console.error("Error writing new bid to Firestore:", err);
       }
@@ -544,11 +545,14 @@ export default function DetailedRequestView({
   const activeLogisticsPartners = useMemo(() => {
     const partnersMap = new Map<string, { uid: string; name: string }>();
 
-    // Put some default partners first if needed, or get from replies
+    // Get partners from logisticsReplies
     (requestObj.logisticsReplies || []).forEach((rep: any) => {
-      if (rep.logisticsUserId && rep.logisticsUserId !== 'anonymous') {
-        const name = rep.sender === 'logistics' ? rep.senderName : (rep.logisticsUserName || 'Operador Logístico');
-        partnersMap.set(rep.logisticsUserId, { uid: rep.logisticsUserId, name });
+      if (rep.sender === 'logistics' || rep.logisticsUserId || rep.logisticsUserName) {
+        const uid = rep.logisticsUserId || `logistics_${rep.senderName || 'op'}`;
+        const name = rep.sender === 'logistics' ? (rep.senderName || rep.logisticsUserName || 'Operador Logístico') : (rep.logisticsUserName || rep.senderName || 'Operador Logístico');
+        if (uid !== 'anonymous') {
+          partnersMap.set(uid, { uid, name });
+        }
       }
     });
 
@@ -580,18 +584,25 @@ export default function DetailedRequestView({
     if (userType === 'logistics') {
       const myUid = user?.uid || 'ops_logistica_default';
       return repliesList.filter((rep: any) => {
-        const pId = rep.logisticsUserId || 'ops_logistica_default';
-        return pId === myUid;
+        const pId = rep.logisticsUserId || `logistics_${rep.senderName || 'op'}`;
+        return pId === myUid || rep.sender === 'logistics';
       });
     }
-    // Buyers/Suppliers see replies filtered by their currently selected logistics provider
-    // If no logistics provider exists or they haven't selected one, we default to the first active partner
-    const activeUid = currentLogisticsUserId || 'ops_logistica_default';
-    return repliesList.filter((rep: any) => {
-      const pId = rep.logisticsUserId || 'ops_logistica_default';
-      return pId === activeUid;
-    });
-  }, [requestObj.logisticsReplies, userType, user?.uid, currentLogisticsUserId]);
+    // Buyers/Suppliers see replies filtered by their currently selected logistics provider or all logistics replies
+    if (selectedLogisticsUserId) {
+      return repliesList.filter((rep: any) => {
+        const pId = rep.logisticsUserId || `logistics_${rep.senderName || 'op'}`;
+        return pId === selectedLogisticsUserId || rep.sender === 'logistics';
+      });
+    }
+    if (currentLogisticsUserId) {
+      return repliesList.filter((rep: any) => {
+        const pId = rep.logisticsUserId || `logistics_${rep.senderName || 'op'}`;
+        return pId === currentLogisticsUserId || rep.sender === 'logistics';
+      });
+    }
+    return repliesList;
+  }, [requestObj.logisticsReplies, userType, user?.uid, selectedLogisticsUserId, currentLogisticsUserId]);
 
   const selectedBid = useMemo(() => {
     return visibleBids[selectedProposalIndex] || visibleBids[0] || null;
@@ -833,6 +844,14 @@ export default function DetailedRequestView({
         participants: [myUid, targetUid],
         text,
         createdAt: serverTimestamp()
+      });
+
+      syncChatMessageToFreightOrders({
+        messageText: text,
+        senderId: myUid,
+        senderName: myName,
+        targetUserId: targetUid,
+        cargoId: requestObj.id
       });
 
       console.log('Synchronized logistics message to B2B Chat room:', chatRoomId);
@@ -1628,35 +1647,72 @@ export default function DetailedRequestView({
                         </div>
                       )}
 
-                      {/* Display the latest operator proposal if available */}
-                      {requestObj.status === 'Em negociação' && (
-                        <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl space-y-3">
-                          <p className="text-[9.5px] font-black uppercase text-emerald-400 tracking-wider">★ PROPOSTA LOGÍSTICA RECEBIDA:</p>
-                          <p className="text-[10px] text-zinc-400 font-bold">
-                            {language === 'PT' ? 'O operador logístico respondeu apresentando as seguintes condições definitivas para este transporte:' : 'The carrier/logistics operator responded with proposed options:'}
-                          </p>
-                          <ul className="text-[10px] font-mono text-white list-disc pl-4 space-y-1">
-                            <li>{language === 'PT' ? 'Valor Consolidado:' : 'Rate Proposed:'} <span className="text-emerald-400 font-bold">{requestObj.targetPrice}</span></li>
-                            <li>{language === 'PT' ? 'Prazo Recomendado:' : 'Transit Promised:'} <span className="text-zinc-300 font-bold">{requestObj.prazoEntrega}</span></li>
-                            <li>{language === 'PT' ? 'Veículo Alocado:' : 'Vehicle Scheduled:'} <span className="text-zinc-300">{requestObj.deliveryMode}</span></li>
-                          </ul>
+                      {/* Display the latest operator proposal in green panel */}
+                      {(() => {
+                        const partnerObj = activeLogisticsPartners.find(p => p.uid === currentLogisticsUserId) || activeLogisticsPartners[0];
+                        const operatorName = selectedBid?.name || partnerObj?.name || (visibleReplies.find((r: any) => r.sender === 'logistics')?.senderName) || requestObj.assignedCarrier || 'Operador Logístico';
+                        const displayPrice = selectedBid ? `MT ${selectedBid.price.toLocaleString('pt-BR')} MZN` : (requestObj.targetPrice || 'Aguardando proposta...');
+                        const displayTransit = selectedBid?.deliverTime || requestObj.prazoEntrega || '2 a 3 dias úteis';
+                        const displayVehicle = (selectedBid as any)?.vehicleType || requestObj.deliveryMode || 'Veículo de Carga Refratária / Seca';
+                        const isAssigned = requestObj.status === 'Atribuído' || requestObj.status === 'Entregue' || requestObj.status === 'Em trânsito' || requestObj.status === 'Em recolha';
 
-                          <div className="flex gap-2.5 pt-2">
-                            <button
-                              onClick={handleRejectProposal}
-                              className="flex-1 py-2 rounded-xl bg-red-500/10 hover:bg-red-550 text-red-500 hover:text-white border border-red-500/20 text-[9px] font-black uppercase tracking-wider transition-all"
-                            >
-                              {language === 'PT' ? 'Recusar / Negociar' : 'Reject & Counter'}
-                            </button>
-                            <button
-                              onClick={handleAcceptProposal}
-                              className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-[9px] font-black uppercase tracking-wider rounded-xl shadow-lg transition-all"
-                            >
-                              {language === 'PT' ? 'Aceitar e Homologar ✓' : 'Accept & Contract ✓'}
-                            </button>
+                        return (
+                          <div className={`p-4 rounded-2xl space-y-3 transition-all ${
+                            isAssigned
+                              ? 'bg-emerald-500/10 border-2 border-emerald-500/40 shadow-lg'
+                              : 'bg-emerald-500/10 border border-emerald-500/30 shadow-md'
+                          }`}>
+                            <div className="flex items-center justify-between">
+                              <p className="text-[9.5px] font-black uppercase text-emerald-400 tracking-wider flex items-center gap-1.5">
+                                <span>★</span> {isAssigned ? (language === 'PT' ? 'PROPOSTA ACEITA E CONTRATO FIRMADO' : 'CONTRACT SIGNED & ASSIGNED') : (language === 'PT' ? 'PROPOSTA DE PREÇO FORMAL DO OPERADOR:' : 'OFFICIAL LOGISTICS PROPOSAL:')}
+                              </p>
+                              <span className="text-[8px] font-mono font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full uppercase">
+                                {requestObj.status}
+                              </span>
+                            </div>
+
+                            <p className="text-[10px] text-zinc-300 font-bold">
+                              {isAssigned
+                                ? (language === 'PT' ? `Carga atribuída ao operador ${operatorName}. Trâmites de transporte em andamento.` : `Cargo assigned to ${operatorName}. Transportation in progress.`)
+                                : (language === 'PT' ? `Condições e tarifas apresentadas por ${operatorName}:` : `Pricing and transit terms offered by ${operatorName}:`)}
+                            </p>
+
+                            <ul className="text-[10px] font-mono text-white list-disc pl-4 space-y-1 bg-zinc-950/60 p-3 rounded-xl border border-white/5">
+                              <li>
+                                {language === 'PT' ? 'Operador Responsa:' : 'Operator:'} <span className="text-white font-bold">{operatorName}</span>
+                              </li>
+                              <li>
+                                {language === 'PT' ? 'Valor Consolidado:' : 'Proposed Rate:'} <span className="text-emerald-400 font-black text-xs">{displayPrice}</span>
+                              </li>
+                              <li>
+                                {language === 'PT' ? 'Prazo Estimado:' : 'Transit Promised:'} <span className="text-zinc-300 font-bold">{displayTransit}</span>
+                              </li>
+                              <li>
+                                {language === 'PT' ? 'Veículo/Modal:' : 'Scheduled Vehicle:'} <span className="text-zinc-300">{displayVehicle}</span>
+                              </li>
+                            </ul>
+
+                            {!isAssigned && (
+                              <div className="flex gap-2.5 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={handleRejectProposal}
+                                  className="flex-1 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/30 text-[9px] font-black uppercase tracking-wider transition-all"
+                                >
+                                  {language === 'PT' ? 'Recusar / Negociar' : 'Reject & Counter'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleAcceptProposal}
+                                  className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-[9px] font-black uppercase tracking-wider rounded-xl shadow-lg transition-all"
+                                >
+                                  {language === 'PT' ? 'Aceitar e Homologar ✓' : 'Accept & Contract ✓'}
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {/* Client Reply and Counterproposal message form directly */}
                       <form onSubmit={handleSendReply} className="space-y-2">

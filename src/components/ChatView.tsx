@@ -28,6 +28,7 @@ import { AttachmentButton } from './chat/AttachmentButton';
 import { UploadProgress } from './chat/UploadProgress';
 import { DocumentCard } from './chat/DocumentCard';
 import { useUpload } from '../hooks/useUpload';
+import { syncChatMessageToFreightOrders } from './logistics/logisticsSync';
 import { db, auth, handleFirestoreError, OperationType, clientDirectUpload, isVercel } from '../lib/firebase';
 import { 
   collection, 
@@ -548,6 +549,15 @@ export default function ChatView({ isDarkMode, language = 'PT', userType, onNavi
         lastMessageSenderId: auth.currentUser.uid,
         updatedAt: serverTimestamp(),
         [`unreadCount.${otherId}`]: increment(1)
+      });
+
+      // Synchronize message to logistics section as a logistics reply / counter-proposal
+      syncChatMessageToFreightOrders({
+        messageText: text,
+        senderId: auth.currentUser.uid,
+        senderName: auth.currentUser.displayName || auth.currentUser.email?.split('@')[0] || undefined,
+        targetUserId: otherId,
+        cargoId: (activeRoom as any).cargoId || (activeRoom as any).requestId
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `chats/${activeRoom.id}/messages`);

@@ -10,6 +10,7 @@ import { db, auth } from '../../lib/firebase';
 import { collection, doc, addDoc, setDoc, getDocs, query, orderBy, serverTimestamp, where, updateDoc, increment, deleteDoc } from 'firebase/firestore';
 import { CommercialDriver } from './types';
 import { notificationService } from '../../services/notificationService';
+import { syncChatMessageToFreightOrders } from './logisticsSync';
 
 // Mozambique realistic vehicle profiles
 interface VehicleProfile {
@@ -380,6 +381,13 @@ export default function TransportAssignmentPage({
           createdAt: serverTimestamp()
         });
       }
+
+      syncChatMessageToFreightOrders({
+        messageText: text,
+        senderId: currentUserId,
+        senderName: currentUserName,
+        targetUserId: carrierId
+      });
 
       triggerToast(language === 'PT' ? 'Mensagem enviada com sucesso!' : 'Message sent successfully!');
       setMessageTextByCarrier(prev => ({ ...prev, [carrierId]: '' }));

@@ -18,7 +18,7 @@ import {
   Award,
   ListFilter
 } from 'lucide-react';
-import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { auth, db, handleFirestoreError, OperationType, cleanFirestoreData } from '../lib/firebase';
 import { collection, onSnapshot, query, where, getDocs, getDoc, setDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -291,16 +291,17 @@ export default function LogisticsView({
 
       const q = query(collection(db, 'freight_orders'), where('id', '==', req.id));
       const querySnapshot = await getDocs(q);
+      const cleanedReq = cleanFirestoreData({ ...req });
       if (!querySnapshot.empty) {
         const updatePromises: Promise<void>[] = [];
         querySnapshot.forEach((docSnap) => {
-          updatePromises.push(updateDoc(docSnap.ref, { ...req }).catch(e => {
+          updatePromises.push(updateDoc(docSnap.ref, cleanedReq).catch(e => {
             handleFirestoreError(e, OperationType.UPDATE, `freight_orders/${docSnap.id}`);
           }));
         });
         await Promise.all(updatePromises);
       } else {
-        await setDoc(doc(db, 'freight_orders', req.id), req);
+        await setDoc(doc(db, 'freight_orders', req.id), cleanedReq);
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `freight_orders/${req.id}`);

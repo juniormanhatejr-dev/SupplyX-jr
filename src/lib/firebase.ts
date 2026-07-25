@@ -502,8 +502,29 @@ export async function clientDirectUpload(
 
 export const isVercel = typeof window !== 'undefined' && (
   window.location.hostname.includes('vercel.app') || 
-  window.location.hostname.includes('localhost') === false && window.location.hostname.includes('run.app') === false
+  (window.location.hostname.includes('localhost') === false && window.location.hostname.includes('run.app') === false)
 );
+
+/**
+ * Recursively removes `undefined` values from an object before sending to Firestore,
+ * preventing 'Function updateDoc() called with invalid data. Unsupported field value: undefined' errors.
+ */
+export function cleanFirestoreData<T extends Record<string, any>>(data: T): Partial<T> {
+  if (!data || typeof data !== 'object') return data;
+  const cleaned: any = Array.isArray(data) ? [] : {};
+  Object.keys(data).forEach((key) => {
+    const value = data[key];
+    if (value !== undefined) {
+      if (value && typeof value === 'object' && !(value instanceof Date) && typeof (value as any).toDate !== 'function') {
+        cleaned[key] = cleanFirestoreData(value);
+      } else {
+        cleaned[key] = value;
+      }
+    }
+  });
+  return cleaned;
+}
+
 
 
 

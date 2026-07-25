@@ -18,7 +18,7 @@ import {
   FileText
 } from 'lucide-react';
 import { CargoRequest } from './types';
-import { db, auth } from '../../lib/firebase';
+import { db, auth, cleanFirestoreData } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import ChatView from '../ChatView';
@@ -142,7 +142,7 @@ export default function CarrierCentral({
         ...newBid,
         id: bidDocRef.id
       };
-      await setDoc(bidDocRef, finalBidDoc);
+      await setDoc(bidDocRef, cleanFirestoreData(finalBidDoc));
     } catch (error) {
       console.error("Error saving bid to Firestore:", error);
     }

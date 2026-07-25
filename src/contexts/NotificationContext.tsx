@@ -316,6 +316,51 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
             });
           }
         }
+
+        // 5. Check for active freight orders / tender loads for logistics operators
+        const isLogisticsRole = userRole === 'logistics' || profile?.type === 'logistics' || profile?.userType === 'logistics';
+        const qFreightOrders = query(collection(db, 'freight_orders'));
+        const freightSnap = await getDocs(qFreightOrders);
+        for (const fDoc of freightSnap.docs) {
+          const cargo = fDoc.data();
+          const cargoId = cargo.id || fDoc.id;
+          const status = cargo.status || 'Em concurso';
+
+          const isOpenTender = status === 'Em concurso' || status === 'Pendente' || status === 'Em negociação' || status === 'Aguardando Coleta';
+          const isAssignedToMe = cargo.assignedCarrier === currentUserId || 
+                                 (profile?.companyName && cargo.assignedCarrier && cargo.assignedCarrier.toLowerCase().includes(profile.companyName.toLowerCase())) ||
+                                 cargo.transporterId === currentUserId;
+
+          if ((isLogisticsRole && isOpenTender) || isAssignedToMe) {
+            const notifId = `notif_freight_cargo_${cargoId}_for_${currentUserId}`;
+            const notifDocSnap = await getDoc(doc(db, 'notifications', notifId));
+            if (!notifDocSnap.exists() || notifDocSnap.data().deleted) {
+              const title = isAssignedToMe
+                ? (language === 'PT' ? `🚚 Carga Atribuída: ${cargo.origem || 'Moçambique'} ➔ ${cargo.destino || 'Moçambique'}` : `🚚 Cargo Assigned: ${cargo.origem || 'Mozambique'} ➔ ${cargo.destino || 'Mozambique'}`)
+                : (language === 'PT' ? `🚛 Nova Carga em Concurso: ${cargo.origem || 'Moçambique'} ➔ ${cargo.destino || 'Moçambique'}` : `🚛 New Cargo Tender: ${cargo.origem || 'Mozambique'} ➔ ${cargo.destino || 'Mozambique'}`);
+
+              const cargoTypeStr = cargo.cargoType || cargo.tipoCarga || cargo.tipoVolume || 'Carga Geral';
+              const message = isAssignedToMe
+                ? (language === 'PT'
+                  ? `Sua empresa foi designada para o frete ${cargoId} (${cargoTypeStr}). Aceda ao painel para iniciar a recolha.`
+                  : `Your company was assigned to freight ${cargoId} (${cargoTypeStr}). Access panel to manage dispatch.`)
+                : (language === 'PT'
+                  ? `Nova oportunidade de frete ativa em concurso (${cargoId}): ${cargoTypeStr} (${cargo.peso || cargo.weight || 'Peso sob consulta'}). Submeta a sua proposta!`
+                  : `New active freight tender (${cargoId}): ${cargoTypeStr} (${cargo.peso || cargo.weight || 'Weight TBD'}). Submit your bid!`);
+
+              await setDoc(doc(db, 'notifications', notifId), {
+                userId: currentUserId,
+                title,
+                message,
+                type: 'logistics',
+                priority: 'high',
+                read: false,
+                deleted: false,
+                createdAt: serverTimestamp()
+              });
+            }
+          }
+        }
       } catch (err) {
         console.warn('Error syncing standard system alerts into notifications:', err);
       }
@@ -465,6 +510,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
       syncRealtimeAlerts();
     });
 
+    const unsubscribeFreight = onSnapshot(query(collection(db, 'freight_orders')), () => {
+      syncRealtimeAlerts();
+    });
+
     return () => {
       console.log('[NotificationContext] Cleaning up current users subscriptions.');
       unsubscribeChats();
@@ -473,6 +522,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; isDarkM
       unsubscribeProducts();
       unsubscribeCarriers();
       unsubscribeOccurrences();
+      unsubscribeFreight();
     };
   }, [user?.uid, profile?.type, language]);
 

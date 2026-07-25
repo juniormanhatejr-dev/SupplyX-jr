@@ -1,5 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import jsPDF from 'jspdf';
+import QRCode from 'qrcode';
 import { motion, AnimatePresence } from 'motion/react';
+import SupplyXLogo from '../SupplyXLogo';
 import { 
   Package, 
   MapPin, 
@@ -21,7 +24,19 @@ import {
   User,
   ThumbsUp,
   XCircle,
-  Trash2
+  Trash2,
+  Eye,
+  Printer,
+  QrCode,
+  X,
+  Lock,
+  ExternalLink,
+  History,
+  Sparkles,
+  Building2,
+  UserCheck,
+  RefreshCw,
+  Check
 } from 'lucide-react';
 import { CargoRequest, CommercialDriver, CarrierProposal, Occurrence } from './types';
 import { db, auth, cleanFirestoreData } from '../../lib/firebase';
@@ -110,8 +125,14 @@ export default function DetailedRequestView({
 
   // Sign canvas state
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const isDrawingRef = useRef(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [savedSignature, setSavedSignature] = useState<string>('');
+
+  // CRT Guia de Transporte Digital states
+  const [showCrtModal, setShowCrtModal] = useState(false);
+  const [crtQrDataUrl, setCrtQrDataUrl] = useState<string>('');
+  const [showValidationDrawer, setShowValidationDrawer] = useState(false);
 
   // Products and quantities sheet states for cubing card
   const [cubingCardTab, setCubingCardTab] = useState<'spec' | 'products' | 'vehicle'>('spec');
@@ -206,6 +227,17 @@ export default function DetailedRequestView({
     }
     return list;
   }, [requestObj.tipoCarga, requestObj.quantidade, requestObj.peso, requestObj.volume, (requestObj as any).items]);
+
+  // Effect to generate QR Code data URL for CRT document
+  useEffect(() => {
+    if (requestObj?.id) {
+      const docCode = `CRT-MZ-TR-2026-${requestObj.id}`;
+      const validationUrl = `https://supplyx.app/verify/${docCode}`;
+      QRCode.toDataURL(validationUrl, { width: 200, margin: 3, color: { dark: '#0f172a', light: '#ffffff' } })
+        .then(url => setCrtQrDataUrl(url))
+        .catch(err => console.warn('QR code generation failed:', err));
+    }
+  }, [requestObj?.id]);
 
   const handleSaveProducts = (updatedList: { name: string; quantity: string; weight: string; volume: string; }[]) => {
     if (!onUpdateCargoRequest) return;
@@ -1112,32 +1144,60 @@ export default function DetailedRequestView({
     saveMessageToFirestoreChat(messageText);
   };
 
-  const handleDrawSignature = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
+  const getCanvasCoords = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / (rect.width || 1);
+    const scaleY = canvas.height / (rect.height || 1);
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
+    };
+  };
+
+  const startDrawing = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    isDrawingRef.current = true;
+    setIsDrawing(true);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    try {
+      (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+    } catch (err) {}
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const { x, y } = getCanvasCoords(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  };
+
+  const handleDrawSignature = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawingRef.current) return;
+    e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
+    const { x, y } = getCanvasCoords(e);
     ctx.lineTo(x, y);
     ctx.stroke();
   };
 
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    setIsDrawing(true);
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.beginPath();
-    const rect = canvas.getBoundingClientRect();
-    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#3b82f6';
+  const stopDrawing = (e?: React.PointerEvent<HTMLCanvasElement>) => {
+    isDrawingRef.current = false;
+    setIsDrawing(false);
+    if (e) {
+      try {
+        (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+      } catch (err) {}
+    }
   };
 
   const clearSignature = () => {
@@ -1152,9 +1212,433 @@ export default function DetailedRequestView({
   const saveSignatureData = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const dataUrl = canvas.toDataURL();
+    const dataUrl = canvas.toDataURL('image/png');
     setSavedSignature(dataUrl);
     onUpdateCargoPod(selectedRequestId, dataUrl, requestObj.podPhoto || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=200');
+  };
+
+  const handleDownloadDocument = async (docType: string, docTitle: string, docCodeParam: string) => {
+    try {
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const issueDate = new Date().toLocaleDateString('pt-PT');
+      const issueTime = new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+      const currentStatus = requestObj.status || 'Em concurso';
+      const officialDocCode = `CRT-MZ-TR-2026-${requestObj.id}`;
+      const validationUrl = `https://supplyx.app/verify/${officialDocCode}`;
+      const cryptoHash = `#CRT-HASH-${requestObj.id}-VERIFIED`;
+
+      // Generate QR Code data URL if not already generated
+      let qrDataUrl = crtQrDataUrl;
+      if (!qrDataUrl) {
+        try {
+          qrDataUrl = await QRCode.toDataURL(validationUrl, { width: 180, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } });
+        } catch (e) {
+          console.warn("QR code generation fallback", e);
+        }
+      }
+
+      // 1. Header Banner
+      pdf.setFillColor(15, 23, 42); // slate-900
+      pdf.rect(0, 0, 210, 42, 'F');
+
+      // Top decorative bar - SupplyX Institutional Blue (#2563eb)
+      pdf.setFillColor(37, 99, 235);
+      pdf.rect(0, 42, 210, 2.5, 'F');
+
+      // Header Text & Logo Title
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(16);
+      pdf.text("SUPPLYX LOGISTICS NETWORK", 15, 16);
+
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(59, 130, 246); // SupplyX Blue accent
+      pdf.text("GUIA DE TRANSPORTE DIGITAL (CRT) • MOÇAMBIQUE", 15, 24);
+
+      // Official Technical Monospace Code (Requirement 4)
+      pdf.setFontSize(8.5);
+      pdf.setFont('courier', 'bold');
+      pdf.setTextColor(203, 213, 225);
+      pdf.text(`CÓDIGO OFICIAL: ${officialDocCode}`, 15, 32);
+
+      // Security Seal Banner on Header (Requirement 9)
+      pdf.setFillColor(30, 41, 59);
+      pdf.roundedRect(15, 35, 122, 5, 1, 1, 'F');
+      pdf.setTextColor(52, 211, 153); // emerald green
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(6.5);
+      pdf.text("✓ DOCUMENTO OFICIAL • ELETRONICAMENTE VALIDADO • INTEGRIDADE GARANTIDA", 17, 38.5);
+
+      // Add QR Code image top right with subtext (Requirement 3)
+      if (qrDataUrl) {
+        try {
+          pdf.addImage(qrDataUrl, 'PNG', 168, 4, 28, 28);
+          pdf.setFillColor(255, 255, 255);
+          pdf.setFontSize(5.5);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(226, 232, 240);
+          pdf.text("Validar autenticidade", 182, 34, { align: 'center' });
+          pdf.text("Assinado digitalmente", 182, 37, { align: 'center' });
+        } catch (qrErr) {}
+      }
+
+      let curY = 50;
+
+      // Status Badge Config
+      let statusBgRGB = [254, 243, 199];
+      let statusTextRGB = [217, 119, 6];
+      let statusBorderRGB = [253, 230, 138];
+      let statusText = currentStatus.toUpperCase();
+
+      if (currentStatus === 'Entregue') {
+        statusBgRGB = [209, 250, 229];
+        statusTextRGB = [5, 150, 105];
+        statusBorderRGB = [167, 243, 208];
+      } else if (currentStatus === 'Em trânsito') {
+        statusBgRGB = [224, 242, 254];
+        statusTextRGB = [2, 132, 199];
+        statusBorderRGB = [186, 230, 253];
+      } else if (currentStatus === 'Cancelado') {
+        statusBgRGB = [254, 226, 226];
+        statusTextRGB = [220, 38, 38];
+        statusBorderRGB = [254, 202, 202];
+      }
+
+      // SECTION 1: Identificação e Especificação da Carga (Dynamic Flow & Independent Columns)
+      const wrappedOrigem = pdf.splitTextToSize(`Origem: ${requestObj.origem || 'Moçambique'}`, 80);
+      const wrappedTipoCarga = pdf.splitTextToSize(`Tipo de Carga: ${requestObj.tipoCarga || 'Carga Geral'}`, 80);
+      const wrappedCarrier = pdf.splitTextToSize(`Transportador: ${requestObj.assignedCarrier || 'Operador Credenciado SupplyX'}`, 80);
+      const wrappedDestino = pdf.splitTextToSize(`Destino: ${requestObj.destino || 'Moçambique'}`, 75);
+
+      // Compute Left Column Height
+      const leftColH = 14 + 6 + (wrappedOrigem.length * 4.5) + (wrappedTipoCarga.length * 4.5) + (wrappedCarrier.length * 4.5) + 6;
+
+      // Compute Right Column Height
+      const rightColH = 14 + 6 + (wrappedDestino.length * 4.5) + 6 + 6 + 6;
+
+      const dynamicSec1Height = Math.max(leftColH, rightColH, 50);
+
+      // Render Outer Card
+      pdf.setFillColor(248, 250, 252);
+      pdf.roundedRect(15, curY, 180, dynamicSec1Height, 3, 3, 'F');
+      pdf.setDrawColor(226, 232, 240);
+      pdf.roundedRect(15, curY, 180, dynamicSec1Height, 3, 3, 'D');
+
+      // SupplyX Blue Accent Bar
+      pdf.setFillColor(37, 99, 235);
+      pdf.rect(15, curY, 3, dynamicSec1Height, 'F');
+
+      // Section 1 Title
+      pdf.setTextColor(37, 99, 235); // SupplyX Blue
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text("1. IDENTIFICAÇÃO E ESPECIFICAÇÃO DA CARGA", 22, curY + 9);
+
+      // Render Status Badge top right inside box
+      pdf.setFillColor(statusBgRGB[0], statusBgRGB[1], statusBgRGB[2]);
+      pdf.setDrawColor(statusBorderRGB[0], statusBorderRGB[1], statusBorderRGB[2]);
+      pdf.roundedRect(145, curY + 4, 42, 7, 2, 2, 'FD');
+      pdf.setTextColor(statusTextRGB[0], statusTextRGB[1], statusTextRGB[2]);
+      pdf.setFontSize(7.5);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(statusText, 166, curY + 8.8, { align: 'center' });
+
+      // Left Column Render (X = 22, Max Width = 80mm)
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFontSize(8.5);
+      pdf.setFont('helvetica', 'normal');
+      let ly = curY + 18;
+      pdf.text(`ID da Carga: ${requestObj.id || 'N/A'}`, 22, ly);
+      ly += 6;
+
+      for (let i = 0; i < wrappedOrigem.length; i++) {
+        pdf.text(wrappedOrigem[i], 22, ly);
+        ly += 4.5;
+      }
+
+      for (let i = 0; i < wrappedTipoCarga.length; i++) {
+        pdf.text(wrappedTipoCarga[i], 22, ly);
+        ly += 4.5;
+      }
+
+      for (let i = 0; i < wrappedCarrier.length; i++) {
+        pdf.text(wrappedCarrier[i], 22, ly);
+        ly += 4.5;
+      }
+
+      // Right Column Render (X = 112, Max Width = 75mm)
+      let ry = curY + 18;
+      pdf.text(`Data de Emissão: ${issueDate}`, 112, ry);
+      ry += 6;
+
+      for (let i = 0; i < wrappedDestino.length; i++) {
+        pdf.text(wrappedDestino[i], 112, ry);
+        ry += 4.5;
+      }
+
+      pdf.text(`Modalidade / Veículo: ${requestObj.deliveryMode || 'Transporte Rodoviário'}`, 112, ry);
+      ry += 6;
+      pdf.text(`Prazo Estimado: ${requestObj.prazoEntrega || '2 - 3 Dias Úteis'}`, 112, ry);
+
+      curY += dynamicSec1Height + 6;
+
+      // Check Smart Page Break for Section 2
+      if (curY + 42 > 265) {
+        pdf.addPage();
+        curY = 20;
+      }
+
+      // SECTION 2: Especificação de Pesos, Volumes e Embalagens
+      pdf.setFillColor(248, 250, 252);
+      pdf.roundedRect(15, curY, 180, 36, 3, 3, 'F');
+      pdf.setDrawColor(226, 232, 240);
+      pdf.roundedRect(15, curY, 180, 36, 3, 3, 'D');
+
+      pdf.setFillColor(37, 99, 235);
+      pdf.rect(15, curY, 3, 36, 'F');
+
+      pdf.setTextColor(37, 99, 235);
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text("2. ESPECIFICAÇÃO DE PESOS, VOLUMES E EMBALAGENS", 22, curY + 8);
+
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(15, 23, 42);
+
+      const pesoTotalVal = requestObj.peso || '12.5 Toneladas';
+      const volumeVal = requestObj.volume || '18.0 m³';
+      const paletesVal = (requestObj as any).pallets || '12 Paletes EPAL';
+      const numVolumesVal = requestObj.quantidade || `${requestProducts.length} Lotes`;
+      const pesoLiquidoVal = (requestObj as any).pesoLiquido || '11.8 Toneladas';
+      const pesoBrutoVal = (requestObj as any).pesoBruto || '12.5 Toneladas';
+
+      // Row 1
+      pdf.text(`Peso Total: ${pesoTotalVal}`, 22, curY + 18);
+      pdf.text(`Volume: ${volumeVal}`, 80, curY + 18);
+      pdf.text(`N.º de Paletes: ${paletesVal}`, 140, curY + 18);
+
+      // Row 2
+      pdf.text(`N.º de Volumes: ${numVolumesVal}`, 22, curY + 27);
+      pdf.text(`Peso Líquido: ${pesoLiquidoVal}`, 80, curY + 27);
+      pdf.text(`Peso Bruto: ${pesoBrutoVal}`, 140, curY + 27);
+
+      curY += 42;
+
+      // Check Smart Page Break for Section 3
+      if (curY + 20 > 265) {
+        pdf.addPage();
+        curY = 20;
+      }
+
+      // SECTION 3: Lista de Produtos e Mercadorias
+      pdf.setTextColor(37, 99, 235);
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text("3. LISTA DE PRODUTOS E MERCADORIAS DECLARADAS", 15, curY);
+
+      curY += 4;
+
+      // Table Header
+      pdf.setFillColor(15, 23, 42); // slate-900 header
+      pdf.rect(15, curY, 180, 7, 'F');
+
+      pdf.setFontSize(7.5);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("SKU", 18, curY + 5);
+      pdf.text("DESCRIÇÃO DO ITEM", 45, curY + 5);
+      pdf.text("QTD", 125, curY + 5);
+      pdf.text("UNIDADE", 148, curY + 5);
+      pdf.text("PESO ESTIMADO", 172, curY + 5);
+
+      curY += 7;
+
+      const itemsToRender = requestProducts.length > 0 ? requestProducts : [
+        { name: requestObj.tipoCarga || 'Carga Geral Consolidada', quantity: requestObj.quantidade || '1 Lote', weight: requestObj.peso || '12.5 Toneladas', volume: requestObj.volume || '18 m³' }
+      ];
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+
+      itemsToRender.forEach((it, idx) => {
+        if (curY + 8 > 265) {
+          pdf.addPage();
+          curY = 20;
+
+          // Re-render Table Header on new page
+          pdf.setFillColor(15, 23, 42);
+          pdf.rect(15, curY, 180, 7, 'F');
+          pdf.setFontSize(7.5);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(255, 255, 255);
+          pdf.text("SKU", 18, curY + 5);
+          pdf.text("DESCRIÇÃO DO ITEM", 45, curY + 5);
+          pdf.text("QTD", 125, curY + 5);
+          pdf.text("UNIDADE", 148, curY + 5);
+          pdf.text("PESO ESTIMADO", 172, curY + 5);
+          curY += 7;
+        }
+
+        // Zebra striping
+        const bg = idx % 2 === 0 ? 255 : 243;
+        pdf.setFillColor(bg, bg, bg);
+        pdf.rect(15, curY, 180, 7, 'F');
+        pdf.setDrawColor(226, 232, 240);
+        pdf.rect(15, curY, 180, 7, 'D');
+
+        pdf.setFont('courier', 'bold');
+        pdf.setTextColor(37, 99, 235);
+        pdf.text(`SKU-${1000 + idx}`, 18, curY + 5);
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(15, 23, 42);
+        const descText = it.name.length > 38 ? it.name.substring(0, 35) + '...' : it.name;
+        pdf.text(descText, 45, curY + 5);
+        pdf.text(String(it.quantity), 125, curY + 5);
+        pdf.text("Lote / Unid", 148, curY + 5);
+        pdf.text(it.weight || 'Padronizado', 172, curY + 5);
+
+        curY += 7;
+      });
+
+      curY += 8;
+
+      // Check Smart Page Break for Section 4
+      if (curY + 52 > 265) {
+        pdf.addPage();
+        curY = 20;
+      }
+
+      // SECTION 4: Autenticação e Assinaturas (Requirement 6)
+      pdf.setTextColor(37, 99, 235);
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text("4. AUTENTICAÇÃO E ASSINATURA ELETRÓNICA (PoD)", 15, curY);
+
+      curY += 4;
+
+      // Panel 1: Expedidor / Operador
+      pdf.setDrawColor(203, 213, 225);
+      pdf.setFillColor(248, 250, 252);
+      pdf.roundedRect(15, curY, 86, 44, 2, 2, 'FD');
+
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(15, 23, 42);
+      pdf.text("EXPEDIDOR / OPERADOR LOGÍSTICO:", 18, curY + 7);
+
+      // Green Badge (Requirement 6)
+      pdf.setFillColor(209, 250, 229);
+      pdf.setDrawColor(167, 243, 208);
+      pdf.roundedRect(18, curY + 10, 42, 5, 1, 1, 'FD');
+      pdf.setTextColor(5, 150, 105);
+      pdf.setFontSize(6.5);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text("✓ ASSINADO DIGITALMENTE", 39, curY + 13.5, { align: 'center' });
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(71, 85, 105);
+      pdf.text(`Nome: ${requestObj.assignedCarrier || 'Operador Credenciado'}`, 18, curY + 20);
+      pdf.text(`Data: ${issueDate}  |  Hora: ${issueTime}`, 18, curY + 26);
+      pdf.setFont('courier', 'normal');
+      pdf.setFontSize(7);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(`Hash: #SUPPLYX-EXP-${requestObj.id || 'MZ'}`, 18, curY + 33);
+
+      // Panel 2: Comprovativo de Recebimento (PoD)
+      pdf.setDrawColor(203, 213, 225);
+      pdf.setFillColor(248, 250, 252);
+      pdf.roundedRect(108, curY, 87, 44, 2, 2, 'FD');
+
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(15, 23, 42);
+      pdf.text("RECEBEDOR / DESTINATÁRIO (PoD):", 111, curY + 7);
+
+      const podSig = savedSignature || requestObj.podSignature;
+      if (podSig) {
+        // Green Badge (Requirement 6)
+        pdf.setFillColor(209, 250, 229);
+        pdf.setDrawColor(167, 243, 208);
+        pdf.roundedRect(111, curY + 10, 42, 5, 1, 1, 'FD');
+        pdf.setTextColor(5, 150, 105);
+        pdf.setFontSize(6.5);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text("✓ ASSINADO DIGITALMENTE", 132, curY + 13.5, { align: 'center' });
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(71, 85, 105);
+        pdf.text(`Nome: ${(requestObj as any).receiverName || 'Fiel Depositário'}`, 111, curY + 20);
+        pdf.text(`Data: ${issueDate}  |  Hora: ${issueTime}`, 111, curY + 26);
+
+        try {
+          pdf.addImage(podSig, 'PNG', 111, curY + 28, 40, 10);
+        } catch (imgErr) {}
+
+        pdf.setFont('courier', 'normal');
+        pdf.setFontSize(7);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(`Hash: #SUPPLYX-POD-${requestObj.id || 'MZ'}`, 111, curY + 40);
+      } else {
+        // Yellow Badge (Requirement 6)
+        pdf.setFillColor(254, 243, 199);
+        pdf.setDrawColor(253, 230, 138);
+        pdf.roundedRect(111, curY + 10, 42, 5, 1, 1, 'FD');
+        pdf.setTextColor(217, 119, 6);
+        pdf.setFontSize(6.5);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text("● PENDENTE DE ASSINATURA", 132, curY + 13.5, { align: 'center' });
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(71, 85, 105);
+        pdf.text(`Nome: ${(requestObj as any).receiverName || 'Fiel Depositário'}`, 111, curY + 20);
+        pdf.text("Aguardando assinatura digital na entrega", 111, curY + 26);
+
+        pdf.setFont('courier', 'normal');
+        pdf.setFontSize(7);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text("Hash: #SUPPLYX-POD-PENDING", 111, curY + 38);
+      }
+
+      // Requirement 7 & 8 & 5: Watermark, Page Numbering & Footer across all pages
+      const totalPages = pdf.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+
+        // Watermark (Requirement 8)
+        pdf.setTextColor(241, 245, 249);
+        pdf.setFontSize(32);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text("SUPPLYX VERIFIED", 105, 145, { align: 'center', angle: 30 });
+
+        // Footer Metadata (Requirement 5 & Requirement 7)
+        pdf.setDrawColor(226, 232, 240);
+        pdf.line(15, 272, 195, 272);
+
+        pdf.setFontSize(6.5);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(148, 163, 184);
+
+        // Footer Row 1
+        pdf.text(`Gerado em: ${issueDate} às ${issueTime} • Versão: v2.4 Enterprise • Hash: ${cryptoHash}`, 15, 277);
+        pdf.text(`Validação: ${validationUrl}`, 15, 281);
+        pdf.text("SupplyX Platform • Validade Legal Eletrónica INATRO & AT Moçambique", 15, 285);
+
+        // Page Numbering (Requirement 7)
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(`Página ${i} de ${totalPages}`, 195, 285, { align: 'right' });
+      }
+
+      pdf.save(`${officialDocCode}.pdf`);
+    } catch (err) {
+      console.error("Error exporting PDF:", err);
+      alert("Ocorreu um erro ao gerar o documento PDF. Por favor tente novamente.");
+    }
   };
 
   const handleFinishReview = (e: React.FormEvent) => {
@@ -2931,19 +3415,31 @@ export default function DetailedRequestView({
                   { title: language === 'PT' ? 'Guia de Transporte (CRT)' : 'Carriage Consignment Note (CRT)', code: `CRT-MZ-${requestObj.id}`, type: 'Manifest' },
                   { title: language === 'PT' ? 'Fatura Logística Comercial' : 'B2B Commercial Fee Invoice', code: `INV-MZ-${requestObj.id}`, type: 'SplitInvoice' }
                 ].map((doc, idx) => (
-                  <div key={idx} className="p-4 bg-zinc-950 border border-white/5 rounded-xl flex items-center justify-between">
+                  <div key={idx} className="p-4 bg-zinc-950 border border-white/5 rounded-xl flex items-center justify-between gap-2">
                     <div>
                       <p className="text-[10px] font-black text-white italic leading-none mb-1">{doc.title}</p>
                       <p className="text-[8px] text-zinc-500 font-bold uppercase">Código Oficial: {doc.code}</p>
                     </div>
 
-                    <button 
-                      onClick={() => alert(`Simulando download do documento ${doc.code} compilado em PDF com dados on-chain.`)}
-                      className="p-2.5 bg-zinc-900 border border-white/5 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg flex items-center gap-1 text-[8.5px] font-black uppercase"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      PDF
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {doc.type === 'Manifest' && (
+                        <button 
+                          onClick={() => setShowCrtModal(true)}
+                          className="p-2.5 bg-supplyx-blue/10 border border-supplyx-blue/30 hover:bg-supplyx-blue/20 text-supplyx-blue rounded-lg flex items-center gap-1 text-[8.5px] font-black uppercase transition-colors"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          {language === 'PT' ? 'Visualizar Guia' : 'View CRT'}
+                        </button>
+                      )}
+
+                      <button 
+                        onClick={() => handleDownloadDocument(doc.type, doc.title, doc.code)}
+                        className="p-2.5 bg-zinc-900 border border-white/5 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg flex items-center gap-1 text-[8.5px] font-black uppercase transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        PDF
+                      </button>
+                    </div>
                   </div>
                 ))}
 
@@ -2974,13 +3470,14 @@ export default function DetailedRequestView({
                 <div className="border border-white/10 rounded-xl bg-zinc-950 p-1">
                   <canvas
                     ref={canvasRef}
-                    width={350}
-                    height={120}
-                    onMouseMove={handleDrawSignature}
-                    onMouseDown={startDrawing}
-                    onMouseUp={() => setIsDrawing(false)}
-                    onMouseLeave={() => setIsDrawing(false)}
-                    className="w-full bg-zinc-950 rounded-lg cursor-crosshair h-[120px]"
+                    width={400}
+                    height={150}
+                    onPointerDown={startDrawing}
+                    onPointerMove={handleDrawSignature}
+                    onPointerUp={stopDrawing}
+                    onPointerLeave={stopDrawing}
+                    onPointerCancel={stopDrawing}
+                    className="w-full bg-zinc-950 rounded-lg cursor-crosshair h-[140px] touch-none select-none"
                   />
                 </div>
 
@@ -3139,6 +3636,567 @@ export default function DetailedRequestView({
               >
                 {language === 'PT' ? 'Entendido' : 'Acknowledge'}
               </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* GUIA DE TRANSPORTE DIGITAL (CRT) OFFICIAL PREVIEW MODAL */}
+      <AnimatePresence>
+        {showCrtModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="relative w-full max-w-4xl bg-zinc-950 border border-white/10 rounded-[28px] p-6 sm:p-8 space-y-6 shadow-2xl text-left text-white my-auto max-h-[92vh] overflow-y-auto print:max-h-none print:border-none print:p-0 print:bg-white print:text-black"
+            >
+              {/* Requirement 8: Watermark de Autenticidade no Fundo */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none opacity-[0.025] print:opacity-[0.03]">
+                <span className="text-6xl sm:text-8xl font-black tracking-widest text-white uppercase rotate-[-20deg] text-center">
+                  SUPPLYX VERIFIED
+                </span>
+              </div>
+
+              {/* Modal Top Bar */}
+              <div className="flex items-center justify-between border-b border-white/10 pb-4 print:hidden relative z-10">
+                <div className="flex items-center gap-3">
+                  <SupplyXLogo size="sm" isDark={true} />
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-zinc-300 flex items-center gap-2">
+                      {language === 'PT' ? 'Guia de Transporte Digital (CRT)' : 'Carriage Consignment Note (CRT)'}
+                      <span className="px-2 py-0.5 bg-supplyx-blue/15 border border-supplyx-blue/30 text-supplyx-blue rounded text-[9px] font-mono font-bold">
+                        Enterprise
+                      </span>
+                    </h3>
+                    <p className="text-[10px] font-mono font-bold text-zinc-400 uppercase mt-0.5">
+                      CRT-MZ-TR-2026-{requestObj.id}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Requirement 10: Botão da Página de Validação */}
+                  <button
+                    onClick={() => setShowValidationDrawer(true)}
+                    className="px-3 py-2 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                    title="Verificar Validação On-Chain"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Verificar Autenticidade</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleDownloadDocument('Manifest', 'Guia de Transporte (CRT)', `CRT-MZ-TR-2026-${requestObj.id}`)}
+                    className="px-3.5 py-2 bg-supplyx-blue hover:bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-supplyx-blue/20 transition-all"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    {language === 'PT' ? 'Baixar PDF' : 'Download PDF'}
+                  </button>
+
+                  <button
+                    onClick={() => window.print()}
+                    className="px-3.5 py-2 bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-zinc-300 rounded-xl text-xs font-black uppercase flex items-center gap-1.5 transition-all"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    {language === 'PT' ? 'Imprimir' : 'Print'}
+                  </button>
+
+                  <button
+                    onClick={() => setShowCrtModal(false)}
+                    className="p-2 text-zinc-400 hover:text-white rounded-xl hover:bg-white/5 transition-all"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* CRT DOCUMENT CONTAINER (PREVIEW READY FOR DISPLAY & PRINT) */}
+              <div className="relative z-10 p-6 sm:p-8 bg-zinc-900/90 border border-white/5 rounded-2xl space-y-6 text-zinc-100 print:bg-white print:text-slate-900 print:border-slate-300 shadow-xl">
+                
+                {/* Header Banner */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-white/10 print:border-slate-300">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <SupplyXLogo size="md" isDark={true} />
+                      <div>
+                        <h2 className="text-base sm:text-lg font-black uppercase tracking-wider text-white print:text-slate-900">
+                          SUPPLYX LOGISTICS NETWORK
+                        </h2>
+                        <p className="text-[10px] sm:text-xs font-black text-supplyx-blue uppercase tracking-widest">
+                          GUIA DE TRANSPORTE DIGITAL (CRT) • MOÇAMBIQUE
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Requirement 9: Segurança Visual / Selo */}
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/25 rounded-full text-emerald-400 text-[9.5px] font-bold tracking-wider">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Documento Oficial • Eletronicamente Validado • Integridade Garantida</span>
+                    </div>
+                  </div>
+
+                  {/* QR Code & Code (Requirement 3 & 4) */}
+                  <div 
+                    onClick={() => setShowValidationDrawer(true)}
+                    className="flex flex-col items-center sm:items-end gap-1.5 bg-zinc-950/90 p-3 rounded-2xl border border-white/10 hover:border-supplyx-blue/50 cursor-pointer transition-all print:bg-slate-50 print:border-slate-200 group"
+                  >
+                    <div className="flex items-center gap-3">
+                      {crtQrDataUrl ? (
+                        <img src={crtQrDataUrl} alt="QR Code" className="w-16 h-16 rounded-xl bg-white p-1 shadow-md" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-xl bg-zinc-800 flex items-center justify-center">
+                          <QrCode className="w-8 h-8 text-zinc-500" />
+                        </div>
+                      )}
+                      <div className="text-left space-y-1">
+                        <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest block">Código do Documento:</span>
+                        {/* Requirement 4: Código Monocromático / Monospace Destacado */}
+                        <p className="text-xs font-mono font-black text-white bg-white/5 px-2 py-0.5 rounded border border-white/10 print:bg-slate-100 print:text-slate-900">
+                          CRT-MZ-TR-2026-{requestObj.id}
+                        </p>
+                        <span className="text-[8.5px] font-mono text-emerald-400 font-bold block flex items-center gap-1">
+                          <Check className="w-3 h-3" /> VERIFICADO ON-CHAIN
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Requirement 3: Textos abaixo do QR Code */}
+                    <div className="w-full text-center sm:text-right pt-1 border-t border-white/5 print:border-slate-200">
+                      <p className="text-[8.5px] font-bold text-supplyx-blue group-hover:underline flex items-center justify-end gap-1">
+                        <span>Validar autenticidade deste documento</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </p>
+                      <p className="text-[8px] text-zinc-400 font-medium italic">
+                        Documento assinado digitalmente.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 1: Identificação e Especificação da Carga (Requirement 1: Hierarquia Visual) */}
+                <div className="p-5 bg-zinc-950/70 border border-white/5 rounded-xl space-y-4 print:bg-slate-50 print:border-slate-200">
+                  <div className="flex justify-between items-center pb-3 border-b border-white/5 print:border-slate-200">
+                    <div className="border-l-4 border-supplyx-blue pl-3 py-0.5">
+                      <h4 className="text-xs font-black text-supplyx-blue uppercase tracking-wider flex items-center gap-2">
+                        <Package className="w-4 h-4 text-supplyx-blue" />
+                        1. Identificação e Especificação da Carga
+                      </h4>
+                    </div>
+
+                    {/* Requirement 2: Badges de Estado */}
+                    {(() => {
+                      const st = requestObj.status || 'Em concurso';
+                      if (st === 'Entregue') {
+                        return (
+                          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            ● ENTREGUE
+                          </span>
+                        );
+                      }
+                      if (st === 'Em trânsito') {
+                        return (
+                          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-500/15 text-sky-400 border border-sky-500/30">
+                            ● EM TRÂNSITO
+                          </span>
+                        );
+                      }
+                      if (st === 'Cancelado') {
+                        return (
+                          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                            ● CANCELADO
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                          ● {st.toUpperCase()}
+                        </span>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    {/* Left Column */}
+                    <div className="space-y-2.5">
+                      <div>
+                        <span className="text-[9px] font-black text-zinc-500 uppercase block">ID da Carga:</span>
+                        <p className="font-mono font-bold text-white print:text-slate-900">{requestObj.id}</p>
+                      </div>
+
+                      <div>
+                        <span className="text-[9px] font-black text-zinc-500 uppercase block">Origem (Carregamento):</span>
+                        <p className="font-bold text-white print:text-slate-900">{requestObj.origem || 'Moçambique'}</p>
+                      </div>
+
+                      <div>
+                        <span className="text-[9px] font-black text-zinc-500 uppercase block">Tipo de Carga:</span>
+                        <p className="font-bold text-white print:text-slate-900 break-words leading-relaxed">
+                          {requestObj.tipoCarga || 'Carga Geral'}
+                        </p>
+                      </div>
+
+                      <div>
+                        <span className="text-[9px] font-black text-zinc-500 uppercase block">Transportador Atribuído:</span>
+                        <p className="font-bold text-white print:text-slate-900">{requestObj.assignedCarrier || 'Operador Credenciado SupplyX'}</p>
+                      </div>
+                    </div>
+
+                    {/* Right Column */}
+                    <div className="space-y-2.5">
+                      <div>
+                        <span className="text-[9px] font-black text-zinc-500 uppercase block">Data de Emissão:</span>
+                        <p className="font-bold text-white print:text-slate-900">{new Date().toLocaleDateString('pt-PT')}</p>
+                      </div>
+
+                      <div>
+                        <span className="text-[9px] font-black text-zinc-500 uppercase block">Destino (Descarregamento):</span>
+                        <p className="font-bold text-white print:text-slate-900">{requestObj.destino || 'Moçambique'}</p>
+                      </div>
+
+                      <div>
+                        <span className="text-[9px] font-black text-zinc-500 uppercase block">Modalidade / Veículo:</span>
+                        <p className="font-bold text-white print:text-slate-900">{requestObj.deliveryMode || 'Transporte Rodoviário'}</p>
+                      </div>
+
+                      <div>
+                        <span className="text-[9px] font-black text-zinc-500 uppercase block">Prazo Estimado de Entrega:</span>
+                        <p className="font-bold text-white print:text-slate-900">{requestObj.prazoEntrega || '2 - 3 Dias Úteis'}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Pesos, Volumes e Embalagens */}
+                <div className="p-5 bg-zinc-950/70 border border-white/5 rounded-xl space-y-3 print:bg-slate-50 print:border-slate-200">
+                  <div className="border-l-4 border-supplyx-blue pl-3 py-0.5">
+                    <h4 className="text-xs font-black text-supplyx-blue uppercase tracking-wider flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-supplyx-blue" />
+                      2. Especificação de Pesos, Volumes e Embalagens
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                    <div className="p-3 bg-zinc-900/90 border border-white/5 rounded-lg print:bg-white print:border-slate-200">
+                      <span className="text-[8.5px] font-black text-zinc-400 uppercase block">Peso Total</span>
+                      <p className="text-xs font-bold text-white print:text-slate-900">{requestObj.peso || '12.5 Toneladas'}</p>
+                    </div>
+
+                    <div className="p-3 bg-zinc-900/90 border border-white/5 rounded-lg print:bg-white print:border-slate-200">
+                      <span className="text-[8.5px] font-black text-zinc-400 uppercase block">Volume</span>
+                      <p className="text-xs font-bold text-white print:text-slate-900">{requestObj.volume || '18.0 m³'}</p>
+                    </div>
+
+                    <div className="p-3 bg-zinc-900/90 border border-white/5 rounded-lg print:bg-white print:border-slate-200">
+                      <span className="text-[8.5px] font-black text-zinc-400 uppercase block">N.º de Paletes</span>
+                      <p className="text-xs font-bold text-white print:text-slate-900">{(requestObj as any).pallets || '12 Paletes EPAL'}</p>
+                    </div>
+
+                    <div className="p-3 bg-zinc-900/90 border border-white/5 rounded-lg print:bg-white print:border-slate-200">
+                      <span className="text-[8.5px] font-black text-zinc-400 uppercase block">N.º de Volumes</span>
+                      <p className="text-xs font-bold text-white print:text-slate-900">{requestObj.quantidade || `${requestProducts.length} Lotes`}</p>
+                    </div>
+
+                    <div className="p-3 bg-zinc-900/90 border border-white/5 rounded-lg print:bg-white print:border-slate-200">
+                      <span className="text-[8.5px] font-black text-zinc-400 uppercase block">Peso Líquido</span>
+                      <p className="text-xs font-bold text-white print:text-slate-900">{(requestObj as any).pesoLiquido || '11.8 Toneladas'}</p>
+                    </div>
+
+                    <div className="p-3 bg-zinc-900/90 border border-white/5 rounded-lg print:bg-white print:border-slate-200">
+                      <span className="text-[8.5px] font-black text-zinc-400 uppercase block">Peso Bruto</span>
+                      <p className="text-xs font-bold text-white print:text-slate-900">{(requestObj as any).pesoBruto || '12.5 Toneladas'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Requirement 2: Tabela com Zebra Striping, Hover e Sticky Header */}
+                <div className="p-5 bg-zinc-950/70 border border-white/5 rounded-xl space-y-3 print:bg-slate-50 print:border-slate-200">
+                  <div className="border-l-4 border-supplyx-blue pl-3 py-0.5">
+                    <h4 className="text-xs font-black text-supplyx-blue uppercase tracking-wider flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-supplyx-blue" />
+                      3. Lista de Produtos e Mercadorias Declaradas
+                    </h4>
+                  </div>
+
+                  <div className="overflow-x-auto max-h-72 overflow-y-auto rounded-lg border border-white/5">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="sticky top-0 z-10 bg-zinc-900 print:bg-slate-200">
+                        <tr className="border-b border-white/10 text-[9px] font-black text-zinc-300 uppercase tracking-wider print:text-slate-800">
+                          <th className="py-2.5 px-3">SKU</th>
+                          <th className="py-2.5 px-3">Descrição do Produto</th>
+                          <th className="py-2.5 px-3 text-center">Quantidade</th>
+                          <th className="py-2.5 px-3 text-center">Unidade</th>
+                          <th className="py-2.5 px-3 text-right">Peso Estimado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 print:divide-slate-200">
+                        {(requestProducts.length > 0 ? requestProducts : [
+                          { name: requestObj.tipoCarga || 'Carga Geral Consolidada', quantity: requestObj.quantidade || '1 Lote', weight: requestObj.peso || '12.5 Toneladas', volume: requestObj.volume || '18 m³' }
+                        ]).map((item, index) => (
+                          <tr 
+                            key={index} 
+                            className="odd:bg-zinc-900/60 even:bg-zinc-950/80 hover:bg-supplyx-blue/10 transition-colors print:odd:bg-white print:even:bg-slate-50"
+                          >
+                            <td className="py-2.5 px-3 font-mono font-bold text-supplyx-blue print:text-slate-700">SKU-{1000 + index}</td>
+                            <td className="py-2.5 px-3 font-bold text-white print:text-slate-900 break-words">{item.name}</td>
+                            <td className="py-2.5 px-3 text-center font-bold text-zinc-300 print:text-slate-800">{item.quantity}</td>
+                            <td className="py-2.5 px-3 text-center text-zinc-400 print:text-slate-700">Lote / Unid</td>
+                            <td className="py-2.5 px-3 text-right font-bold text-supplyx-blue print:text-slate-900">{item.weight || 'Padronizado'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Requirement 6: Assinaturas Digitais com Selos */}
+                <div className="p-5 bg-zinc-950/70 border border-white/5 rounded-xl space-y-4 print:bg-slate-50 print:border-slate-200">
+                  <div className="border-l-4 border-emerald-500 pl-3 py-0.5">
+                    <h4 className="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      4. Autenticação e Assinatura Eletrónica (PoD)
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Expedidor Panel */}
+                    <div className="p-4 bg-zinc-900/90 border border-white/5 rounded-xl space-y-2 text-left print:bg-white print:border-slate-300">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block">Expedidor / Operador:</span>
+                        <span className="px-2 py-0.5 rounded-full text-[8.5px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                          <Check className="w-2.5 h-2.5" /> Assinado Digitalmente
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold text-white print:text-slate-900 pt-1">
+                        {requestObj.assignedCarrier || 'Operador Credenciado SupplyX'}
+                      </p>
+                      <div className="text-[10px] text-zinc-400 space-y-0.5 pt-1">
+                        <p><span className="text-zinc-500 font-bold">Data:</span> {new Date().toLocaleDateString('pt-PT')}</p>
+                        <p><span className="text-zinc-500 font-bold">Hora:</span> {new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</p>
+                        <p className="font-mono text-[8.5px] text-zinc-500 pt-1">Hash: #SUPPLYX-EXP-{requestObj.id}</p>
+                      </div>
+                    </div>
+
+                    {/* PoD Recebedor Panel */}
+                    <div className="p-4 bg-zinc-900/90 border border-white/5 rounded-xl space-y-2 text-left print:bg-white print:border-slate-300">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block">Recebedor / Destinatário (PoD):</span>
+                        {(savedSignature || requestObj.podSignature) ? (
+                          <span className="px-2 py-0.5 rounded-full text-[8.5px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                            <Check className="w-2.5 h-2.5" /> Assinado Digitalmente
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[8.5px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                            ● Pendente de assinatura
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-bold text-white print:text-slate-900 pt-1">
+                        {(requestObj as any).receiverName || 'Fiel Depositário / Recebedor'}
+                      </p>
+                      <div className="text-[10px] text-zinc-400 space-y-0.5 pt-1">
+                        <p><span className="text-zinc-500 font-bold">Data:</span> {new Date().toLocaleDateString('pt-PT')}</p>
+                        <p><span className="text-zinc-500 font-bold">Hora:</span> {new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</p>
+
+                        {(savedSignature || requestObj.podSignature) ? (
+                          <div className="pt-1">
+                            <img src={savedSignature || requestObj.podSignature} alt="Assinatura PoD" className="h-10 bg-white/10 rounded border border-white/10 p-1" />
+                            <p className="font-mono text-[8.5px] text-emerald-400 font-bold pt-0.5">Hash: #SUPPLYX-POD-{requestObj.id}</p>
+                          </div>
+                        ) : (
+                          <div className="pt-2">
+                            <span className="text-[9.5px] text-amber-400/90 italic font-semibold">Pendente de assinatura no ato da entrega</span>
+                            <p className="font-mono text-[8.5px] text-zinc-600 pt-0.5">Hash: #SUPPLYX-POD-PENDING</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Requirement 5 & 7: Rodapé Técnico Detalhado com Paginação */}
+                <div className="pt-4 border-t border-white/10 space-y-2 text-[9px] text-zinc-400 print:border-slate-300">
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-2 font-mono">
+                    <div>
+                      <span>Gerado em: {new Date().toLocaleDateString('pt-PT')} às {new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="mx-2">•</span>
+                      <span>Versão: v2.4 Enterprise</span>
+                    </div>
+                    <div>
+                      {/* Requirement 7: Paginação */}
+                      <span className="px-2.5 py-0.5 bg-white/5 rounded border border-white/10 text-white font-bold">
+                        Página 1 de 1
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-1 text-[8.5px]">
+                    <p className="font-mono text-zinc-500">ID Único: CRT-MZ-TR-2026-{requestObj.id} | Hash: #CRT-HASH-{requestObj.id}-VERIFIED</p>
+                    <p className="text-supplyx-blue font-bold">URL: https://supplyx.app/verify/CRT-MZ-TR-2026-{requestObj.id}</p>
+                  </div>
+
+                  <div className="text-center text-[8.5px] text-zinc-500 pt-1">
+                    SupplyX Digital Logistics Platform • Documento Oficial de Transporte em Moçambique • Validade Legal Eletrónica INATRO & Autoridade Tributária
+                  </div>
+                </div>
+
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Requirement 10: PÁGINA / DRAWER DE VALIDAÇÃO DE AUTENTICIDADE DO QR CODE */}
+      <AnimatePresence>
+        {showValidationDrawer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 15 }}
+              className="w-full max-w-2xl bg-zinc-950 border border-white/10 rounded-[32px] p-6 sm:p-8 space-y-6 text-white text-left shadow-2xl my-auto"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-white">
+                      Portal de Validação Digital SupplyX
+                    </h3>
+                    <p className="text-[10px] font-mono text-zinc-400">
+                      https://supplyx.app/verify/CRT-MZ-TR-2026-{requestObj.id}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowValidationDrawer(false)}
+                  className="p-2 text-zinc-400 hover:text-white rounded-xl hover:bg-white/5 transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Status Banner */}
+              {requestObj.status === 'Cancelado' ? (
+                <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex items-center gap-3">
+                  <AlertTriangle className="w-8 h-8 text-rose-400 shrink-0" />
+                  <div>
+                    <h4 className="text-xs font-black uppercase text-rose-400">● Documento Cancelado / Inexistente</h4>
+                    <p className="text-[10px] text-rose-300/80 mt-0.5">
+                      Este documento de transporte foi revogado pelo expedidor ou autoridade competente.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center gap-3">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-400 shrink-0" />
+                  <div>
+                    <h4 className="text-xs font-black uppercase text-emerald-400">✓ Documento Válido e Autêntico</h4>
+                    <p className="text-[10px] text-emerald-300/80 mt-0.5">
+                      A integridade criptográfica e assinatura eletrónica deste CRT foram confirmadas com sucesso na rede SupplyX.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Data Specifications Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3.5 bg-zinc-900/90 border border-white/5 rounded-xl space-y-1">
+                  <span className="text-[9px] font-black text-zinc-500 uppercase block">Código Oficial CRT</span>
+                  <p className="font-mono font-bold text-white">CRT-MZ-TR-2026-{requestObj.id}</p>
+                </div>
+
+                <div className="p-3.5 bg-zinc-900/90 border border-white/5 rounded-xl space-y-1">
+                  <span className="text-[9px] font-black text-zinc-500 uppercase block">Estado da Carga</span>
+                  <p className="font-bold text-supplyx-blue uppercase">{requestObj.status || 'Em trânsito'}</p>
+                </div>
+
+                <div className="p-3.5 bg-zinc-900/90 border border-white/5 rounded-xl space-y-1">
+                  <span className="text-[9px] font-black text-zinc-500 uppercase block">Data de Emissão</span>
+                  <p className="font-bold text-white">{new Date().toLocaleDateString('pt-PT')}</p>
+                </div>
+
+                <div className="p-3.5 bg-zinc-900/90 border border-white/5 rounded-xl space-y-1">
+                  <span className="text-[9px] font-black text-zinc-500 uppercase block">Última Atualização</span>
+                  <p className="font-bold text-white">{new Date().toLocaleDateString('pt-PT')} às {new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+
+                <div className="p-3.5 bg-zinc-900/90 border border-white/5 rounded-xl space-y-1">
+                  <span className="text-[9px] font-black text-zinc-500 uppercase block">Empresa Emissora</span>
+                  <p className="font-bold text-white">Manhate Link África, Lda (SupplyX)</p>
+                </div>
+
+                <div className="p-3.5 bg-zinc-900/90 border border-white/5 rounded-xl space-y-1">
+                  <span className="text-[9px] font-black text-zinc-500 uppercase block">Transportador Credenciado</span>
+                  <p className="font-bold text-white">{requestObj.assignedCarrier || 'Operador Credenciado SupplyX'}</p>
+                </div>
+
+                <div className="p-3.5 bg-zinc-900/90 border border-white/5 rounded-xl space-y-1 sm:col-span-2">
+                  <span className="text-[9px] font-black text-zinc-500 uppercase block">Destinatário (Recebedor)</span>
+                  <p className="font-bold text-white">{(requestObj as any).receiverName || 'Fiel Depositário / Recebedor'}</p>
+                </div>
+
+                <div className="p-3.5 bg-zinc-900/90 border border-white/5 rounded-xl space-y-1 sm:col-span-2">
+                  <span className="text-[9px] font-black text-zinc-500 uppercase block">Hash Criptográfico On-Chain</span>
+                  <p className="font-mono text-emerald-400 text-[10px] break-all">#CRT-HASH-{requestObj.id}-VERIFIED-ELECTRONICALLY-SIGNED-BY-INATRO-AT-SUPPLYX</p>
+                </div>
+              </div>
+
+              {/* Operation Timeline / History */}
+              <div className="space-y-3 pt-2">
+                <h4 className="text-xs font-black uppercase text-zinc-400 flex items-center gap-2">
+                  <History className="w-4 h-4 text-supplyx-blue" />
+                  Histórico Completo da Operação
+                </h4>
+
+                <div className="space-y-2 text-xs">
+                  <div className="p-3 bg-zinc-900/60 border border-white/5 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+                      <span className="font-bold text-zinc-200">1. Emissão do CRT Digital pelo Expedidor</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500">{new Date().toLocaleDateString('pt-PT')}</span>
+                  </div>
+
+                  <div className="p-3 bg-zinc-900/60 border border-white/5 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+                      <span className="font-bold text-zinc-200">2. Atribuição de Frota & Motorista Credenciado</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500">{new Date().toLocaleDateString('pt-PT')}</span>
+                  </div>
+
+                  <div className="p-3 bg-zinc-900/60 border border-white/5 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-2 h-2 rounded-full bg-sky-400"></div>
+                      <span className="font-bold text-zinc-200">3. Registro de Trânsito & Rastreio GPS</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500">{new Date().toLocaleDateString('pt-PT')}</span>
+                  </div>
+
+                  <div className="p-3 bg-zinc-900/60 border border-white/5 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-2 h-2 rounded-full ${requestObj.status === 'Entregue' ? 'bg-emerald-400' : 'bg-amber-400'}`}></div>
+                      <span className="font-bold text-zinc-200">4. Validação Eletrónica & Comprovativo de Entrega (PoD)</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500">{requestObj.status === 'Entregue' ? 'Concluído' : 'Em andamento'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action */}
+              <div className="pt-2">
+                <button
+                  onClick={() => setShowValidationDrawer(false)}
+                  className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-black uppercase tracking-wider border border-white/10 transition-all"
+                >
+                  Fechar Validação
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

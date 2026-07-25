@@ -2725,6 +2725,12 @@ async function startServer() {
       index: false
     }));
 
+    // Explicit route for public document verification to ensure index.html is served
+    app.get(['/verify', '/verify/*'], (req, res) => {
+      res.set('Cache-Control', 'no-store');
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+
     app.get('*', (req, res) => {
       if (req.path.startsWith('/api/')) {
         return res.status(404).json({ error: 'Endpoint não encontrado ou ficheiro indisponível.' });

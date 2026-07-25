@@ -10,6 +10,14 @@
       "destination": "/api/$1"
     },
     {
+      "source": "/verify/(.*)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/verify",
+      "destination": "/index.html"
+    },
+    {
       "source": "/((?!api/|assets/|icons/|screenshots/|.*\\..*).*)",
       "destination": "/index.html"
     }

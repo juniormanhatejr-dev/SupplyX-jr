@@ -232,7 +232,8 @@ export default function DetailedRequestView({
   useEffect(() => {
     if (requestObj?.id) {
       const docCode = `CRT-MZ-TR-2026-${requestObj.id}`;
-      const validationUrl = `https://supplyx.app/verify/${docCode}`;
+      const baseUrl = window.location.origin.includes('http') ? window.location.origin : 'https://supplyx.app';
+      const validationUrl = `${baseUrl}/verify/${docCode}`;
       QRCode.toDataURL(validationUrl, { width: 200, margin: 3, color: { dark: '#0f172a', light: '#ffffff' } })
         .then(url => setCrtQrDataUrl(url))
         .catch(err => console.warn('QR code generation failed:', err));
@@ -1224,7 +1225,8 @@ export default function DetailedRequestView({
       const issueTime = new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
       const currentStatus = requestObj.status || 'Em concurso';
       const officialDocCode = `CRT-MZ-TR-2026-${requestObj.id}`;
-      const validationUrl = `https://supplyx.app/verify/${officialDocCode}`;
+      const baseUrl = window.location.origin.includes('http') ? window.location.origin : 'https://supplyx.app';
+      const validationUrl = `${baseUrl}/verify/${officialDocCode}`;
       const cryptoHash = `#CRT-HASH-${requestObj.id}-VERIFIED`;
 
       // Generate QR Code data URL if not already generated

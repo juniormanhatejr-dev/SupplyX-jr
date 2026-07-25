@@ -24,6 +24,7 @@ import DiagnosticOverlay from './components/DiagnosticOverlay';
 import AboutView from './components/AboutView';
 import OfflineView from './components/OfflineView';
 import MarketHealthView from './components/MarketHealthView';
+import DocumentVerificationView from './components/logistics/DocumentVerificationView';
 import { OptimizedImage } from './components/ui/OptimizedImage';
 import { useAuth, isProfileComplete } from './contexts/AuthContext';
 import { useCart } from './contexts/CartContext';
@@ -61,6 +62,39 @@ export default function App() {
     status: 'idle' | 'verifying' | 'success' | 'error';
     message: string;
   }>({ status: 'idle', message: '' });
+
+  // Public CRT Document Verification route state (/verify/:documentId)
+  const [verifyDocId, setVerifyDocId] = useState<string | null>(() => {
+    const path = window.location.pathname;
+    if (path.startsWith('/verify/') || path === '/verify') {
+      const docId = path.replace(/^\/verify\/?/, '');
+      return docId ? decodeURIComponent(docId) : '';
+    }
+    const params = new URLSearchParams(window.location.search);
+    const paramDoc = params.get('verify') || params.get('verifyDoc') || params.get('documentId');
+    return paramDoc ? decodeURIComponent(paramDoc) : null;
+  });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      if (path.startsWith('/verify/') || path === '/verify') {
+        const docId = path.replace(/^\/verify\/?/, '');
+        setVerifyDocId(docId ? decodeURIComponent(docId) : '');
+      } else {
+        const params = new URLSearchParams(window.location.search);
+        const paramDoc = params.get('verify') || params.get('verifyDoc') || params.get('documentId');
+        if (paramDoc) {
+          setVerifyDocId(decodeURIComponent(paramDoc));
+        } else {
+          setVerifyDocId(null);
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Custom Email Verification Token handler
   useEffect(() => {
@@ -314,6 +348,21 @@ export default function App() {
   };
 
   const t = translations[language];
+
+  // Render Public CRT Document Verification page if /verify/:documentId route is active
+  if (verifyDocId !== null) {
+    return (
+      <DocumentVerificationView 
+        documentId={verifyDocId}
+        isDarkMode={isDarkMode}
+        language={language}
+        onBackToApp={() => {
+          window.history.pushState({}, '', '/');
+          setVerifyDocId(null);
+        }}
+      />
+    );
+  }
 
   // Render custom verification state overlays if a token verification is in progress or completed
   if (verificationState.status === 'verifying') {

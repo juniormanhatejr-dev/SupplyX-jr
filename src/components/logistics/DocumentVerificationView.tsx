@@ -31,6 +31,7 @@ import {
 import { db } from '../../lib/firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import SupplyXLogo from '../SupplyXLogo';
+import { getOfficialCrtCode } from './types';
 
 interface DocumentVerificationViewProps {
   documentId?: string;
@@ -316,9 +317,10 @@ export default function DocumentVerificationView({
     window.history.pushState({}, '', `/verify/${encodeURIComponent(cleanSearch)}`);
   };
 
-  const formattedOfficialCode = documentData?.id 
-    ? (documentData.id.startsWith('CRT-') ? documentData.id : `CRT-MZ-TR-2026-${documentData.id}`)
-    : `CRT-MZ-TR-2026-${currentDocId}`;
+  const formattedOfficialCode = getOfficialCrtCode(
+    documentData?.id || currentDocId,
+    documentData?.crtCode || documentData?.officialDocCode
+  );
 
   return (
     <div className={`min-h-screen transition-colors duration-300 font-sans ${isDarkMode ? 'bg-zinc-950 text-white' : 'bg-slate-50 text-slate-900'} print:bg-white print:text-black`}>

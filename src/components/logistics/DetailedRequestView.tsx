@@ -38,7 +38,7 @@ import {
   RefreshCw,
   Check
 } from 'lucide-react';
-import { CargoRequest, CommercialDriver, CarrierProposal, Occurrence } from './types';
+import { CargoRequest, CommercialDriver, CarrierProposal, Occurrence, getOfficialCrtCode } from './types';
 import { db, auth, cleanFirestoreData } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { calculateVehicleRecommendation } from './vehicleRecommendation';
@@ -231,7 +231,7 @@ export default function DetailedRequestView({
   // Effect to generate QR Code data URL for CRT document
   useEffect(() => {
     if (requestObj?.id) {
-      const docCode = `CRT-MZ-TR-2026-${requestObj.id}`;
+      const docCode = getOfficialCrtCode(requestObj.id, requestObj.crtCode || requestObj.officialDocCode);
       const baseUrl = window.location.origin.includes('http') ? window.location.origin : 'https://supplyx.app';
       const validationUrl = `${baseUrl}/verify/${docCode}`;
       QRCode.toDataURL(validationUrl, { width: 200, margin: 3, color: { dark: '#0f172a', light: '#ffffff' } })
@@ -1224,7 +1224,7 @@ export default function DetailedRequestView({
       const issueDate = new Date().toLocaleDateString('pt-PT');
       const issueTime = new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
       const currentStatus = requestObj.status || 'Em concurso';
-      const officialDocCode = `CRT-MZ-TR-2026-${requestObj.id}`;
+      const officialDocCode = getOfficialCrtCode(requestObj.id, requestObj.crtCode || requestObj.officialDocCode);
       const baseUrl = window.location.origin.includes('http') ? window.location.origin : 'https://supplyx.app';
       const validationUrl = `${baseUrl}/verify/${officialDocCode}`;
       const cryptoHash = `#CRT-HASH-${requestObj.id}-VERIFIED`;
@@ -3755,7 +3755,7 @@ export default function DetailedRequestView({
                         <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest block">Código do Documento:</span>
                         {/* Requirement 4: Código Monocromático / Monospace Destacado */}
                         <p className="text-xs font-mono font-black text-white bg-white/5 px-2 py-0.5 rounded border border-white/10 print:bg-slate-100 print:text-slate-900">
-                          CRT-MZ-TR-2026-{requestObj.id}
+                          {getOfficialCrtCode(requestObj.id, requestObj.crtCode || requestObj.officialDocCode)}
                         </p>
                         <span className="text-[8.5px] font-mono text-emerald-400 font-bold block flex items-center gap-1">
                           <Check className="w-3 h-3" /> VERIFICADO ON-CHAIN
@@ -4033,8 +4033,8 @@ export default function DetailedRequestView({
                   </div>
 
                   <div className="flex flex-col sm:flex-row justify-between items-center gap-1 text-[8.5px]">
-                    <p className="font-mono text-zinc-500">ID Único: CRT-MZ-TR-2026-{requestObj.id} | Hash: #CRT-HASH-{requestObj.id}-VERIFIED</p>
-                    <p className="text-supplyx-blue font-bold">URL: {typeof window !== 'undefined' ? window.location.origin : 'https://supplyx.app'}/verify/CRT-MZ-TR-2026-{requestObj.id}</p>
+                    <p className="font-mono text-zinc-500">ID Único: {getOfficialCrtCode(requestObj.id, requestObj.crtCode || requestObj.officialDocCode)} | Hash: #CRT-HASH-{requestObj.id}-VERIFIED</p>
+                    <p className="text-supplyx-blue font-bold">URL: {typeof window !== 'undefined' ? window.location.origin : 'https://supplyx.app'}/verify/{getOfficialCrtCode(requestObj.id, requestObj.crtCode || requestObj.officialDocCode)}</p>
                   </div>
 
                   <div className="text-center text-[8.5px] text-zinc-500 pt-1">
@@ -4069,7 +4069,7 @@ export default function DetailedRequestView({
                       Portal de Validação Digital SupplyX
                     </h3>
                     <p className="text-[10px] font-mono text-zinc-400">
-                      {typeof window !== 'undefined' ? window.location.origin : 'https://supplyx.app'}/verify/CRT-MZ-TR-2026-{requestObj.id}
+                      {typeof window !== 'undefined' ? window.location.origin : 'https://supplyx.app'}/verify/{getOfficialCrtCode(requestObj.id, requestObj.crtCode || requestObj.officialDocCode)}
                     </p>
                   </div>
                 </div>

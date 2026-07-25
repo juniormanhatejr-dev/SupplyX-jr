@@ -59,6 +59,40 @@ export interface CargoRequest {
   officialDocCode?: string;
 }
 
+export function getOfficialCrtCode(id?: string, existingCrtCode?: string): string {
+  const source = existingCrtCode || id || '';
+  if (!source) return 'CRT-MZ-TR-2026-0000';
+
+  let clean = source.trim();
+
+  // Strip duplicate prefixes recursively if present
+  while (
+    clean.startsWith('CRT-MZ-TR-2026-') ||
+    clean.startsWith('CRT-MZ-TR-2025-') ||
+    clean.startsWith('CRT-MZ-TR-2024-') ||
+    clean.startsWith('CRT-MZ-') ||
+    clean.startsWith('CRT-') ||
+    clean.startsWith('TR-2026-') ||
+    clean.startsWith('TR-2025-') ||
+    clean.startsWith('TR-2024-')
+  ) {
+    if (clean.startsWith('CRT-MZ-TR-2026-')) clean = clean.substring('CRT-MZ-TR-2026-'.length);
+    else if (clean.startsWith('CRT-MZ-TR-2025-')) clean = clean.substring('CRT-MZ-TR-2025-'.length);
+    else if (clean.startsWith('CRT-MZ-TR-2024-')) clean = clean.substring('CRT-MZ-TR-2024-'.length);
+    else if (clean.startsWith('CRT-MZ-')) clean = clean.substring('CRT-MZ-'.length);
+    else if (clean.startsWith('CRT-')) clean = clean.substring('CRT-'.length);
+    else if (clean.startsWith('TR-2026-')) clean = clean.substring('TR-2026-'.length);
+    else if (clean.startsWith('TR-2025-')) clean = clean.substring('TR-2025-'.length);
+    else if (clean.startsWith('TR-2024-')) clean = clean.substring('TR-2024-'.length);
+  }
+
+  if (!clean) {
+    return 'CRT-MZ-TR-2026-0000';
+  }
+
+  return `CRT-MZ-TR-2026-${clean}`;
+}
+
 export interface CarrierProposal {
   id: string;
   cargoId: string;

@@ -19,7 +19,7 @@ import {
   Sparkles,
   Plus
 } from 'lucide-react';
-import { CargoRequest } from './types';
+import { CargoRequest, getOfficialCrtCode } from './types';
 import { useAuth } from '../../contexts/AuthContext';
 import { calculateRoute } from '../../services/mapRoutingService';
 import { 
@@ -492,10 +492,11 @@ export default function CreateRequestPage({
 
     setTimeout(() => {
       const generatedId = `TR-2025-${Math.floor(1001 + Math.random() * 8999)}`;
+      const formattedCrt = getOfficialCrtCode(generatedId);
       const generatedReq: CargoRequest = {
         id: generatedId,
-        crtCode: `CRT-MZ-TR-2026-${generatedId}`,
-        officialDocCode: `CRT-MZ-TR-2026-${generatedId}`,
+        crtCode: formattedCrt,
+        officialDocCode: formattedCrt,
         ...formData,
         requesterName: profile?.name || profile?.userName || (formData.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente'),
         status: 'Em concurso',

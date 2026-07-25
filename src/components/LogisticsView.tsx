@@ -23,7 +23,7 @@ import { collection, onSnapshot, query, where, getDocs, getDoc, setDoc, updateDo
 import { useAuth } from '../contexts/AuthContext';
 
 // Decoupled sub-system views
-import { CargoRequest, CommercialDriver, StorageWarehouse, FinancialLedger } from './logistics/types';
+import { CargoRequest, CommercialDriver, StorageWarehouse, FinancialLedger, getOfficialCrtCode } from './logistics/types';
 import LogisticsDashboard from './logistics/LogisticsDashboard';
 import DetailedRequestView from './logistics/DetailedRequestView';
 import CreateRequestPage from './logistics/CreateRequestPage';
@@ -291,7 +291,7 @@ export default function LogisticsView({
 
       const q = query(collection(db, 'freight_orders'), where('id', '==', req.id));
       const querySnapshot = await getDocs(q);
-      const officialDocCode = req.id.startsWith('CRT-') ? req.id : `CRT-MZ-TR-2026-${req.id}`;
+      const officialDocCode = getOfficialCrtCode(req.id, req.crtCode || req.officialDocCode);
       const cleanedReq = cleanFirestoreData({ 
         ...req, 
         crtCode: officialDocCode, 

@@ -4034,7 +4034,7 @@ export default function DetailedRequestView({
 
                   <div className="flex flex-col sm:flex-row justify-between items-center gap-1 text-[8.5px]">
                     <p className="font-mono text-zinc-500">ID Único: CRT-MZ-TR-2026-{requestObj.id} | Hash: #CRT-HASH-{requestObj.id}-VERIFIED</p>
-                    <p className="text-supplyx-blue font-bold">URL: https://supplyx.app/verify/CRT-MZ-TR-2026-{requestObj.id}</p>
+                    <p className="text-supplyx-blue font-bold">URL: {typeof window !== 'undefined' ? window.location.origin : 'https://supplyx.app'}/verify/CRT-MZ-TR-2026-{requestObj.id}</p>
                   </div>
 
                   <div className="text-center text-[8.5px] text-zinc-500 pt-1">
@@ -4069,7 +4069,7 @@ export default function DetailedRequestView({
                       Portal de Validação Digital SupplyX
                     </h3>
                     <p className="text-[10px] font-mono text-zinc-400">
-                      https://supplyx.app/verify/CRT-MZ-TR-2026-{requestObj.id}
+                      {typeof window !== 'undefined' ? window.location.origin : 'https://supplyx.app'}/verify/CRT-MZ-TR-2026-{requestObj.id}
                     </p>
                   </div>
                 </div>

@@ -491,8 +491,11 @@ export default function CreateRequestPage({
     const isInvalid = routeInfo.routeStatus === 'invalid_route';
 
     setTimeout(() => {
+      const generatedId = `TR-2025-${Math.floor(1001 + Math.random() * 8999)}`;
       const generatedReq: CargoRequest = {
-        id: `TR-2025-${Math.floor(1001 + Math.random() * 8999)}`,
+        id: generatedId,
+        crtCode: `CRT-MZ-TR-2026-${generatedId}`,
+        officialDocCode: `CRT-MZ-TR-2026-${generatedId}`,
         ...formData,
         requesterName: profile?.name || profile?.userName || (formData.requester === 'Client' ? 'Cliente Remetente' : 'Fornecedor Remetente'),
         status: 'Em concurso',

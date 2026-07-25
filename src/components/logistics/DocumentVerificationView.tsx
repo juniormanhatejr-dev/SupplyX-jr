@@ -82,86 +82,200 @@ export default function DocumentVerificationView({
 
       // Extract raw ID cleanups
       // Formats could be:
-      // CRT-MZ-TR-2026-TR-2025-0001
-      // CRT-MZ-TR-2026-1001
-      // TR-2025-0001
-      // 1001
-      let rawId = currentDocId.trim();
-      let cleanId = rawId;
+      // CRT-MZ-TR-2026-6035
+      // CRT-MZ-TR-2026-TR-2025-6035
+      // TR-2025-6035
+      // 6035
+      const rawId = currentDocId.trim();
 
-      if (rawId.startsWith('CRT-MZ-TR-2026-')) {
-        cleanId = rawId.replace('CRT-MZ-TR-2026-', '');
-      } else if (rawId.startsWith('CRT-MZ-')) {
-        cleanId = rawId.replace('CRT-MZ-', '');
+      // Build exhaustive candidate search list
+      const candidateIds = new Set<string>();
+      candidateIds.add(rawId);
+
+      // Strip known prefixes
+      let cleaned = rawId;
+      const prefixes = [
+        'CRT-MZ-TR-2026-',
+        'CRT-MZ-TR-2025-',
+        'CRT-MZ-TR-2024-',
+        'CRT-MZ-',
+        'CRT-'
+      ];
+
+      for (const prefix of prefixes) {
+        if (cleaned.startsWith(prefix)) {
+          cleaned = cleaned.substring(prefix.length);
+        }
       }
 
+      candidateIds.add(cleaned);
+
+      // Extract numeric or trailing identifier
+      let numericTail = cleaned;
+      if (numericTail.includes('-')) {
+        const parts = numericTail.split('-');
+        numericTail = parts[parts.length - 1];
+      }
+
+      if (numericTail) {
+        candidateIds.add(numericTail);
+        candidateIds.add(`TR-2025-${numericTail}`);
+        candidateIds.add(`TR-2026-${numericTail}`);
+        candidateIds.add(`TR-2024-${numericTail}`);
+        candidateIds.add(`CRT-MZ-TR-2026-${numericTail}`);
+        candidateIds.add(`CRT-MZ-TR-2025-${numericTail}`);
+        candidateIds.add(`CRT-MZ-${numericTail}`);
+        candidateIds.add(`CRT-MZ-TR-2026-TR-2025-${numericTail}`);
+        candidateIds.add(`CRT-MZ-TR-2026-TR-2026-${numericTail}`);
+        candidateIds.add(`TA-${numericTail}`);
+      }
+
+      if (cleaned && cleaned !== numericTail) {
+        candidateIds.add(cleaned);
+        candidateIds.add(`TR-2025-${cleaned}`);
+        candidateIds.add(`TR-2026-${cleaned}`);
+        candidateIds.add(`CRT-MZ-TR-2026-${cleaned}`);
+      }
+
+      const searchList = Array.from(candidateIds).filter(Boolean);
       let foundDoc: any = null;
 
       try {
-        // 1. Try Firestore: freight_orders by document id or cleanId
-        const freightRef1 = doc(db, 'freight_orders', rawId);
-        const snap1 = await getDoc(freightRef1);
-        if (snap1.exists()) {
-          foundDoc = { id: snap1.id, ...snap1.data() };
-        }
-
-        if (!foundDoc && cleanId !== rawId) {
-          const freightRef2 = doc(db, 'freight_orders', cleanId);
-          const snap2 = await getDoc(freightRef2);
-          if (snap2.exists()) {
-            foundDoc = { id: snap2.id, ...snap2.data() };
+        // 1. Direct doc key lookup in freight_orders
+        for (const cand of searchList) {
+          if (foundDoc) break;
+          try {
+            const snap = await getDoc(doc(db, 'freight_orders', cand));
+            if (snap.exists()) {
+              foundDoc = { id: snap.id, ...snap.data() };
+            }
+          } catch (e) {
+            // ignore
           }
         }
 
+        // 2. Direct doc key lookup in transportAssignments
         if (!foundDoc) {
-          const q1 = query(collection(db, 'freight_orders'), where('id', '==', rawId));
-          const querySnap1 = await getDocs(q1);
-          if (!querySnap1.empty) {
-            foundDoc = { id: querySnap1.docs[0].id, ...querySnap1.docs[0].data() };
-          }
-        }
-
-        if (!foundDoc && cleanId !== rawId) {
-          const q2 = query(collection(db, 'freight_orders'), where('id', '==', cleanId));
-          const querySnap2 = await getDocs(q2);
-          if (!querySnap2.empty) {
-            foundDoc = { id: querySnap2.docs[0].id, ...querySnap2.docs[0].data() };
-          }
-        }
-
-        // 2. Try Firestore: transportAssignments
-        if (!foundDoc) {
-          const assignRef1 = doc(db, 'transportAssignments', rawId);
-          const assignSnap1 = await getDoc(assignRef1);
-          if (assignSnap1.exists()) {
-            foundDoc = { id: assignSnap1.id, ...assignSnap1.data(), isDirectAssignment: true };
-          }
-        }
-
-        if (!foundDoc && cleanId !== rawId) {
-          const assignRef2 = doc(db, 'transportAssignments', cleanId);
-          const assignSnap2 = await getDoc(assignRef2);
-          if (assignSnap2.exists()) {
-            foundDoc = { id: assignSnap2.id, ...assignSnap2.data(), isDirectAssignment: true };
-          }
-        }
-
-        // 3. Fallback to LocalStorage
-        if (!foundDoc) {
-          const savedLocal = localStorage.getItem('supplyx_freight_requests');
-          if (savedLocal) {
+          for (const cand of searchList) {
+            if (foundDoc) break;
             try {
-              const list = JSON.parse(savedLocal);
-              const matched = list.find((item: any) => 
-                item.id === rawId || 
-                item.id === cleanId || 
-                `CRT-MZ-TR-2026-${item.id}` === rawId
-              );
-              if (matched) {
-                foundDoc = matched;
+              const snap = await getDoc(doc(db, 'transportAssignments', cand));
+              if (snap.exists()) {
+                foundDoc = { id: snap.id, ...snap.data(), isDirectAssignment: true };
               }
-            } catch (err) {
-              console.warn('Error reading local CRT document cache:', err);
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+
+        // 3. Query freight_orders by field 'id' or 'crtCode' or 'officialDocCode'
+        if (!foundDoc) {
+          for (const cand of searchList) {
+            if (foundDoc) break;
+            try {
+              const q1 = query(collection(db, 'freight_orders'), where('id', '==', cand));
+              const qSnap1 = await getDocs(q1);
+              if (!qSnap1.empty) {
+                foundDoc = { id: qSnap1.docs[0].id, ...qSnap1.docs[0].data() };
+                break;
+              }
+
+              const q2 = query(collection(db, 'freight_orders'), where('crtCode', '==', cand));
+              const qSnap2 = await getDocs(q2);
+              if (!qSnap2.empty) {
+                foundDoc = { id: qSnap2.docs[0].id, ...qSnap2.docs[0].data() };
+                break;
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+
+        // 4. Query transportAssignments by field 'assignmentId' or 'id'
+        if (!foundDoc) {
+          for (const cand of searchList) {
+            if (foundDoc) break;
+            try {
+              const q = query(collection(db, 'transportAssignments'), where('assignmentId', '==', cand));
+              const qSnap = await getDocs(q);
+              if (!qSnap.empty) {
+                foundDoc = { id: qSnap.docs[0].id, ...qSnap.docs[0].data(), isDirectAssignment: true };
+                break;
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+
+        // 5. Collection scan fallback: freight_orders
+        if (!foundDoc) {
+          try {
+            const allSnap = await getDocs(collection(db, 'freight_orders'));
+            allSnap.forEach((docSnap) => {
+              if (foundDoc) return;
+              const data = docSnap.data();
+              const dId = (data.id || docSnap.id || '').toString();
+              const crtCode = (data.crtCode || data.officialDocCode || '').toString();
+
+              if (searchList.some(c => dId === c || crtCode === c) ||
+                  (numericTail && dId.endsWith(numericTail)) ||
+                  (dId && rawId.includes(dId)) ||
+                  (rawId && dId.includes(rawId))) {
+                foundDoc = { id: docSnap.id, ...data };
+              }
+            });
+          } catch (e) {
+            console.warn('freight_orders scan fallback error:', e);
+          }
+        }
+
+        // 6. Collection scan fallback: transportAssignments
+        if (!foundDoc) {
+          try {
+            const allSnap = await getDocs(collection(db, 'transportAssignments'));
+            allSnap.forEach((docSnap) => {
+              if (foundDoc) return;
+              const data = docSnap.data();
+              const dId = (data.assignmentId || data.id || docSnap.id || '').toString();
+
+              if (searchList.some(c => dId === c) ||
+                  (numericTail && dId.endsWith(numericTail)) ||
+                  (dId && rawId.includes(dId)) ||
+                  (rawId && dId.includes(rawId))) {
+                foundDoc = { id: docSnap.id, ...data, isDirectAssignment: true };
+              }
+            });
+          } catch (e) {
+            console.warn('transportAssignments scan fallback error:', e);
+          }
+        }
+
+        // 7. LocalStorage Fallback
+        if (!foundDoc) {
+          const localKeys = ['supplyx_freight_requests', 'supplyx_transport_assignments'];
+          for (const key of localKeys) {
+            if (foundDoc) break;
+            const savedLocal = localStorage.getItem(key);
+            if (savedLocal) {
+              try {
+                const list = JSON.parse(savedLocal);
+                const matched = list.find((item: any) => {
+                  const itemId = (item.id || item.assignmentId || '').toString();
+                  return searchList.some(c => itemId === c) ||
+                         (numericTail && itemId.endsWith(numericTail)) ||
+                         itemId.includes(rawId) ||
+                         rawId.includes(itemId) ||
+                         `CRT-MZ-TR-2026-${itemId}` === rawId;
+                });
+                if (matched) {
+                  foundDoc = matched;
+                }
+              } catch (err) {
+                console.warn('Error reading local CRT document cache:', err);
+              }
             }
           }
         }

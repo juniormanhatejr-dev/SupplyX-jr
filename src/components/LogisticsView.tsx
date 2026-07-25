@@ -291,7 +291,12 @@ export default function LogisticsView({
 
       const q = query(collection(db, 'freight_orders'), where('id', '==', req.id));
       const querySnapshot = await getDocs(q);
-      const cleanedReq = cleanFirestoreData({ ...req });
+      const officialDocCode = req.id.startsWith('CRT-') ? req.id : `CRT-MZ-TR-2026-${req.id}`;
+      const cleanedReq = cleanFirestoreData({ 
+        ...req, 
+        crtCode: officialDocCode, 
+        officialDocCode: officialDocCode 
+      });
       if (!querySnapshot.empty) {
         const updatePromises: Promise<void>[] = [];
         querySnapshot.forEach((docSnap) => {

@@ -55,6 +55,8 @@ export interface CargoRequest {
   vehicleWarningMsg?: string;
   userId?: string;
   isDirectAssignment?: boolean;
+  crtCode?: string;
+  officialDocCode?: string;
 }
 
 export interface CarrierProposal {

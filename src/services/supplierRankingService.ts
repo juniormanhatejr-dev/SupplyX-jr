@@ -89,14 +89,14 @@ export function rankSuppliers(
     const distanceScore = Math.max(0, 1 - (s.distanceKm / maxDistance));
     
     // Scoring logic (Weighted):
-    // 1. Availability (90% target) - 40%
-    // 2. Proximity - 30%
-    // 3. Price - 30%
+    // 1. Availability (95% target requirement) - 50%
+    // 2. Price - 30%
+    // 3. Proximity - 20%
     
-    // Bonus for hitting the 90% availability target
-    const availabilityBonus = s.productMatch >= 0.9 ? 0.1 : 0;
+    // Bonus / Gate for hitting the 95% availability target
+    const coverageScore = s.productMatch >= 0.95 ? 1.0 : (s.productMatch * 0.5);
     
-    const score = (s.productMatch * 0.4) + (distanceScore * 0.3) + (priceScore * 0.3) + availabilityBonus;
+    const score = (coverageScore * 0.5) + (priceScore * 0.3) + (distanceScore * 0.2);
 
     return {
       ...s,

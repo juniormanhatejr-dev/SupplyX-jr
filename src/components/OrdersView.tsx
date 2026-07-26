@@ -63,6 +63,9 @@ interface SupplierResponse {
   itemPrices: { material: string; price: number }[];
   phone?: string;
   email?: string;
+  address?: string;
+  distanceKm?: number;
+  rankingScore?: number;
 }
 
 interface MaterialComboBoxProps {
@@ -1617,15 +1620,46 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
     );
   };
 
+  const getAddressCoords = (addr?: string) => {
+    if (!addr) return { lat: -25.9692, lng: 32.5732 };
+    const str = addr.toLowerCase();
+    if (str.includes('nampula') || str.includes('nacala')) return { lat: -15.1167, lng: 39.2667 };
+    if (str.includes('maputo') || str.includes('matola')) return { lat: -25.9692, lng: 32.5732 };
+    if (str.includes('sofala') || str.includes('beira')) return { lat: -19.8333, lng: 34.8500 };
+    if (str.includes('cabo delgado') || str.includes('pemba')) return { lat: -12.9667, lng: 40.5500 };
+    if (str.includes('tete')) return { lat: -16.1564, lng: 33.5867 };
+    if (str.includes('gaza') || str.includes('xai-xai')) return { lat: -25.0447, lng: 33.6406 };
+    if (str.includes('inhambane')) return { lat: -23.8650, lng: 35.3833 };
+    if (str.includes('manica') || str.includes('chimoio')) return { lat: -18.9167, lng: 33.4500 };
+    if (str.includes('zambézia') || str.includes('zambezia') || str.includes('quelimane')) return { lat: -17.8786, lng: 36.8883 };
+    if (str.includes('niassa') || str.includes('lichinga')) return { lat: -13.3125, lng: 35.2422 };
+    return { lat: -25.9692, lng: 32.5732 };
+  };
+
+  const calcDistKm = (loc1: { lat: number; lng: number }, loc2: { lat: number; lng: number }) => {
+    const R = 6371;
+    const dLat = (loc2.lat - loc1.lat) * Math.PI / 180;
+    const dLng = (loc2.lng - loc1.lng) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(loc1.lat * Math.PI / 180) * Math.cos(loc2.lat * Math.PI / 180) * 
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return Math.round(R * c);
+  };
+
   const startAiAnalysis = async () => {
     setStep(3);
     setIsAiProcessing(true);
     
     try {
       const requestId = `RQ-${Math.floor(Date.now()/100000)}`;
+      const buyerCoords = getAddressCoords(profile?.address || 'NACALA - PORTO');
       
       const responses: SupplierResponse[] = await Promise.all(selectedSuppliers.map(async (sid) => {
         const s = mergedSuppliers.find(as => as.id === sid);
+        const supplierAddr = s?.address || 'Maputo, Moçambique';
+        const supplierCoords = getAddressCoords(supplierAddr);
+        const distanceKm = calcDistKm(buyerCoords, supplierCoords);
         
         // Calculate real total based on products if they exist
         let calculatedTotal = 0;
@@ -1662,7 +1696,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
         });
 
         // 1. Create a real Quotation document in Firestore for each supplier
-        // This allows real-time viewing on the supplier's side
         try {
           await addDoc(collection(db, 'quotations'), {
             requestId,
@@ -1674,7 +1707,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             buyerPhone: profile?.phone || '+258 84 ...',
             supplierId: sid,
             supplierName: s?.name || 'Fornecedor',
-            supplierAddress: s?.address || 'Maputo, Moçambique',
+            supplierAddress: supplierAddr,
             supplierEmail: s?.email || 'sales@supplier.com',
             supplierPhone: s?.phone || '',
             supplierNuit: s?.nuit || '400' + Math.floor(Math.random() * 1000000),
@@ -1711,7 +1744,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
             }),
             status: 'pending',
             totalAmount: calculatedTotal,
-            confidence: Math.round((itemsFound / rows.length) * 100),
+            confidence: Math.round((itemsFound / (rows.length || 1)) * 100),
             createdAt: serverTimestamp(),
             language
           });
@@ -1735,6 +1768,8 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           console.error(`Error saving quotation for ${sid}:`, e);
         }
 
+        const confidence = Math.round((itemsFound / (rows.length || 1)) * 100);
+
         return {
           supplierId: sid,
           name: s?.name || (language === 'PT' ? 'Fornecedor' : 'Supplier'),
@@ -1742,14 +1777,40 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
           timeToDeliver: itemsFound === rows.length
             ? (language === 'PT' ? '2 dias' : '2 days') 
             : (language === 'PT' ? '4-5 dias (Sob consulta)' : '4-5 days (Pending quote)'),
-          confidence: Math.round((itemsFound / rows.length) * 100),
+          confidence,
           itemPrices,
           phone: s?.phone,
-          email: s?.email
+          email: s?.email,
+          address: supplierAddr,
+          distanceKm
         };
       }));
 
-      const sorted = [...responses].sort((a, b) => a.price - b.price);
+      // Multi-criteria ranking:
+      // 1. Availability target >= 95% of requested products
+      // 2. Lowest total price comparison
+      // 3. Proximity / Location distance to buyer
+      const minP = Math.min(...responses.map(r => r.price)) || 1;
+      const maxP = Math.max(...responses.map(r => r.price)) || 1;
+
+      const scoredResponses = responses.map(r => {
+        const coverageRatio = r.confidence / 100;
+        // Requirement 1: Gate for hitting 95% availability target
+        const coverageScore = coverageRatio >= 0.95 ? 1.0 : (coverageRatio * 0.4);
+        
+        // Requirement 2: Lower price score
+        const priceScore = maxP === minP ? 1.0 : 1 - ((r.price - minP) / (maxP - minP || 1));
+        
+        // Requirement 3: Proximity score
+        const distanceScore = Math.max(0, 1 - ((r.distanceKm || 0) / 2000));
+
+        // Combined score
+        const rankingScore = (coverageScore * 0.50) + (priceScore * 0.30) + (distanceScore * 0.20);
+
+        return { ...r, rankingScore };
+      });
+
+      const sorted = scoredResponses.sort((a, b) => (b.rankingScore || 0) - (a.rankingScore || 0));
       setAiResponses(sorted);
     } catch (err) {
       console.error('Error in AI analysis:', err);
@@ -1976,7 +2037,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       excel: 'Baixar Planilha (Excel)',
       simultaneousAi: 'AI simultânea em processamento',
       analysisComplete: 'Análise Concluída',
-      analysisSub: 'Resultados ordenados por menor custo',
+      analysisSub: 'Resultados ordenados por Disponibilidade (≥95%), Menor Preço e Proximidade',
       bestChoice: 'Melhor Escolha',
       confirmPayment: 'Pagamento Confirmado',
       secureCheckout: 'Check-out Seguro',
@@ -2071,7 +2132,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
       excel: 'Download Spreadsheet (Excel)',
       simultaneousAi: 'Simultaneous AI processing',
       analysisComplete: 'Analysis Complete',
-      analysisSub: 'Results ordered by lowest cost',
+      analysisSub: 'Results ranked by Availability (≥95%), Best Price & Proximity',
       bestChoice: 'Best Choice',
       confirmPayment: 'Payment Confirmed',
       secureCheckout: 'Secure Checkout',
@@ -2778,6 +2839,16 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                                 {res.name}
                                 {i === 0 && <span className="bg-emerald-500 text-white text-[10px] px-2 py-0.5 rounded-lg italic font-black uppercase">{t.bestChoice}</span>}
                               </h4>
+                              <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${res.confidence >= 95 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>
+                                  {res.confidence}% {language === 'PT' ? 'Disponibilidade de Itens' : 'Item Availability'}
+                                </span>
+                                {res.distanceKm !== undefined && (
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${isDarkMode ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-100 text-zinc-700'}`}>
+                                    {res.distanceKm} km {language === 'PT' ? 'de distância' : 'away'}
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center gap-2 mt-2">
                                 <div className="flex gap-1.5 overflow-hidden">
                                   <button 
@@ -2811,7 +2882,7 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                               </div>
                             </div>
                           </div>
-                          <div className="text-right mt-4 sm:mt-0 w-full sm:w-auto flex flex-col items-end gap-3">
+                          <div className="text-right mt-4 sm:mt-0 w-full sm:w-auto flex flex-col items-end gap-1">
                             <div>
                               <p className={`text-2xl font-black italic tracking-tighter ${i === 0 ? 'text-brand' : isDarkMode ? 'text-zinc-100' : 'text-zinc-900'}`}>
                                 MT {res.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -2823,16 +2894,6 @@ export default function OrdersView({ startWithForm = false, onFormClose, onNavig
                               </p>
                               <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-none mt-1">{t.totalEstimated}</p>
                             </div>
-                            <button 
-                              onClick={() => {
-                                setSelectedResponseIndex(i);
-                                setStep(4);
-                              }}
-                              className="w-full sm:w-auto px-6 py-3 bg-[#0052CC] text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-brand hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
-                            >
-                              <ShieldCheck className="w-4 h-4" />
-                              {t.payNow}
-                            </button>
                           </div>
                         </motion.div>
                       ))}

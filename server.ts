@@ -250,6 +250,62 @@ async function startServer() {
     return false;
   }
 
+  // Rate limiter for AI & resource-heavy endpoints
+  const aiRateLimits = new Map<string, { count: number; expiresAt: number }>();
+  function checkAiRateLimit(key: string, maxRequests = 30, windowMs = 60 * 1000): boolean {
+    const now = Date.now();
+    const entry = aiRateLimits.get(key);
+    if (!entry || now > entry.expiresAt) {
+      aiRateLimits.set(key, { count: 1, expiresAt: now + windowMs });
+      return false;
+    }
+    if (entry.count >= maxRequests) {
+      return true;
+    }
+    entry.count += 1;
+    return false;
+  }
+
+  // SSRF Protection: Prevent downloading from loopback, internal cloud metadata, or private IP spaces
+  function isSafeExternalUrl(rawUrl: string): boolean {
+    try {
+      const parsed = new URL(rawUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return false;
+      }
+      const host = parsed.hostname.toLowerCase();
+      // Block localhost, link-local, private subnets, cloud metadata
+      if (
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '::1' ||
+        host === '0.0.0.0' ||
+        host === '169.254.169.254' ||
+        host.includes('metadata.google.internal') ||
+        host.endsWith('.internal') ||
+        host.endsWith('.local')
+      ) {
+        return false;
+      }
+      // Check private IPv4 ranges
+      const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+      const match = host.match(ipv4Regex);
+      if (match) {
+        const first = parseInt(match[1], 10);
+        const second = parseInt(match[2], 10);
+        if (first === 10) return false;
+        if (first === 127) return false;
+        if (first === 169 && second === 254) return false;
+        if (first === 172 && second >= 16 && second <= 31) return false;
+        if (first === 192 && second === 168) return false;
+        if (first === 0) return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // Clean up expired IP limit items periodically to prevent memory leaks
   setInterval(() => {
     const now = Date.now();
@@ -258,10 +314,20 @@ async function startServer() {
         ipLimitsMap.delete(ip);
       }
     }
+    for (const [key, limit] of aiRateLimits.entries()) {
+      if (now > limit.expiresAt) {
+        aiRateLimits.delete(key);
+      }
+    }
   }, 15 * 60 * 1000);
 
   // AI Classification API
   app.post('/api/products/classify', async (req, res) => {
+    const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+    if (checkAiRateLimit(`classify_${clientIp}`, 20, 60 * 1000)) {
+      return res.status(429).json({ error: 'Limite de requisições excedido. Tente novamente em 1 minuto.' });
+    }
+
     const { productName, description } = req.body;
     if (!productName) {
       return res.status(400).json({ error: 'productName is required' });
@@ -679,6 +745,11 @@ async function startServer() {
 
   // AI Product Image Search via Google Grounding API
   app.post('/api/products/search-images', async (req, res) => {
+    const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+    if (checkAiRateLimit(`search_img_${clientIp}`, 30, 60 * 1000)) {
+      return res.status(429).json({ error: 'Limite de requisições excedido. Tente novamente em 1 minuto.' });
+    }
+
     const { productName } = req.body;
     if (!productName) {
       return res.status(400).json({ error: 'productName is required' });
@@ -876,6 +947,11 @@ async function startServer() {
       const { imageUrl, productName } = req.body;
       if (!imageUrl) {
         return res.status(400).json({ error: 'Missing imageUrl' });
+      }
+
+      // Enforce SSRF protection: reject internal network, metadata IP and local addresses
+      if (!isSafeExternalUrl(imageUrl)) {
+        return res.status(400).json({ error: 'URL inválida ou não permitida por políticas de segurança de rede (SSRF).' });
       }
 
       console.log(`[SERVER] Attempting to download external image: ${imageUrl} for: ${productName}`);
@@ -1286,7 +1362,7 @@ async function startServer() {
   // API Proxy for Uploads (Bypass CORS)
   app.post('/api/upload', upload.single('file'), async (req: any, res) => {
     const file = req.file;
-    const destination = req.body.path;
+    let destination = req.body.path;
 
     if (!file) {
       return res.status(400).json({ error: 'Missing file' });
@@ -1296,10 +1372,26 @@ async function startServer() {
       return res.status(400).json({ error: 'Missing path' });
     }
 
+    // Security: Sanitize path, strip directory traversal attacks
+    destination = destination.replace(/\\/g, '/').replace(/\.\./g, '').replace(/^\/+/, '');
+    const allowedPrefixes = ['uploads/', 'products/', 'users/', 'chats/', 'temp/'];
+    const isPrefixAllowed = allowedPrefixes.some(p => destination.startsWith(p));
+    if (!isPrefixAllowed) {
+      destination = `uploads/${destination}`;
+    }
+
+    // Security: Validate file extension
+    const allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'png', 'jpg', 'jpeg', 'webp', 'svg'];
+    const originalName = file.originalname || 'file';
+    const ext = originalName.split('.').pop()?.toLowerCase() || '';
+    if (!allowedExtensions.includes(ext)) {
+      return res.status(400).json({ error: 'Extensão de arquivo não permitida por diretrizes de segurança.' });
+    }
+
     const saveLocally = async () => {
       if (file && file.buffer) {
         try {
-          const sanitizedOriginalName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const sanitizedOriginalName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
           const localFileName = `${Date.now()}_${sanitizedOriginalName}`;
           const localFilePath = path.join(UPLOADS_DIR, localFileName);
           
@@ -1424,28 +1516,72 @@ async function startServer() {
       const decodedToken = await admin.auth().verifyIdToken(idToken);
       return decodedToken;
     } catch (err) {
-      console.error('[SERVER] Token verification failed:', err);
       return null;
     }
   }
 
+  const checkIsAdmin = async (uid?: string, email?: string): Promise<boolean> => {
+    if (!uid && !email) return false;
+    const lowerEmail = (email || '').toLowerCase();
+    if (lowerEmail === 'admin@supplyx.co.mz' || lowerEmail === 'juniormanhate2@gmail.com') {
+      return true;
+    }
+    if (uid) {
+      try {
+        const adminDoc = await db.collection('admins').doc(uid).get();
+        if (adminDoc.exists) return true;
+        const userDoc = await db.collection('users').doc(uid).get();
+        if (userDoc.exists) {
+          const uData = userDoc.data();
+          if (uData?.role === 'admin' || uData?.role === 'superadmin') return true;
+        }
+      } catch (err) {
+        console.warn('[AUTH] Error checking admin status:', err);
+      }
+    }
+    return false;
+  };
+
   async function resolveUserSession(req: any) {
     const userToken = await getUserIdFromRequest(req);
-    if (userToken) {
+    if (userToken && userToken.uid) {
+      const isAdmin = await checkIsAdmin(userToken.uid, userToken.email);
       return {
         uid: userToken.uid,
         email: userToken.email || '',
-        companyId: req.body.company_id || req.body.companyId || 'default-company'
+        companyId: req.body?.company_id || req.body?.companyId || req.query?.companyId || null,
+        isAdmin,
+        isAuthenticated: true
       };
     }
-    const fallbackUid = req.headers['x-user-id'] || req.body.uploaded_by || req.body.uploadedBy || 'mock-user-123';
-    const fallbackEmail = req.headers['x-user-email'] || 'mock-email@supplyx.com';
     return {
-      uid: fallbackUid,
-      email: fallbackEmail,
-      companyId: req.body.company_id || req.body.companyId || 'default-company'
+      uid: null,
+      email: null,
+      companyId: null,
+      isAdmin: false,
+      isAuthenticated: false
     };
   }
+
+  // Middleware: Require authenticated user
+  const requireAuth = async (req: any, res: any, next: any) => {
+    const session = await resolveUserSession(req);
+    if (!session.isAuthenticated || !session.uid) {
+      return res.status(401).json({ error: 'Acesso não autorizado. Autenticação obrigatória.' });
+    }
+    req.user = session;
+    next();
+  };
+
+  // Middleware: Require admin privileges
+  const requireAdmin = async (req: any, res: any, next: any) => {
+    const session = await resolveUserSession(req);
+    if (!session.isAuthenticated || !session.isAdmin) {
+      return res.status(403).json({ error: 'Acesso negado. Privilégios de Administrador requeridos.' });
+    }
+    req.user = session;
+    next();
+  };
 
   const logAudit = async (action: 'upload' | 'download' | 'delete', fileId: string, metadata: any, req: any) => {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
@@ -1456,9 +1592,9 @@ async function startServer() {
       id: logId,
       file_id: fileId,
       action,
-      user_id: user.uid,
-      user_email: user.email,
-      company_id: user.companyId,
+      user_id: user.uid || 'anonymous',
+      user_email: user.email || 'anonymous',
+      company_id: user.companyId || 'default-company',
       timestamp: new Date().toISOString(),
       ip_address: ip,
       metadata: metadata
@@ -1478,12 +1614,12 @@ async function startServer() {
       await db.collection('file_audits').doc(logId).set(auditRecord);
       console.log(`[AUDIT] Action [${action}] by User [${user.uid}] (IP: ${ip}) on file [${fileId}]`);
     } catch (err: any) {
-      console.log(`[SERVER] Info: Firestore audit logging skipped (saved to local fallback store instead): ${err.message}`);
+      console.log(`[SERVER] Info: Firestore audit logging skipped: ${err.message}`);
     }
   };
 
-  // Upload endpoint
-  app.post('/api/files/upload', upload.single('file'), async (req: any, res) => {
+  // Upload endpoint (Authenticated & Sanitized)
+  app.post('/api/files/upload', requireAuth, upload.single('file'), async (req: any, res) => {
     const file = req.file;
     if (!file) {
       return res.status(400).json({ error: 'Erro de upload: nenhum ficheiro fornecido.' });
@@ -1513,8 +1649,7 @@ async function startServer() {
       await fs.promises.writeFile(localFilePath, file.buffer);
 
       const blobUrl = `/api/uploads/${fileName}`;
-      const storagePath = `uploads/${fileName}`;
-      const user = await resolveUserSession(req);
+      const storagePath = `uploads/${req.user.uid}/${fileName}`;
 
       const fileMetadata = {
         id: fileId,
@@ -1524,8 +1659,8 @@ async function startServer() {
         file_size: file.size,
         storage_path: storagePath,
         blob_url: blobUrl,
-        uploaded_by: user.uid,
-        company_id: user.companyId,
+        uploaded_by: req.user.uid,
+        company_id: req.user.companyId || 'default-company',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         message_id: req.body.message_id || req.body.messageId || null,
@@ -1545,7 +1680,7 @@ async function startServer() {
       try {
         await db.collection('files').doc(fileId).set(fileMetadata);
       } catch (fErr: any) {
-        console.log('[SERVER] Info: Firestore set file document skipped (saved to local fallback store instead):', fErr.message);
+        console.log('[SERVER] Info: Firestore set file document skipped:', fErr.message);
       }
 
       await logAudit('upload', fileId, { originalName }, req);
@@ -1557,10 +1692,10 @@ async function startServer() {
     }
   });
 
-  // List all files endpoint with search, type filter, association relation filter support
-  app.get('/api/files', async (req, res) => {
+  // List files endpoint with authorization & multi-tenant isolation
+  app.get('/api/files', requireAuth, async (req: any, res) => {
     try {
-      const user = await resolveUserSession(req);
+      const user = req.user;
       const { search, type, category, orderId, shipmentId, assignmentId, productId } = req.query;
 
       let files: any[] = [];
@@ -1583,8 +1718,17 @@ async function startServer() {
         files = readLocalFiles();
       }
       
-      // Perform filtering
+      // Perform access control & query filtering
       const filteredFiles = files.filter((data: any) => {
+        // Multi-tenant Access Control: Admin sees all; regular user sees their own or their company's files
+        if (!user.isAdmin) {
+          const isOwner = data.uploaded_by === user.uid;
+          const isSameCompany = user.companyId && data.company_id === user.companyId;
+          if (!isOwner && !isSameCompany) {
+            return false;
+          }
+        }
+
         let matches = true;
 
         if (req.query.companyId && data.company_id !== req.query.companyId) {
@@ -1592,7 +1736,7 @@ async function startServer() {
         }
         if (search) {
           const searchStr = (search as string).toLowerCase();
-          const matchName = data.original_name.toLowerCase().includes(searchStr);
+          const matchName = (data.original_name || '').toLowerCase().includes(searchStr);
           const matchCat = data.category && data.category.toLowerCase().includes(searchStr);
           if (!matchName && !matchCat) matches = false;
         }
@@ -1600,11 +1744,11 @@ async function startServer() {
           const typeStr = (type as string).toLowerCase();
           if (typeStr === 'document') {
             const documentExts = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv'];
-            const ext = data.original_name.split('.').pop()?.toLowerCase() || '';
+            const ext = (data.original_name || '').split('.').pop()?.toLowerCase() || '';
             if (!documentExts.includes(ext)) matches = false;
           } else if (typeStr === 'image') {
             const imageExts = ['png', 'jpg', 'jpeg', 'webp'];
-            const ext = data.original_name.split('.').pop()?.toLowerCase() || '';
+            const ext = (data.original_name || '').split('.').pop()?.toLowerCase() || '';
             if (!imageExts.includes(ext)) matches = false;
           }
         }
@@ -1637,8 +1781,8 @@ async function startServer() {
     }
   });
 
-  // Secure temporary token request url generator (Download Safe)
-  app.get('/api/files/:id/download', async (req, res) => {
+  // Secure temporary token request url generator (Download Safe with Ownership Verification)
+  app.get('/api/files/:id/download', requireAuth, async (req: any, res) => {
     try {
       const fileId = req.params.id;
       let fileData: any = null;
@@ -1663,10 +1807,11 @@ async function startServer() {
         return res.status(404).json({ error: 'Ficheiro não registado no sistema de arquivos.' });
       }
 
-      const user = await resolveUserSession(req);
+      const user = req.user;
 
-      if (!user.uid) {
-        return res.status(403).json({ error: 'Usuário não autenticado.' });
+      // Access Authorization Check: Must be uploader, same company, or admin
+      if (!user.isAdmin && fileData.uploaded_by !== user.uid && (!user.companyId || fileData.company_id !== user.companyId)) {
+        return res.status(403).json({ error: 'Acesso negado: Você não tem permissão para descarregar este ficheiro.' });
       }
 
       // Generate secure temp SAS/Download Token, expires in 5 minutes
@@ -1701,9 +1846,6 @@ async function startServer() {
       if (!cachedToken || cachedToken.fileId !== fileId || cachedToken.expires < Date.now()) {
         return res.status(403).send('Link de download expirado ou acesso não autorizado.');
       }
-
-      // Do not consume token immediately so that browser PDF viewers can make range/sub-requests
-      // tempTokens.delete(token);
 
       let fileData: any = null;
 
@@ -1748,8 +1890,8 @@ async function startServer() {
     }
   });
 
-  // Safe file delete
-  app.delete('/api/files/:id', async (req: any, res) => {
+  // Safe file delete (Protected with Owner/Admin Access Verification)
+  app.delete('/api/files/:id', requireAuth, async (req: any, res) => {
     try {
       const fileId = req.params.id;
       let fileData: any = null;
@@ -1771,6 +1913,15 @@ async function startServer() {
         fileData = localFileData;
       }
       
+      if (!fileData) {
+        return res.status(404).json({ error: 'Ficheiro não encontrado.' });
+      }
+
+      // Authorization Check: Only file owner or admin can delete
+      if (!req.user.isAdmin && fileData.uploaded_by !== req.user.uid) {
+        return res.status(403).json({ error: 'Acesso negado: Apenas o proprietário ou administrador pode eliminar este ficheiro.' });
+      }
+
       if (fileData) {
         const localFilePath = path.join(UPLOADS_DIR, fileData.file_name);
         if (fs.existsSync(localFilePath)) {
@@ -1786,7 +1937,7 @@ async function startServer() {
       try {
         await db.collection('files').doc(fileId).delete();
       } catch (fErr: any) {
-        console.warn('[SERVER] Firestore delete file doc failed (likely custom database permission issue):', fErr.message);
+        console.warn('[SERVER] Firestore delete file doc failed:', fErr.message);
       }
 
       await logAudit('delete', fileId, {}, req);
@@ -2057,8 +2208,8 @@ async function startServer() {
     }
   });
 
-  // POST /synonyms - Add a new synonym
-  app.post(['/synonyms', '/api/synonyms'], async (req, res) => {
+  // POST /synonyms - Add a new synonym (Admin only)
+  app.post(['/synonyms', '/api/synonyms'], requireAdmin, async (req: any, res) => {
     try {
       const { canonicalName, synonyms, language, country } = req.body;
       if (!canonicalName) {
@@ -2085,8 +2236,8 @@ async function startServer() {
     }
   });
 
-  // PUT /synonyms/:id - Update an existing synonym
-  app.put(['/synonyms/:id', '/api/synonyms/:id'], async (req, res) => {
+  // PUT /synonyms/:id - Update an existing synonym (Admin only)
+  app.put(['/synonyms/:id', '/api/synonyms/:id'], requireAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
       const { canonicalName, synonyms, language, country } = req.body;
@@ -2109,8 +2260,8 @@ async function startServer() {
     }
   });
 
-  // DELETE /synonyms/:id - Delete an existing synonym
-  app.delete(['/synonyms/:id', '/api/synonyms/:id'], async (req, res) => {
+  // DELETE /synonyms/:id - Delete an existing synonym (Admin only)
+  app.delete(['/synonyms/:id', '/api/synonyms/:id'], requireAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
       await db.collection('ProductSynonyms').doc(id).delete();
@@ -2362,8 +2513,8 @@ async function startServer() {
     }
   });
 
-  // POST /suggestions/:id/approve - Approve suggestion and merge it
-  app.post(['/suggestions/:id/approve', '/api/suggestions/:id/approve'], async (req, res) => {
+  // POST /suggestions/:id/approve - Approve suggestion and merge it (Admin only)
+  app.post(['/suggestions/:id/approve', '/api/suggestions/:id/approve'], requireAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
       const { canonicalName } = req.body;
@@ -2415,8 +2566,8 @@ async function startServer() {
     }
   });
 
-  // POST /suggestions/:id/reject - Reject suggestion
-  app.post(['/suggestions/:id/reject', '/api/suggestions/:id/reject'], async (req, res) => {
+  // POST /suggestions/:id/reject - Reject suggestion (Admin only)
+  app.post(['/suggestions/:id/reject', '/api/suggestions/:id/reject'], requireAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
       await db.collection('SynonymSuggestions').doc(id).update({
@@ -2644,11 +2795,16 @@ async function startServer() {
   });
 
   // SECURE AUTH: Endpoint to retrieve verification link for an authenticated user (useful for fallback when Brevo is blocked)
-  app.post('/api/auth/get-verification-link', async (req, res) => {
+  app.post('/api/auth/get-verification-link', requireAuth, async (req: any, res) => {
     try {
       const { uid } = req.body || {};
       if (!uid) {
         return res.status(400).json({ error: 'UID is required' });
+      }
+
+      // Authorization Check: Must be requesting for self or be an admin
+      if (!req.user.isAdmin && req.user.uid !== uid) {
+        return res.status(403).json({ error: 'Acesso negado: Você só pode obter links de verificação para sua própria conta.' });
       }
 
       const verificationsSnapshot = await db.collection('email_verifications')
@@ -2673,11 +2829,16 @@ async function startServer() {
   });
 
   // SECURE AUTH: Endpoint to bypass/force verify email (useful for development/testing when mail servers are blocked/inactive)
-  app.post('/api/auth/bypass-verification', async (req, res) => {
+  app.post('/api/auth/bypass-verification', requireAuth, async (req: any, res) => {
     try {
       const { uid } = req.body || {};
       if (!uid) {
         return res.status(400).json({ error: 'UID is required' });
+      }
+
+      // Authorization Check: Must be verifying own account or be an admin
+      if (!req.user.isAdmin && req.user.uid !== uid) {
+        return res.status(403).json({ error: 'Acesso negado: Apenas o titular da conta ou administrador pode validar o e-mail.' });
       }
 
       // Mark as verified in Firestore

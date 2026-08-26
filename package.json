@@ -8,7 +8,12 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "tsx tests/security/run-security-suite.ts",
+    "test:security": "tsx tests/security/run-security-suite.ts",
+    "test:architecture": "tsx tests/architecture/architecture-check.ts",
+    "test:enterprise": "tsx tests/enterprise/run-enterprise-readiness-suite.ts",
+    "test:production-gate": "tsx tests/production-gate.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

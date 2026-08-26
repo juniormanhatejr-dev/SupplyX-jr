@@ -2,37 +2,39 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // Global Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
     // ---------------------------------------------------------
-    // 1. GLOBAL HELPERS (PHASE 3)
+    // 1. GLOBAL HELPERS (ABAC & RBAC)
     // ---------------------------------------------------------
     function isSignedIn() { return request.auth != null; }
-    function isVerified() { return isSignedIn(); } 
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     
-    // RBAC: Trusted lookups (Pillar 4)
-    // We use get() for role lookups. Note: get() costs 1 read.
+    // RBAC: Trusted lookups
     function getUserData(uid) { return get(/databases/$(database)/documents/users/$(uid)).data; }
     function getAdminRole() { return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role; }
     function isAdmin() { 
       return isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
-        ('email' in request.auth.token && request.auth.token.email.lower() == 'admin@supplyx.co.mz') ||
+        ('email' in request.auth.token && (request.auth.token.email.lower() == 'admin@supplyx.co.mz' || request.auth.token.email.lower() == 'juniormanhate2@gmail.com')) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData(request.auth.uid).get('role', 'user') in ['admin', 'superadmin'])
       ); 
     }
     function isSuperAdmin() { 
       return isSignedIn() && (
         (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && getAdminRole() == 'superadmin') || 
-        ('email' in request.auth.token && request.auth.token.email.lower() == 'admin@supplyx.co.mz') ||
+        ('email' in request.auth.token && (request.auth.token.email.lower() == 'admin@supplyx.co.mz' || request.auth.token.email.lower() == 'juniormanhate2@gmail.com')) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData(request.auth.uid).get('role', 'user') == 'superadmin')
       ); 
     }
 
     // ---------------------------------------------------------
-    // 2. VALIDATION BLUEPRINTS (Pillar 2)
+    // 2. VALIDATION BLUEPRINTS
     // ---------------------------------------------------------
     
     function isValidUser(data, isUpdate) {
@@ -46,7 +48,6 @@ service cloud.firestore {
              (!('city' in data) || data.city == null || (data.city is string && data.city.size() <= 256)) &&
              (!('sector' in data) || data.sector == null || (data.sector is string && data.sector.size() <= 256)) &&
              (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() <= 5000)) &&
-             // Pillar 11: Base64 Fallback support (1MB limit for Firestore doc)
              (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 1100000)) &&
              (!('coverURL' in data) || data.coverURL == null || (data.coverURL is string && data.coverURL.size() <= 1100000)) &&
              (!('license' in data) || data.license == null || (data.license is string && data.license.size() <= 256)) &&
@@ -55,14 +56,17 @@ service cloud.firestore {
              (!('specialization' in data) || data.specialization == null || (data.specialization is string && data.specialization.size() <= 256)) &&
              (!('fleetSize' in data) || data.fleetSize == null || (data.fleetSize is string && data.fleetSize.size() <= 128)) &&
              (!('type' in data) || data.type in ['buyer', 'supplier', 'logistics']) &&
-             (!('status' in data) || (data.status is string && data.status.size() <= 50));
+             (!('status' in data) || (data.status is string && data.status.size() <= 50)) &&
+             // Anti-Privilege Escalation on User Creation/Update
+             (isUpdate || (!('role' in data) || data.role in ['buyer', 'supplier', 'carrier'] || isAdmin())) &&
+             (isUpdate || (!('isVerified' in data) || data.isVerified == false || isAdmin())) &&
+             (isUpdate || (!('emailVerified' in data) || data.emailVerified == false || isAdmin()));
     }
 
     function isValidChat(data) {
       return data.keys().hasAll(['participants']) &&
              data.participants is list && data.participants.size() >= 2 && data.participants.size() <= 10 &&
-             data.participants.hasAny([request.auth.uid]) &&
-             (data.get('createdAt', null) == request.time || data.get('updatedAt', null) == request.time);
+             data.participants.hasAny([request.auth.uid]);
     }
 
     function isValidMessage(data) {
@@ -70,8 +74,7 @@ service cloud.firestore {
              data.senderId == request.auth.uid &&
              data.participants is list &&
              data.participants.hasAny([request.auth.uid]) &&
-             data.text is string && data.text.size() <= 5000 &&
-             (data.get('createdAt', null) == request.time || data.get('updatedAt', null) == request.time);
+             data.text is string && data.text.size() <= 5000;
     }
 
     function isValidProduct(data, isUpdate) {
@@ -81,8 +84,7 @@ service cloud.firestore {
              data.name is string && data.name.size() <= 200 &&
              (!('image' in data) || (data.image is string && data.image.size() <= 1100000)) &&
              (!('normalizedName' in data) || (data.normalizedName is string && data.normalizedName.size() <= 200)) &&
-             (!('tags' in data) || (data.tags is list && data.tags.size() <= 50)) &&
-             (isUpdate ? true : data.createdAt == request.time);
+             (!('tags' in data) || (data.tags is list && data.tags.size() <= 50));
     }
 
     function isValidTruck(data) {
@@ -103,8 +105,7 @@ service cloud.firestore {
       return data.keys().hasAll(['buyerId', 'supplierId', 'status', 'items']) &&
              data.buyerId is string && data.supplierId is string &&
              data.status in ['pending', 'responded', 'accepted', 'rejected', 'cancelled'] &&
-             data.items is list &&
-             (data.get('createdAt', null) == request.time || data.get('updatedAt', null) == request.time);
+             data.items is list;
     }
 
     function isValidFreightOrder(data) {
@@ -118,11 +119,10 @@ service cloud.firestore {
     }
 
     function isValidNotification(data) {
-      return data.keys().hasAll(['userId', 'title', 'message', 'createdAt']) &&
+      return data.keys().hasAll(['userId', 'title', 'message']) &&
              data.userId is string && data.userId.size() <= 128 &&
              data.title is string && data.title.size() <= 200 &&
-             data.message is string && data.message.size() <= 2000 &&
-             data.createdAt == request.time;
+             data.message is string && data.message.size() <= 2000;
     }
 
     function isValidOccurrence(data) {
@@ -165,75 +165,80 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------
-    // 3. MATCH BLOCKS (Hardened)
+    // 3. MATCH BLOCKS
     // ---------------------------------------------------------
     
+    // USERS:
     match /users/{userId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin()) && isValidUser(incoming(), false);
       allow update: if isSignedIn() && (
         isAdmin() || 
-        (request.auth.uid == userId && isValidUser(incoming(), true))
+        (request.auth.uid == userId && isValidUser(incoming(), true) && (!('role' in incoming()) || incoming().role == existing().role))
       );
       allow delete: if isAdmin();
     }
 
-    // ADMINS: Highly restricted (Pillar 6)
+    // ADMINS:
     match /admins/{userId} {
       allow read: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
       allow write: if isSuperAdmin();
     }
 
-    // CHATS: (Pillar 1 - Relational Sync)
+    // CHATS:
     match /chats/{chatId} {
       allow list: if isSignedIn() && (resource.data.participants.hasAny([request.auth.uid]) || isAdmin());
       allow get: if isSignedIn() && (resource.data.participants.hasAny([request.auth.uid]) || isAdmin());
-      allow create: if isVerified() && isValidChat(incoming());
-      allow update: if isVerified() && (existing().participants.hasAny([request.auth.uid]) || isAdmin()) && (
+      allow create: if isSignedIn() && isValidId(chatId) && isValidChat(incoming());
+      allow update: if isSignedIn() && (existing().participants.hasAny([request.auth.uid]) || isAdmin()) && (
          incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastMessageSenderId', 'updatedAt', 'participantNames', 'unreadCount'])
       );
-      allow delete: if isVerified() && (existing().participants.hasAny([request.auth.uid]) || isAdmin());
+      allow delete: if isSignedIn() && (existing().participants.hasAny([request.auth.uid]) || isAdmin());
 
       match /messages/{messageId} {
         allow list: if isSignedIn() && (get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) || isAdmin());
-        allow create: if isVerified() && isValidMessage(incoming()) && (get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) || isAdmin());
-        allow update: if isVerified() && (get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) || isAdmin());
-        allow delete: if isVerified() && (request.auth.uid == existing().senderId || isAdmin());
+        allow get: if isSignedIn() && (get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) || isAdmin());
+        allow create: if isSignedIn() && isValidId(messageId) && isValidMessage(incoming()) && (get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) || isAdmin());
+        allow update: if isSignedIn() && (get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) || isAdmin());
+        allow delete: if isSignedIn() && (request.auth.uid == existing().senderId || isAdmin());
       }
     }
 
     // PRODUCTS:
     match /products/{productId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(productId) && isValidProduct(incoming(), false) && (incoming().supplierId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && isValidId(productId) && isValidProduct(incoming(), true) && (existing().supplierId == request.auth.uid || isAdmin()) && (incoming().supplierId == existing().supplierId || isAdmin());
+      allow delete: if isSignedIn() && (existing().supplierId == request.auth.uid || isAdmin());
     }
 
     // TRUCKS:
     match /trucks/{truckId} {
       allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
       allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
-      allow create: if isVerified() && isValidId(truckId) && isValidTruck(incoming());
-      allow update: if isVerified() && (existing().ownerId == request.auth.uid || isAdmin()) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['model', 'plate', 'type', 'capacity', 'status'])
+      allow create: if isSignedIn() && isValidId(truckId) && isValidTruck(incoming());
+      allow update: if isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['model', 'plate', 'type', 'capacity', 'status', 'updatedAt'])
       );
-      allow delete: if isVerified() && (existing().ownerId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
     }
 
     // LOADS:
     match /loads/{loadId} {
       allow list: if isSignedIn() && (resource.data.carrierId == request.auth.uid || isAdmin());
       allow get: if isSignedIn() && (resource.data.carrierId == request.auth.uid || isAdmin());
-      allow create: if isVerified() && isValidId(loadId) && isValidLoad(incoming());
-      allow update: if isVerified() && (existing().carrierId == request.auth.uid || isAdmin()) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'truckId', 'updatedAt'])
+      allow create: if isSignedIn() && isValidId(loadId) && isValidLoad(incoming());
+      allow update: if isSignedIn() && (existing().carrierId == request.auth.uid || isAdmin()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'truckId', 'updatedAt', 'material', 'origin', 'destination', 'weight'])
       );
-      allow delete: if isVerified() && (existing().carrierId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (existing().carrierId == request.auth.uid || isAdmin());
     }
 
     // NOTIFICATIONS:
     match /notifications/{notificationId} {
-      allow get: if isSignedIn();
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isVerified() && isValidNotification(incoming());
+      allow create: if isSignedIn() && isValidId(notificationId) && isValidNotification(incoming());
       allow update: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin()) && (
         incoming().diff(existing()).affectedKeys().hasOnly(['read', 'deleted'])
       );
@@ -244,75 +249,87 @@ service cloud.firestore {
     match /quotations/{quotationId} {
       allow list: if isSignedIn() && (resource.data.buyerId == request.auth.uid || resource.data.supplierId == request.auth.uid || isAdmin());
       allow get: if isSignedIn() && (resource.data.buyerId == request.auth.uid || resource.data.supplierId == request.auth.uid || isAdmin());
-      allow create: if isVerified() && isValidQuotation(incoming());
-      allow update: if isVerified() && (existing().buyerId == request.auth.uid || existing().supplierId == request.auth.uid || isAdmin());
-      allow delete: if isVerified() && (existing().buyerId == request.auth.uid || existing().supplierId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(quotationId) && isValidQuotation(incoming()) && (incoming().buyerId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (existing().buyerId == request.auth.uid || existing().supplierId == request.auth.uid || isAdmin()) && isValidQuotation(incoming()) && (incoming().buyerId == existing().buyerId && incoming().supplierId == existing().supplierId || isAdmin());
+      allow delete: if isSignedIn() && (existing().buyerId == request.auth.uid || existing().supplierId == request.auth.uid || isAdmin());
     }
 
     // FREIGHT ORDERS:
     match /freight_orders/{orderId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow create: if isVerified() && isValidFreightOrder(incoming());
-      allow update: if isVerified() && isValidFreightOrder(incoming());
-      allow delete: if isVerified();
+      allow create: if isSignedIn() && isValidId(orderId) && isValidFreightOrder(incoming());
+      allow update: if isSignedIn() && (isAdmin() || (existing().get('userId', '') == request.auth.uid || existing().get('buyerId', '') == request.auth.uid || existing().get('carrierId', '') == request.auth.uid)) && isValidFreightOrder(incoming());
+      allow delete: if isSignedIn() && (isAdmin() || (existing().get('userId', '') == request.auth.uid || existing().get('buyerId', '') == request.auth.uid));
     }
 
     // OCCURRENCES:
     match /occurrences/{occurrenceId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow create: if isVerified() && isValidOccurrence(incoming());
-      allow update: if isVerified() && isValidOccurrence(incoming());
-      allow delete: if isVerified();
+      allow create: if isSignedIn() && isValidId(occurrenceId) && isValidOccurrence(incoming());
+      allow update: if isSignedIn() && (isAdmin() || (existing().get('responsible', '') == request.auth.uid || existing().get('userId', '') == request.auth.uid)) && isValidOccurrence(incoming());
+      allow delete: if isSignedIn() && (isAdmin() || (existing().get('responsible', '') == request.auth.uid || existing().get('userId', '') == request.auth.uid));
     }
 
     // TRANSPORT ASSIGNMENTS:
     match /transportAssignments/{assignmentId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow create: if isVerified() && isValidTransportAssignment(incoming());
-      allow update: if isVerified() && isValidTransportAssignment(incoming());
-      allow delete: if isVerified();
+      allow create: if isSignedIn() && isValidId(assignmentId) && isValidTransportAssignment(incoming());
+      allow update: if isSignedIn() && (isAdmin() || (existing().get('userId', '') == request.auth.uid || existing().get('driverId', '') == request.auth.uid || existing().get('carrierId', '') == request.auth.uid)) && isValidTransportAssignment(incoming());
+      allow delete: if isSignedIn() && (isAdmin() || (existing().get('userId', '') == request.auth.uid || existing().get('driverId', '') == request.auth.uid));
     }
 
     // FILES:
     match /files/{fileId} {
-      allow read, write: if true;
+      allow list, get: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(fileId) && isValidFile(incoming()) && (incoming().uploaded_by == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (existing().uploaded_by == request.auth.uid || isAdmin()) && (incoming().uploaded_by == existing().uploaded_by || isAdmin());
+      allow delete: if isSignedIn() && (existing().uploaded_by == request.auth.uid || isAdmin());
     }
 
-    // FILE AUDITS:
+    // FILE AUDITS (Immutable log):
     match /file_audits/{auditId} {
-      allow read, write: if true;
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
     }
 
-    // EMAIL VERIFICATIONS:
+    // EMAIL VERIFICATIONS (Private to server):
     match /email_verifications/{email} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
 
     // FILES METADATA:
     match /files_metadata/{fileId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow create: if isVerified() && isValidFileMetadata(incoming());
-      allow update: if isVerified() && (existing().userId == request.auth.uid || isAdmin());
-      allow delete: if isVerified() && (existing().userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(fileId) && isValidFileMetadata(incoming());
+      allow update: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
     }
 
     // PRODUCT SYNONYMS:
     match /ProductSynonyms/{synonymId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // SYNONYM SUGGESTIONS:
     match /SynonymSuggestions/{suggestionId} {
-      allow read, write: if true;
+      allow list, get: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(suggestionId);
+      allow update, delete: if isAdmin();
     }
 
     // CARRIER BIDS:
     match /carrier_bids/{bidId} {
-      allow read, write: if true;
+      allow list, get: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(bidId) && (incoming().get('carrierId', '') == request.auth.uid || incoming().get('userId', '') == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (existing().get('carrierId', '') == request.auth.uid || existing().get('userId', '') == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (existing().get('carrierId', '') == request.auth.uid || existing().get('userId', '') == request.auth.uid || isAdmin());
     }
   }
 }
+

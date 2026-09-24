@@ -105,7 +105,23 @@ service cloud.firestore {
       return data.keys().hasAll(['buyerId', 'supplierId', 'status', 'items']) &&
              data.buyerId is string && data.supplierId is string &&
              data.status in ['pending', 'responded', 'accepted', 'rejected', 'cancelled'] &&
-             data.items is list;
+             data.items is list &&
+             (!('totalAmount' in data) || (data.totalAmount is number && data.totalAmount >= 0));
+    }
+
+    function isValidQuotationTransition(currentStatus, nextStatus, isBuyer, isSupplier, isAdminUser) {
+      return isAdminUser ||
+        // Buyer can create 'pending', cancel anytime before final, accept/reject responded quote
+        (isBuyer && (
+          (currentStatus == 'pending' && nextStatus == 'cancelled') ||
+          (currentStatus == 'responded' && (nextStatus == 'accepted' || nextStatus == 'rejected' || nextStatus == 'cancelled')) ||
+          (currentStatus == nextStatus)
+        )) ||
+        // Supplier can respond to pending quote, or reject
+        (isSupplier && (
+          (currentStatus == 'pending' && (nextStatus == 'responded' || nextStatus == 'rejected')) ||
+          (currentStatus == nextStatus)
+        ));
     }
 
     function isValidFreightOrder(data) {
@@ -250,7 +266,18 @@ service cloud.firestore {
       allow list: if isSignedIn() && (resource.data.buyerId == request.auth.uid || resource.data.supplierId == request.auth.uid || isAdmin());
       allow get: if isSignedIn() && (resource.data.buyerId == request.auth.uid || resource.data.supplierId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isValidId(quotationId) && isValidQuotation(incoming()) && (incoming().buyerId == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && (existing().buyerId == request.auth.uid || existing().supplierId == request.auth.uid || isAdmin()) && isValidQuotation(incoming()) && (incoming().buyerId == existing().buyerId && incoming().supplierId == existing().supplierId || isAdmin());
+      allow update: if isSignedIn() && (existing().buyerId == request.auth.uid || existing().supplierId == request.auth.uid || isAdmin()) &&
+        isValidQuotation(incoming()) &&
+        (incoming().buyerId == existing().buyerId && incoming().supplierId == existing().supplierId || isAdmin()) &&
+        // If just viewing / tracking metadata:
+        (incoming().diff(existing()).affectedKeys().hasOnly(['viewedBy', 'updatedAt', 'lastReadAt']) ||
+         isValidQuotationTransition(
+           existing().status,
+           incoming().status,
+           existing().buyerId == request.auth.uid,
+           existing().supplierId == request.auth.uid,
+           isAdmin()
+         ));
       allow delete: if isSignedIn() && (existing().buyerId == request.auth.uid || existing().supplierId == request.auth.uid || isAdmin());
     }
 

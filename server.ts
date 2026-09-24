@@ -207,6 +207,137 @@ async function startServer() {
     }
   };
 
+  // Security Hardening: Hide server details and enable reverse proxy trust
+  app.disable('x-powered-by');
+  app.set('trust proxy', 1);
+
+  // Allowed CORS Origins Whitelist (OWASP ZAP: Strict Cross-Domain Protection)
+  const ALLOWED_EXACT_DOMAINS = new Set([
+    'localhost',
+    '127.0.0.1',
+    'supplyx.co.mz',
+    'supplyx.app'
+  ]);
+
+  const ALLOWED_SUBDOMAIN_SUFFIXES = [
+    '.supplyx.co.mz',
+    '.supplyx.app'
+  ];
+
+  const isAllowedOrigin = (origin?: string): boolean => {
+    if (!origin || typeof origin !== 'string') return false;
+    if (origin === 'null' || origin.trim() === '') return false;
+
+    try {
+      const parsed = new URL(origin);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return false;
+      }
+      const hostname = parsed.hostname.toLowerCase();
+
+      // 1. Exact matches for primary domains & local development
+      if (ALLOWED_EXACT_DOMAINS.has(hostname)) {
+        return true;
+      }
+
+      // 2. Exact hierarchical subdomains of supplyx.co.mz and supplyx.app
+      for (const suffix of ALLOWED_SUBDOMAIN_SUFFIXES) {
+        if (hostname.endsWith(suffix)) {
+          const prefix = hostname.slice(0, -suffix.length);
+          if (prefix.length > 0 && !prefix.includes('..') && /^[a-z0-9-]+(\.[a-z0-9-]+)*$/.test(prefix)) {
+            return true;
+          }
+        }
+      }
+
+      // 3. AI Studio / Cloud Run active sandbox preview environments
+      if (hostname.endsWith('.run.app')) {
+        const prefix = hostname.slice(0, -'.run.app'.length);
+        if (/^(ais-dev-|ais-pre-)[a-z0-9-]+$/.test(prefix)) {
+          return true;
+        }
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  // 1. Strict CORS Middleware: Never allow '*' on sensitive/authenticated routes
+  app.use((req, res, next) => {
+    const origin = req.headers.origin as string | undefined;
+    if (origin && isAllowedOrigin(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Max-Age', '86400');
+      res.setHeader('Vary', 'Origin');
+    }
+
+    if (req.method === 'OPTIONS') {
+      if (origin && !isAllowedOrigin(origin)) {
+        return res.status(403).json({ error: 'Origem não permitida pela política CORS do SupplyX.' });
+      }
+      return res.status(204).end();
+    }
+    next();
+  });
+
+  // 2. Global HTTP Security Headers (Strict-Transport-Security, X-Content-Type-Options, Referrer-Policy, CSP, X-Frame-Options)
+  app.use((req, res, next) => {
+    // Strict-Transport-Security: enforce HTTPS with 1 year max-age & includeSubDomains
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+
+    // X-Content-Type-Options: prevent MIME sniffing
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    // Referrer-Policy: protect referrer information across origins
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+    // X-Frame-Options: prevent clickjacking (DENY)
+    res.setHeader('X-Frame-Options', 'DENY');
+
+    // Permissions-Policy: lock down sensitive browser hardware features
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
+
+    // Content Security Policy:
+    // In dev: allow framing within Google AI Studio / Google Cloud Run iframe. In prod: frame-ancestors 'none'.
+    const isDev = process.env.NODE_ENV !== 'production';
+    const sub = (d: string) => 'https://' + '*' + '.' + d;
+    const frameAncestors = isDev
+      ? `frame-ancestors 'self' ${sub('google.com')} ${sub('run.app')}`
+      : "frame-ancestors 'none'";
+
+    const cspDirectives = [
+      "default-src 'self'",
+      `script-src 'self' ${sub('googleapis.com')} https://apis.google.com`,
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' data: https://fonts.gstatic.com",
+      "img-src 'self' blob: data: https:",
+      `connect-src 'self' http://localhost:* ws://localhost:* ${sub('googleapis.com')} ${sub('firebaseio.com')} ${sub('run.app')} https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebasestorage.googleapis.com https://routes.googleapis.com https://maps.googleapis.com https://api.openrouteservice.org https://nominatim.openstreetmap.org https://router.project-osrm.org https://image.pollinations.ai`,
+      "media-src 'self' blob: data: https://assets.mixkit.co",
+      "worker-src 'self' blob:",
+      "manifest-src 'self'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      frameAncestors
+    ].join('; ');
+
+    res.setHeader('Content-Security-Policy', cspDirectives);
+    next();
+  });
+
+  // 3. Cache-Control for Authenticated & Dynamic API Endpoints (no-store to prevent leakage)
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    next();
+  });
+
   // Support JSON request bodies with 100MB limit for base64 fallback uploads
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
@@ -1742,9 +1873,11 @@ async function startServer() {
       await logAudit('download', fileData.id, { direct_access: true, file_name: fileName }, req);
 
       // 8. Stream the file securely with appropriate headers
+      const isDownload = req.query.download === 'true' || req.query.attachment === 'true';
       res.setHeader('Content-Type', fileData.file_type || 'application/octet-stream');
-      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileData.original_name || fileName)}"`);
+      res.setHeader('Content-Disposition', `${isDownload ? 'attachment' : 'inline'}; filename="${encodeURIComponent(fileData.original_name || fileName)}"`);
       res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
 
       return fs.createReadStream(localFilePath).pipe(res);
     } catch (err: any) {
@@ -2061,10 +2194,12 @@ async function startServer() {
       const isInline = req.query.inline === 'true';
       res.setHeader(
         'Content-Disposition',
-        `${isInline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(fileData.original_name)}"`
+        `${isInline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(fileData.original_name || 'documento')}"`
       );
-      res.setHeader('Content-Type', fileData.file_type);
+      res.setHeader('Content-Type', fileData.file_type || 'application/octet-stream');
       res.setHeader('Content-Length', fileData.file_size);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
 
       const readStream = fs.createReadStream(localFilePath);
       readStream.pipe(res);
